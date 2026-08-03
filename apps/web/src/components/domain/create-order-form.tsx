@@ -143,6 +143,31 @@ export function CreateOrderForm({
         />
       </Field>
 
+      <div
+        role="note"
+        className="flex gap-2.5 rounded-md border border-hold-edge bg-hold-wash px-3.5 py-3"
+      >
+        <Info
+          aria-hidden="true"
+          strokeWidth={1.5}
+          className="mt-0.5 size-4 shrink-0 text-hold-ink"
+        />
+        <p className="text-body text-hold-ink">
+          Pastikan IMEI yang di-submit wajib berstatus{" "}
+          <span className="font-semibold">UNKNOWN</span>. Silakan cek CEIR
+          melalui{" "}
+          <a
+            href="https://infoceir.com"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-semibold underline underline-offset-2 hover:opacity-80"
+          >
+            infoceir.com
+          </a>
+          .
+        </p>
+      </div>
+
       <Field
         label="Catatan"
         htmlFor="notes"
