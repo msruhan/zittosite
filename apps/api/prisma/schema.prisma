@@ -1,0 +1,288 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserStatus {
+  active
+  suspended
+}
+
+enum AdminRole {
+  super_admin
+  admin
+}
+
+enum AdminStatus {
+  active
+  blocked
+}
+
+enum ChannelProvider {
+  telegram
+}
+
+enum TelegramActorType {
+  user
+  admin
+}
+
+enum OrderStatus {
+  waiting_payment
+  paid
+  waiting_action
+  in_process
+  done
+  rejected
+  cancel
+}
+
+enum OrderChannel {
+  web
+  telegram
+}
+
+enum PaymentStatus {
+  pending
+  paid
+  failed
+  expired
+  cancelled
+}
+
+enum ResultStatus {
+  success
+  partial
+  failed
+}
+
+model User {
+  id             String          @id @default(cuid())
+  username       String          @unique
+  passwordHash   String          @map("password_hash")
+  fullName       String          @map("full_name")
+  telegramHandle String?         @map("telegram_handle")
+  customPrice    Int?            @map("custom_price")
+  creditBalance  Int             @default(0) @map("credit_balance")
+  status         UserStatus      @default(active)
+  botAccess      Boolean         @default(true) @map("bot_access")
+  createdAt      DateTime        @default(now()) @map("created_at")
+  updatedAt      DateTime        @updatedAt @map("updated_at")
+  sessions       UserSession[]
+  identities     UserIdentity[]
+  linkTokens     TelegramLinkToken[]
+  orders         Order[]
+
+  @@map("users")
+}
+
+model UserSession {
+  id         String    @id @default(cuid())
+  userId     String    @map("user_id")
+  ip         String?
+  userAgent  String?   @map("user_agent")
+  lastSeenAt DateTime  @default(now()) @map("last_seen_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  revokedAt  DateTime? @map("revoked_at")
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, lastSeenAt])
+  @@map("user_sessions")
+}
+
+model UserIdentity {
+  id             String          @id @default(cuid())
+  userId         String          @map("user_id")
+  provider       ChannelProvider
+  externalId     String          @map("external_id")
+  chatId         String?         @map("chat_id")
+  label          String?
+  verifiedAt     DateTime        @default(now()) @map("verified_at")
+  chatVerifiedAt DateTime?       @map("chat_verified_at")
+  createdAt      DateTime        @default(now()) @map("created_at")
+  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, externalId])
+  @@unique([provider, chatId])
+  @@unique([userId, provider])
+  @@index([userId])
+  @@map("user_identities")
+}
+
+model TelegramLinkToken {
+  id             String            @id @default(cuid())
+  tokenHash      String            @map("token_hash")
+  actorType      TelegramActorType @map("actor_type")
+  userId         String?           @map("user_id")
+  adminId        String?           @map("admin_id")
+  telegramUserId String            @map("telegram_user_id")
+  expiresAt      DateTime          @map("expires_at")
+  consumedAt     DateTime?         @map("consumed_at")
+  createdAt      DateTime          @default(now()) @map("created_at")
+  user           User?             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  admin          Admin?            @relation(fields: [adminId], references: [id], onDelete: Cascade)
+
+  @@index([tokenHash])
+  @@index([userId])
+  @@index([adminId])
+  @@map("telegram_link_tokens")
+}
+
+model Admin {
+  id                    String         @id @default(cuid())
+  username              String         @unique
+  passwordHash          String         @map("password_hash")
+  fullName              String         @map("full_name")
+  role                  AdminRole      @default(super_admin)
+  status                AdminStatus    @default(active)
+  totpSecret            String?        @map("totp_secret")
+  totpEnabledAt         DateTime?      @map("totp_enabled_at")
+  totpPrefs             Json?          @map("totp_prefs")
+  telegramUserId        String?        @unique @map("telegram_user_id")
+  telegramChatId        String?        @unique @map("telegram_chat_id")
+  telegramUsername      String?        @map("telegram_username")
+  telegramOauthLinkedAt DateTime?      @map("telegram_oauth_linked_at")
+  telegramLinkedAt      DateTime?      @map("telegram_linked_at")
+  createdAt             DateTime       @default(now()) @map("created_at")
+  updatedAt             DateTime       @updatedAt @map("updated_at")
+  sessions              AdminSession[]
+  linkTokens            TelegramLinkToken[]
+  assignedOrders        Order[]             @relation("OrderAssignedAdmin")
+  orderResults          OrderResult[]
+  orderNotifications    OrderTelegramNotification[]
+
+  @@map("admins")
+}
+
+model AdminSession {
+  id         String    @id @default(cuid())
+  adminId    String    @map("admin_id")
+  ip         String?
+  userAgent  String?   @map("user_agent")
+  lastSeenAt DateTime  @default(now()) @map("last_seen_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  revokedAt  DateTime? @map("revoked_at")
+  admin      Admin     @relation(fields: [adminId], references: [id], onDelete: Cascade)
+
+  @@index([adminId, lastSeenAt])
+  @@map("admin_sessions")
+}
+
+model SystemSetting {
+  key       String   @id
+  value     Json
+  updatedBy String?  @map("updated_by")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("system_settings")
+}
+
+model Service {
+  id          String   @id @default(cuid())
+  code        String   @unique
+  name        String
+  description String
+  price       Int
+  estimate    String
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  orders      Order[]
+
+  @@map("services")
+}
+
+model Order {
+  id               String             @id @default(cuid())
+  orderId          String             @unique @map("order_id")
+  userId           String             @map("user_id")
+  serviceId        String             @map("service_id")
+  channel          OrderChannel       @default(web)
+  imei             String
+  notes            String?
+  status           OrderStatus        @default(waiting_payment)
+  price            Int
+  assignedAdminId  String?            @map("assigned_admin_id")
+  startedAt        DateTime?          @map("started_at")
+  completedAt      DateTime?          @map("completed_at")
+  createdAt        DateTime           @default(now()) @map("created_at")
+  updatedAt        DateTime           @updatedAt @map("updated_at")
+  user             User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  service          Service            @relation(fields: [serviceId], references: [id])
+  assignedAdmin    Admin?             @relation("OrderAssignedAdmin", fields: [assignedAdminId], references: [id])
+  invoice          PaymentInvoice?
+  result           OrderResult?
+  activity         OrderActivityLog[]
+  telegramNotifications OrderTelegramNotification[]
+
+  @@index([userId, createdAt])
+  @@index([status, createdAt])
+  @@index([imei])
+  @@map("orders")
+}
+
+model OrderTelegramNotification {
+  id         String    @id @default(cuid())
+  orderId    String    @map("order_id")
+  adminId    String    @map("admin_id")
+  chatId     String    @map("chat_id")
+  messageId  String?   @map("message_id")
+  notifiedAt DateTime? @map("notified_at")
+  lastError  String?   @map("last_error")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  order      Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  admin      Admin     @relation(fields: [adminId], references: [id], onDelete: Cascade)
+
+  @@unique([orderId, adminId])
+  @@index([orderId])
+  @@map("order_telegram_notifications")
+}
+
+model PaymentInvoice {
+  id               String        @id @default(cuid())
+  invoiceId        String        @unique @map("invoice_id")
+  orderId          String        @unique @map("order_id")
+  amount           Int
+  paymentChannel   String        @default("qris_placeholder") @map("payment_channel")
+  paymentReference String?       @map("payment_reference")
+  paymentStatus    PaymentStatus @default(pending) @map("payment_status")
+  expiredAt        DateTime      @map("expired_at")
+  paidAt           DateTime?     @map("paid_at")
+  gatewayPayload   Json?         @map("gateway_payload")
+  createdAt        DateTime      @default(now()) @map("created_at")
+  updatedAt        DateTime      @updatedAt @map("updated_at")
+  order            Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@map("payment_invoices")
+}
+
+model OrderActivityLog {
+  id        String      @id @default(cuid())
+  orderId   String      @map("order_id")
+  status    OrderStatus
+  note      String
+  actor     String
+  createdAt DateTime    @default(now()) @map("created_at")
+  order     Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId, createdAt])
+  @@map("order_activity_logs")
+}
+
+model OrderResult {
+  id               String       @id @default(cuid())
+  orderId          String       @unique @map("order_id")
+  resultStatus     ResultStatus @map("result_status")
+  resultNote       String       @map("result_note")
+  resultData       Json?        @map("result_data")
+  createdByAdminId String       @map("created_by_admin_id")
+  createdAt        DateTime     @default(now()) @map("created_at")
+  order            Order        @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  createdByAdmin   Admin        @relation(fields: [createdByAdminId], references: [id])
+
+  @@map("order_results")
+}

@@ -1,0 +1,158 @@
+name: Release & Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: "Semver bump type"
+        required: true
+        default: patch
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+      deploy_env:
+        description: "Vercel environment"
+        required: true
+        default: production
+        type: choice
+        options:
+          - production
+          - preview
+
+concurrency:
+  group: release-deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  version:
+    name: Version bump & tag
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'push' &&
+       !startsWith(github.event.head_commit.message, 'chore(release):'))
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.release.outputs.version }}
+      tag: ${{ steps.release.outputs.tag }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Version bump & tag
+        id: release
+        run: |
+          set -euo pipefail
+          BUMP="${{ github.event.inputs.bump || 'patch' }}"
+          CURRENT=$(node -p "require('./package.json').version")
+          IFS=. read -r MAJOR MINOR PATCH <<< "$CURRENT"
+          case "$BUMP" in
+            major) MAJOR=$((MAJOR + 1)); MINOR=0; PATCH=0 ;;
+            minor) MINOR=$((MINOR + 1)); PATCH=0 ;;
+            *)     PATCH=$((PATCH + 1)) ;;
+          esac
+          NEXT="${MAJOR}.${MINOR}.${PATCH}"
+          TAG="v${NEXT}"
+          export NEXT_VERSION="$NEXT"
+
+          node -e '
+            const fs = require("fs");
+            const next = process.env.NEXT_VERSION;
+            for (const file of ["package.json", "apps/web/package.json", "apps/api/package.json"]) {
+              if (!fs.existsSync(file)) continue;
+              const pkg = JSON.parse(fs.readFileSync(file, "utf8"));
+              pkg.version = next;
+              fs.writeFileSync(file, JSON.stringify(pkg, null, 2) + "\n");
+            }
+          '
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package.json apps/web/package.json apps/api/package.json
+          git commit -m "chore(release): ${TAG}"
+          git tag -a "$TAG" -m "Release ${TAG}"
+          git push origin HEAD:main
+          git push origin "$TAG"
+
+          echo "version=${NEXT}" >> "$GITHUB_OUTPUT"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "Released ${TAG}"
+
+  deploy:
+    name: Deploy to Vercel
+    needs: version
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ github.event.inputs.deploy_env || 'production' }}
+      url: ${{ steps.deploy.outputs.url }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Vercel CLI
+        run: npm install -g vercel@latest
+
+      - name: Pull Vercel project settings
+        run: >
+          vercel pull --yes
+          --environment=${{ github.event.inputs.deploy_env || 'production' }}
+          --token=${{ secrets.VERCEL_TOKEN }}
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+      - name: Build for Vercel
+        run: >
+          vercel build
+          ${{ (github.event.inputs.deploy_env || 'production') == 'production' && '--prod' || '' }}
+          --token=${{ secrets.VERCEL_TOKEN }}
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+      - name: Deploy to Vercel
+        id: deploy
+        run: |
+          set -euo pipefail
+          ENV="${{ github.event.inputs.deploy_env || 'production' }}"
+          if [ "$ENV" = "production" ]; then
+            URL=$(vercel deploy --prebuilt --prod --token="${{ secrets.VERCEL_TOKEN }}")
+          else
+            URL=$(vercel deploy --prebuilt --token="${{ secrets.VERCEL_TOKEN }}")
+          fi
+          echo "url=${URL}" >> "$GITHUB_OUTPUT"
+          {
+            echo "### Deployed ${{ needs.version.outputs.tag }}"
+            echo "- Version: \`${{ needs.version.outputs.version }}\`"
+            echo "- Environment: \`${ENV}\`"
+            echo "- URL: ${URL}"
+          } >> "$GITHUB_STEP_SUMMARY"
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}

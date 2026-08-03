@@ -1,0 +1,24 @@
+{
+  "name": "zittosite",
+  "version": "0.1.0",
+  "private": true,
+  "description": "ZITTOSITE — Digital IMEI Activation Platform",
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace=web",
+    "web:dev": "npm run dev --workspace=web",
+    "api:dev": "npm run start:dev --workspace=@zittosite/api",
+    "db:up": "docker compose up -d postgres",
+    "db:migrate": "npm run prisma:migrate --workspace=@zittosite/api",
+    "db:seed": "npm run prisma:seed --workspace=@zittosite/api",
+    "build": "npm run build --workspace=web",
+    "start": "npm run start --workspace=web",
+    "lint": "npm run lint --workspace=web",
+    "typecheck": "npm run typecheck --workspace=web"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
