@@ -1,5 +1,7 @@
 import { cookies } from "next/headers";
 import { API_URL, ApiError } from "@/lib/api";
+import { mockApi } from "@/lib/mock-api";
+import { isMockMode, MOCK_COOKIE, parseMockAudience } from "@/lib/mock-mode";
 
 async function parseError(res: Response): Promise<string> {
   try {
@@ -19,6 +21,12 @@ export async function serverApi<T>(
   path: string,
   init: RequestInit = {},
 ): Promise<T> {
+  if (isMockMode()) {
+    const jar = await cookies();
+    const audience = parseMockAudience(jar.get(MOCK_COOKIE)?.value);
+    return mockApi<T>(path, init, audience);
+  }
+
   const jar = await cookies();
   const cookieHeader = jar
     .getAll()

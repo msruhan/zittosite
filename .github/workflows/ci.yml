@@ -33,4 +33,5 @@ jobs:
       - name: Build web
         run: npm run build
         env:
+          NEXT_PUBLIC_USE_MOCK: "1"
           NEXT_PUBLIC_API_URL: ${{ vars.NEXT_PUBLIC_API_URL || 'https://api.example.com' }}
