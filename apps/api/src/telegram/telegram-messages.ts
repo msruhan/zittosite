@@ -172,7 +172,6 @@ export function newOrderAdminHtml(input: {
   orderId: string;
   imei: string;
   serviceName: string;
-  userName: string;
   price: number;
 }): string {
   return [
@@ -181,7 +180,6 @@ export function newOrderAdminHtml(input: {
     row("🎫", "Order ID", input.orderId, true),
     row("📱", "IMEI", input.imei.slice(0, 3) + "X".repeat(Math.max(0, input.imei.length - 3)), true),
     row("📦", "Layanan", input.serviceName),
-    row("👤", "User", input.userName),
     row("💰", "Harga", formatRp(input.price)),
     row("🟢", "Status", "waiting_action"),
   ].join("\n");

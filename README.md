@@ -66,13 +66,16 @@ Isi `TELEGRAM_*` di `.env` agar bot + OAuth aktif (`TELEGRAM_BOT_TOKEN`, `TELEGR
 3. **Admins** — buat operator (default role Admin); Telegram ditautkan sendiri oleh operator
 4. **Services** — aktifkan/nonaktifkan layanan & harga
 5. **Orders / Reports** — pantau; override status hanya bila darurat
-6. Security: aktifkan TOTP, lalu tautkan Telegram di `/admin/security`
+6. **Settings** — konfigurasi produk (Super Admin saja)
+7. Security: aktifkan TOTP, lalu tautkan Telegram di `/admin/security`
 
-### 2. Operator admin (Telegram)
+### 2. Operator admin (website + Telegram)
+
+**Website (terbatas):** Orders, Reports, Security, Dashboard. Tidak ada akses Users / Services / Admins / Settings. Identitas pelanggan (nama, username, Telegram) **disembunyikan** — cari order lewat Order ID atau IMEI. Override status manual hanya Super Admin.
 
 1. Login `operator` di `/admin/login` → Security → TOTP → tautkan Telegram
 2. Di bot: `/start` sampai chat tertaut
-3. Saat user bayar (mark-paid), terima kartu order → **Terima** / **Tolak** → **Done** + hasil
+3. Saat user bayar (mark-paid), terima kartu order (tanpa nama pelanggan) → **Terima** / **Tolak** → **Done** + hasil
 4. `/riwayat` — antrean `waiting_action` + order yang sedang dipegang
 
 ### 3. User (website + bot)

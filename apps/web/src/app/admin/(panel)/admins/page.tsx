@@ -21,7 +21,7 @@ export default async function AdminAdminsPage() {
     throw err;
   }
   if (me.role !== "super_admin") {
-    redirect("/admin/dashboard");
+    redirect("/admin/orders");
   }
 
   let admins: Admin[];
@@ -32,7 +32,7 @@ export default async function AdminAdminsPage() {
       redirect("/admin/login");
     }
     if (err instanceof ApiError && err.status === 403) {
-      redirect("/admin/dashboard");
+      redirect("/admin/orders");
     }
     throw err;
   }

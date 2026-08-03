@@ -60,7 +60,7 @@ export class AdminNotifyService {
 
     const order = await this.prisma.order.findUnique({
       where: { id: internalOrderId },
-      include: { service: true, user: true },
+      include: { service: true },
     });
     if (!order || order.status !== "waiting_action") return;
 
@@ -74,7 +74,6 @@ export class AdminNotifyService {
       orderId: order.orderId,
       imei: order.imei,
       serviceName: order.service.name,
-      userName: order.user.fullName,
       price: order.price,
     });
     const replyMarkup = {

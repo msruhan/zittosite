@@ -30,12 +30,35 @@ const ALL_STATUSES: OrderStatus[] = [
 export class AdminOrdersService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async list(q?: string, status?: string) {
+  private async redactFor(viewerAdminId: string): Promise<boolean> {
+    const viewer = await this.prisma.admin.findUnique({
+      where: { id: viewerAdminId },
+      select: { role: true },
+    });
+    return viewer?.role !== "super_admin";
+  }
+
+  async list(viewerAdminId: string, q?: string, status?: string) {
+    const redactUser = await this.redactFor(viewerAdminId);
     const needle = String(q ?? "").trim();
     const statusFilter =
       status && ALL_STATUSES.includes(status as OrderStatus)
         ? (status as OrderStatus)
         : undefined;
+
+    const userSearch =
+      !redactUser && needle
+        ? [
+            {
+              user: {
+                OR: [
+                  { fullName: { contains: needle, mode: "insensitive" as const } },
+                  { username: { contains: needle, mode: "insensitive" as const } },
+                ],
+              },
+            },
+          ]
+        : [];
 
     const rows = await this.prisma.order.findMany({
       where: {
@@ -45,14 +68,7 @@ export class AdminOrdersService {
               OR: [
                 { orderId: { contains: needle, mode: "insensitive" } },
                 { imei: { contains: needle } },
-                {
-                  user: {
-                    OR: [
-                      { fullName: { contains: needle, mode: "insensitive" } },
-                      { username: { contains: needle, mode: "insensitive" } },
-                    ],
-                  },
-                },
+                ...userSearch,
               ],
             }
           : {}),
@@ -61,16 +77,17 @@ export class AdminOrdersService {
       orderBy: { createdAt: "desc" },
       take: 200,
     });
-    return rows.map(serializeOrderListItem);
+    return rows.map((row) => serializeOrderListItem(row, { redactUser }));
   }
 
-  async get(publicOrderId: string) {
+  async get(viewerAdminId: string, publicOrderId: string) {
+    const redactUser = await this.redactFor(viewerAdminId);
     const order = await this.prisma.order.findUnique({
       where: { orderId: publicOrderId },
       include: orderInclude,
     });
     if (!order) throw new NotFoundException("Order tidak ditemukan.");
-    return serializeOrderListItem(order);
+    return serializeOrderListItem(order, { redactUser });
   }
 
   async overrideStatus(
@@ -113,10 +130,13 @@ export class AdminOrdersService {
       },
       include: orderInclude,
     });
-    return serializeOrderListItem(updated);
+    return serializeOrderListItem(updated, {
+      redactUser: admin.role !== "super_admin",
+    });
   }
 
-  async dashboardStats() {
+  async dashboardStats(viewerAdminId: string) {
+    const redactUser = await this.redactFor(viewerAdminId);
     const start = new Date();
     start.setHours(0, 0, 0, 0);
 
@@ -158,7 +178,9 @@ export class AdminOrdersService {
       totalUsers: users,
       activeServices: services,
       revenueToday: paidToday._sum.amount ?? 0,
-      recentOrders: recent.map(serializeOrderListItem),
+      recentOrders: recent.map((row) =>
+        serializeOrderListItem(row, { redactUser }),
+      ),
     };
   }
 }

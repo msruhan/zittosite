@@ -15,6 +15,8 @@ colors:
   ink-soft: "#6B7280"
   ink-faint: "#9CA3AF"
   nav-ink: "#4B5563"
+  panel-night: "#0B1220"
+  panel-black: "#020617"
   metric-green: "#22AD5C"
   metric-orange: "#FF9C55"
   metric-red: "#F23030"

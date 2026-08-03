@@ -11,11 +11,23 @@ export const metadata: Metadata = {
 };
 
 export default async function AdminUsersPage() {
+  let me: { role: string };
+  try {
+    me = await serverApi<{ role: string }>("/admin/me");
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 401) redirect("/admin/login");
+    throw err;
+  }
+  if (me.role !== "super_admin") {
+    redirect("/admin/orders");
+  }
+
   let users: User[] = [];
   try {
     users = await serverApi<User[]>("/admin/users");
   } catch (err) {
     if (err instanceof ApiError && err.status === 401) redirect("/admin/login");
+    if (err instanceof ApiError && err.status === 403) redirect("/admin/orders");
     throw err;
   }
 

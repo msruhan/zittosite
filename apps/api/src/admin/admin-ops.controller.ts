@@ -30,8 +30,8 @@ export class AdminOpsController {
   ) {}
 
   @Get("dashboard/stats")
-  dashboard() {
-    return this.orders.dashboardStats();
+  dashboard(@Req() req: { admin: { sub: string } }) {
+    return this.orders.dashboardStats(req.admin.sub);
   }
 
   @Get("reports/summary")
@@ -40,11 +40,13 @@ export class AdminOpsController {
   }
 
   @Get("users")
+  @UseGuards(SuperAdminGuard)
   listUsers(@Query("q") q?: string) {
     return this.users.list(q);
   }
 
   @Post("users")
+  @UseGuards(SuperAdminGuard)
   createUser(@Body() body: Record<string, unknown>) {
     return this.users.create({
       username: body.username as string | undefined,
@@ -57,6 +59,7 @@ export class AdminOpsController {
   }
 
   @Patch("users/:id")
+  @UseGuards(SuperAdminGuard)
   updateUser(@Param("id") id: string, @Body() body: Record<string, unknown>) {
     return this.users.update(id, {
       fullName: body.fullName as string | undefined,
@@ -69,16 +72,19 @@ export class AdminOpsController {
   }
 
   @Delete("users/:id")
+  @UseGuards(SuperAdminGuard)
   deleteUser(@Param("id") id: string) {
     return this.users.remove(id);
   }
 
   @Get("services")
+  @UseGuards(SuperAdminGuard)
   listServices() {
     return this.services.list();
   }
 
   @Post("services")
+  @UseGuards(SuperAdminGuard)
   createService(@Body() body: Record<string, unknown>) {
     return this.services.create({
       code: body.code as string | undefined,
@@ -91,6 +97,7 @@ export class AdminOpsController {
   }
 
   @Patch("services/:id")
+  @UseGuards(SuperAdminGuard)
   updateService(@Param("id") id: string, @Body() body: Record<string, unknown>) {
     return this.services.update(id, {
       name: body.name as string | undefined,
@@ -102,18 +109,26 @@ export class AdminOpsController {
   }
 
   @Get("orders")
-  listOrders(@Query("q") q?: string, @Query("status") status?: string) {
-    return this.orders.list(q, status);
+  listOrders(
+    @Req() req: { admin: { sub: string } },
+    @Query("q") q?: string,
+    @Query("status") status?: string,
+  ) {
+    return this.orders.list(req.admin.sub, q, status);
   }
 
   @Get("orders/:orderId")
-  getOrder(@Param("orderId") orderId: string) {
-    return this.orders.get(orderId);
+  getOrder(
+    @Req() req: { admin: { sub: string } },
+    @Param("orderId") orderId: string,
+  ) {
+    return this.orders.get(req.admin.sub, orderId);
   }
 
   @Patch("orders/:orderId/status")
+  @UseGuards(SuperAdminGuard)
   overrideStatus(
-    @Req() req: any,
+    @Req() req: { admin: { sub: string } },
     @Param("orderId") orderId: string,
     @Body() body: { status?: string; note?: string },
   ) {

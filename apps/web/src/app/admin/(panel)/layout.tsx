@@ -28,7 +28,14 @@ export default async function AdminPanelLayout({
       variant="admin"
       navLabel="MAIN MENU"
       hideHrefs={
-        admin.role === "super_admin" ? undefined : ["/admin/admins"]
+        admin.role === "super_admin"
+          ? undefined
+          : [
+              "/admin/users",
+              "/admin/services",
+              "/admin/admins",
+              "/admin/settings",
+            ]
       }
       topbarRight={
         <UserChip

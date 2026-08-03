@@ -16,8 +16,10 @@ export default async function AdminOrdersPage({
   searchParams: Promise<{ q?: string }>;
 }) {
   const { q } = await searchParams;
+  let me: { role: string };
   let orders: OrderDetail[] = [];
   try {
+    me = await serverApi<{ role: string }>("/admin/me");
     const path = q
       ? `/admin/orders?q=${encodeURIComponent(q)}`
       : "/admin/orders";
@@ -27,13 +29,19 @@ export default async function AdminOrdersPage({
     throw err;
   }
 
+  const showCustomerIdentity = me.role === "super_admin";
+
   return (
     <>
       <PageHeader
         title="Orders"
         description="Semua order di sistem. Operasional harian admin tetap di Telegram."
       />
-      <AdminOrderManagement orders={orders} initialQuery={q ?? ""} />
+      <AdminOrderManagement
+        orders={orders}
+        initialQuery={q ?? ""}
+        showCustomerIdentity={showCustomerIdentity}
+      />
     </>
   );
 }

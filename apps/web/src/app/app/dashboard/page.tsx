@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { Suspense } from "react";
 import { ArrowRight, Package } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,6 +10,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { Reveal } from "@/components/ui/reveal";
 import { StatusBadge, Tag } from "@/components/ui/status-badge";
 import { TicketStub } from "@/components/ui/ticket-stub";
+import { DashboardMonthFilter } from "@/components/domain/dashboard-month-filter";
 import { StatGrid, StatTile } from "@/components/domain/stat-tile";
 import { TicketShowcase } from "@/components/domain/ticket-showcase";
 import { UserOrderTable } from "@/components/domain/user-order-table";
@@ -29,7 +31,56 @@ const ACTIVE = new Set([
   "in_process",
 ]);
 
-export default async function UserDashboardPage() {
+function toMonthKey(iso: string): string {
+  const d = new Date(iso);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  return `${y}-${m}`;
+}
+
+function formatMonthLabel(key: string): string {
+  const [y, m] = key.split("-").map(Number);
+  if (!y || !m) return key;
+  return new Date(y, m - 1, 1).toLocaleDateString("id-ID", {
+    month: "long",
+    year: "numeric",
+  });
+}
+
+function buildMonthOptions(orders: OrderDetail[]) {
+  const now = new Date();
+  const keys = new Set<string>();
+
+  for (let i = 0; i < 12; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    keys.add(
+      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`,
+    );
+  }
+  for (const order of orders) {
+    keys.add(toMonthKey(order.createdAt));
+  }
+
+  const sorted = [...keys].sort((a, b) => b.localeCompare(a));
+  return [
+    { value: "all", label: "Semua waktu" },
+    ...sorted.map((value) => ({
+      value,
+      label: formatMonthLabel(value),
+    })),
+  ];
+}
+
+export default async function UserDashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ bulan?: string }>;
+}) {
+  const params = await searchParams;
+  const bulan = params.bulan && /^\d{4}-\d{2}$/.test(params.bulan)
+    ? params.bulan
+    : "all";
+
   let user: User;
   let orders: OrderDetail[] = [];
   try {
@@ -40,23 +91,39 @@ export default async function UserDashboardPage() {
     throw err;
   }
 
+  const monthOptions = buildMonthOptions(orders);
+  const filtered =
+    bulan === "all"
+      ? orders
+      : orders.filter((order) => toMonthKey(order.createdAt) === bulan);
+
+  const periodLabel =
+    bulan === "all" ? "Semua waktu" : formatMonthLabel(bulan);
+
   const stats = {
-    totalOrders: orders.length,
-    activeOrders: orders.filter((o) => ACTIVE.has(o.status)).length,
-    doneOrders: orders.filter((o) => o.status === "done").length,
+    totalOrders: filtered.length,
+    activeOrders: filtered.filter((o) => ACTIVE.has(o.status)).length,
+    doneOrders: filtered.filter((o) => o.status === "done").length,
     balance: user.creditBalance ?? 0,
   };
-  const latest = orders[0] ?? null;
-  const recent = orders.slice(0, 5);
+  const latest = filtered[0] ?? null;
+  const recent = filtered.slice(0, 5);
   const firstName = user.fullName.split(" ")[0] ?? user.fullName;
 
   return (
     <div className="space-y-5 sm:space-y-6">
       <Reveal>
-        <h1 className="text-display text-ink">Halo, {firstName}</h1>
-        <p className="mt-1.5 text-body text-ink-soft">
-          Selamat datang kembali di ZittoSite. Pantau tiket Anda di bawah.
-        </p>
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h1 className="text-display text-ink">Halo, {firstName}</h1>
+            <p className="mt-1.5 text-body text-ink-soft">
+              Selamat datang kembali di ZittoSite. Pantau tiket Anda di bawah.
+            </p>
+          </div>
+          <Suspense fallback={null}>
+            <DashboardMonthFilter value={bulan} options={monthOptions} />
+          </Suspense>
+        </div>
       </Reveal>
 
       <StatGrid>
@@ -65,8 +132,8 @@ export default async function UserDashboardPage() {
           tone="action"
           label="Total Order"
           value={stats.totalOrders}
-          hint="Semua order yang pernah Anda buat."
-          caption="Semua waktu"
+          hint="Order pada periode yang dipilih."
+          caption={periodLabel}
           href="/app/riwayat"
         />
         <StatTile
@@ -74,7 +141,7 @@ export default async function UserDashboardPage() {
           tone="working"
           label="Order Aktif"
           value={stats.activeOrders}
-          hint="Order yang belum selesai atau masih menunggu."
+          hint="Order yang belum selesai pada periode ini."
           caption="Sedang berjalan"
           href="/app/riwayat"
         />
@@ -83,7 +150,7 @@ export default async function UserDashboardPage() {
           tone="cleared"
           label="Selesai"
           value={stats.doneOrders}
-          hint="Order yang sudah dikerjakan sampai Done."
+          hint="Order Done pada periode ini."
           caption="Status Done"
           href="/app/riwayat"
         />
@@ -92,7 +159,7 @@ export default async function UserDashboardPage() {
           tone="sky"
           label="Saldo"
           value={formatRupiah(stats.balance)}
-          hint="Saldo kredit (top-up) — pembayaran order saat ini via QRIS."
+          hint="Saldo kredit akun — tidak berubah oleh filter bulan."
           caption={stats.balance === 0 ? "Tidak ada saldo" : "Siap dipakai"}
           href="/app/profil"
         />
@@ -170,8 +237,8 @@ export default async function UserDashboardPage() {
             ) : (
               <EmptyState
                 icon={<Package strokeWidth={1.5} />}
-                title="Belum ada order"
-                description="Order pertama Anda akan muncul di sini beserta statusnya."
+                title="Tidak ada order di periode ini"
+                description={`Belum ada order untuk ${periodLabel.toLowerCase()}. Coba bulan lain atau buat order baru.`}
                 action={
                   <Button asChild>
                     <Link href="/app/order">Buat order</Link>
@@ -221,11 +288,11 @@ export default async function UserDashboardPage() {
             ) : (
               <EmptyState
                 icon={<Package strokeWidth={1.5} />}
-                title="Riwayat masih kosong"
-                description="Setiap order yang Anda buat akan tercatat di sini."
+                title="Riwayat kosong untuk periode ini"
+                description={`Tidak ada order pada ${periodLabel.toLowerCase()}.`}
                 action={
                   <Button asChild>
-                    <Link href="/app/order">Buat order pertama</Link>
+                    <Link href="/app/order">Buat order</Link>
                   </Button>
                 }
               />

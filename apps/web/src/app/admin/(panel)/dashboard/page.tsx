@@ -160,7 +160,7 @@ export default async function AdminDashboardPage() {
                           {order.orderId}
                         </Link>
                       </TD>
-                      <TD>{order.user.fullName}</TD>
+                      <TD>{order.user?.fullName ?? "—"}</TD>
                       <TD>
                         <DataValue>{maskImei(order.imei)}</DataValue>
                       </TD>

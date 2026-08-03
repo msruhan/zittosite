@@ -26,9 +26,11 @@ import type { OrderDetail, OrderStatus } from "@/lib/types";
 export function AdminOrderManagement({
   orders,
   initialQuery = "",
+  showCustomerIdentity = true,
 }: {
   orders: OrderDetail[];
   initialQuery?: string;
+  showCustomerIdentity?: boolean;
 }) {
   const [query, setQuery] = React.useState(initialQuery);
   const [status, setStatus] = React.useState<OrderStatus | "all">("all");
@@ -38,14 +40,17 @@ export function AdminOrderManagement({
     return orders.filter((order) => {
       if (status !== "all" && order.status !== status) return false;
       if (!needle) return true;
-      return (
+      const matchesIdOrImei =
         order.orderId.toLowerCase().includes(needle) ||
-        order.imei.toLowerCase().includes(needle) ||
+        order.imei.toLowerCase().includes(needle);
+      if (!showCustomerIdentity || !order.user) return matchesIdOrImei;
+      return (
+        matchesIdOrImei ||
         order.user.fullName.toLowerCase().includes(needle) ||
         order.user.username.toLowerCase().includes(needle)
       );
     });
-  }, [orders, query, status]);
+  }, [orders, query, status, showCustomerIdentity]);
 
   return (
     <div className="space-y-4">
@@ -60,7 +65,11 @@ export function AdminOrderManagement({
           <Input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Cari Order ID, IMEI, atau nama user"
+            placeholder={
+              showCustomerIdentity
+                ? "Cari Order ID, IMEI, atau nama user"
+                : "Cari Order ID atau IMEI"
+            }
             className="pl-9"
           />
         </label>
@@ -81,7 +90,7 @@ export function AdminOrderManagement({
                 <THead>
                   <TR className="hover:bg-transparent">
                     <TH>Order ID</TH>
-                    <TH>User</TH>
+                    {showCustomerIdentity ? <TH>User</TH> : null}
                     <TH>IMEI</TH>
                     <TH>Harga</TH>
                     <TH>Status</TH>
@@ -95,16 +104,22 @@ export function AdminOrderManagement({
                       <TD>
                         <DataValue emphasis>{order.orderId}</DataValue>
                       </TD>
-                      <TD className="whitespace-nowrap">
-                        <div>
-                          <p className="font-medium text-ink">
-                            {order.user.fullName}
-                          </p>
-                          <p className="font-data text-body text-ink-soft">
-                            @{order.user.username}
-                          </p>
-                        </div>
-                      </TD>
+                      {showCustomerIdentity ? (
+                        <TD className="whitespace-nowrap">
+                          {order.user ? (
+                            <div>
+                              <p className="font-medium text-ink">
+                                {order.user.fullName}
+                              </p>
+                              <p className="font-data text-body text-ink-soft">
+                                @{order.user.username}
+                              </p>
+                            </div>
+                          ) : (
+                            <span className="text-ink-faint">—</span>
+                          )}
+                        </TD>
+                      ) : null}
                       <TD>
                         <DataValue className="text-ink-soft">
                           {maskImei(order.imei)}

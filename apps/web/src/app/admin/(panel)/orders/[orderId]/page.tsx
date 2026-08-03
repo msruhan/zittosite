@@ -40,14 +40,19 @@ export default async function AdminOrderDetailPage({
   params: Promise<{ orderId: string }>;
 }) {
   const { orderId } = await params;
+  let me: { role: string };
   let order: OrderDetail;
   try {
+    me = await serverApi<{ role: string }>("/admin/me");
     order = await serverApi<OrderDetail>(`/admin/orders/${orderId}`);
   } catch (err) {
     if (err instanceof ApiError && err.status === 401) redirect("/admin/login");
     if (err instanceof ApiError && err.status === 404) notFound();
     throw err;
   }
+
+  const isSuperAdmin = me.role === "super_admin";
+  const showCustomer = isSuperAdmin && order.user;
 
   return (
     <>
@@ -125,10 +130,12 @@ export default async function AdminOrderDetailPage({
                 </div>
               ) : null}
 
-              <AdminOrderStatusOverride
-                orderId={order.orderId}
-                currentStatus={order.status}
-              />
+              {isSuperAdmin ? (
+                <AdminOrderStatusOverride
+                  orderId={order.orderId}
+                  currentStatus={order.status}
+                />
+              ) : null}
             </CardBody>
           </Card>
 
@@ -207,20 +214,26 @@ export default async function AdminOrderDetailPage({
               <CardTitle className="text-title">Pihak terkait</CardTitle>
             </CardHeader>
             <CardBody className="pt-4">
-              <div className="flex items-center gap-3">
-                <Avatar fullName={order.user.fullName} className="size-9" />
-                <div className="min-w-0">
-                  <p className="text-body font-medium text-ink">
-                    {order.user.fullName}
-                  </p>
-                  <p className="font-data text-body text-ink-soft">
-                    @{order.user.username}
-                    {order.user.telegramHandle
-                      ? ` · ${order.user.telegramHandle}`
-                      : ""}
-                  </p>
+              {showCustomer && order.user ? (
+                <div className="flex items-center gap-3">
+                  <Avatar fullName={order.user.fullName} className="size-9" />
+                  <div className="min-w-0">
+                    <p className="text-body font-medium text-ink">
+                      {order.user.fullName}
+                    </p>
+                    <p className="font-data text-body text-ink-soft">
+                      @{order.user.username}
+                      {order.user.telegramHandle
+                        ? ` · ${order.user.telegramHandle}`
+                        : ""}
+                    </p>
+                  </div>
                 </div>
-              </div>
+              ) : (
+                <p className="text-body text-ink-soft">
+                  Identitas pelanggan disembunyikan untuk peran Admin.
+                </p>
+              )}
 
               <div className="mt-4 border-t border-hairline pt-4">
                 {order.assignedAdmin ? (

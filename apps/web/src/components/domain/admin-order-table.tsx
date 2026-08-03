@@ -64,17 +64,21 @@ export function AdminOrderTable({
                 </Link>
               </TD>
               <TD className="py-2.5">
-                <span className="flex items-center gap-2 whitespace-nowrap">
-                  <Avatar fullName={order.user.fullName} className="size-6" />
-                  <span>
-                    <span className="block text-body text-ink">
-                      {order.user.fullName}
-                    </span>
-                    <span className="block font-data text-body text-ink-soft">
-                      @{order.user.username}
+                {order.user ? (
+                  <span className="flex items-center gap-2 whitespace-nowrap">
+                    <Avatar fullName={order.user.fullName} className="size-6" />
+                    <span>
+                      <span className="block text-body text-ink">
+                        {order.user.fullName}
+                      </span>
+                      <span className="block font-data text-body text-ink-soft">
+                        @{order.user.username}
+                      </span>
                     </span>
                   </span>
-                </span>
+                ) : (
+                  <span className="text-ink-faint">—</span>
+                )}
               </TD>
               <TD className="whitespace-nowrap py-2.5">{order.service.name}</TD>
               {compact ? null : (

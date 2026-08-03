@@ -119,11 +119,14 @@ export function serializeResult(
   };
 }
 
-export function serializeOrderListItem(order: OrderWithRelations) {
+export function serializeOrderListItem(
+  order: OrderWithRelations,
+  opts?: { redactUser?: boolean },
+) {
   return {
     id: order.id,
     orderId: order.orderId,
-    userId: order.userId,
+    userId: opts?.redactUser ? null : order.userId,
     serviceId: order.serviceId,
     channel: order.channel,
     imei: order.imei,
@@ -136,7 +139,7 @@ export function serializeOrderListItem(order: OrderWithRelations) {
     createdAt: order.createdAt.toISOString(),
     updatedAt: order.updatedAt.toISOString(),
     service: serializeService(order.service),
-    user: serializeUser(order.user),
+    user: opts?.redactUser ? null : serializeUser(order.user),
     assignedAdmin: serializeAdmin(order.assignedAdmin),
     invoice: order.invoice
       ? { ...serializeInvoice(order.invoice)!, orderId: order.orderId }

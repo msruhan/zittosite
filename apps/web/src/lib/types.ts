@@ -111,7 +111,7 @@ export interface Order {
 /** An order joined with the records a screen needs to render it. */
 export interface OrderDetail extends Order {
   service: Service;
-  user: User;
+  user: User | null;
   assignedAdmin: Admin | null;
   invoice: PaymentInvoice | null;
   result: OrderResult | null;

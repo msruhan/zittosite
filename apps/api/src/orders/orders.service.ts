@@ -63,7 +63,7 @@ export class OrdersService {
     for (const row of rows) {
       refreshed.push(await this.ensureNotExpired(row));
     }
-    return refreshed.map(serializeOrderListItem);
+    return refreshed.map((row) => serializeOrderListItem(row));
   }
 
   async getOrder(userId: string, publicOrderId: string) {
@@ -431,7 +431,7 @@ export class OrdersService {
       orderBy: { createdAt: "desc" },
       take,
     });
-    return rows.map(serializeOrderListItem);
+    return rows.map((row) => serializeOrderListItem(row));
   }
 
   async listAdminQueue(adminId: string, take = 5) {
@@ -446,7 +446,7 @@ export class OrdersService {
       orderBy: { createdAt: "desc" },
       take,
     });
-    return rows.map(serializeOrderListItem);
+    return rows.map((row) => serializeOrderListItem(row));
   }
 
   private effectivePrice(
