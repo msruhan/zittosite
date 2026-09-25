@@ -6,33 +6,44 @@ Digital IMEI Activation Platform — successor to CeirBot with a manual Telegram
 
 Auth, Security, Telegram linking, Order foundation, Telegram order workflow, Super Admin API, Admin accounts API, Reports API. Payment gateway / QRIS nyata **ditunda** (bayar pakai mark-paid simulasi). Claim UI dihapus dari produk.
 
-## CI/CD (GitHub Actions + Vercel)
+## CI/CD (GitHub Actions → VPS)
 
 Workflows di `.github/workflows/`:
 
 | Workflow | Trigger | Fungsi |
 | --- | --- | --- |
 | **CI** | push / PR ke `main` | `typecheck` + `build` web |
-| **Release & Deploy** | push ke `main` / manual | bump semver (`vX.Y.Z` tag) + deploy web ke Vercel |
+| **Release & Deploy** | push ke `main` / manual | bump semver (`vX.Y.Z` tag) + deploy **web + API + Postgres** ke VPS via SSH |
+
+Stack di VPS: Docker Compose (`docker-compose.prod.yml`) di `/opt/zittosite`.
+
+- Web: `http://VPS_HOST:3000`
+- API: `http://VPS_HOST:4000/health`
 
 ### Secrets (Repo → Settings → Secrets and variables → Actions)
 
-| Secret | Cara dapat |
-| --- | --- |
-| `VERCEL_TOKEN` | [Vercel → Account → Tokens](https://vercel.com/account/tokens) |
-| `VERCEL_ORG_ID` | Setelah `vercel link`, lihat `.vercel/project.json` → `orgId` |
-| `VERCEL_PROJECT_ID` | File yang sama → `projectId` |
+| Secret | Contoh | Keterangan |
+| --- | --- | --- |
+| `VPS_HOST` | `187.53.138.144` | IP / hostname VPS |
+| `VPS_USER` | `root` | User SSH |
+| `VPS_SSH_PRIVATE_KEY` | isi file private key deploy | Key khusus GitHub Actions (ed25519) |
+| `VPS_DEPLOY_PATH` | `/opt/zittosite` | Opsional; default `/opt/zittosite` |
 
-Setup sekali di mesin lokal:
+Buat Environment GitHub bernama **`production`** (Settings → Environments) agar job deploy bisa memakai secrets environment.
+
+### Setup VPS (sekali)
+
+1. Install Docker Engine + Compose plugin.
+2. Buat `/opt/zittosite` dan isi `.env` dari `.env.production.example` (password/JWT kuat).
+3. Pasang public key deploy ke `/root/.ssh/authorized_keys`.
+4. Push ke `main` atau jalankan workflow **Release & Deploy** (Actions → Run workflow).
+
+Deploy manual di server:
 
 ```bash
-npm i -g vercel
-vercel login
-vercel link   # pilih/create project, root = repo ini
-# salin orgId & projectId dari .vercel/project.json ke GitHub Secrets
+cd /opt/zittosite
+bash scripts/deploy.sh
 ```
-
-Di Vercel project, set env `NEXT_PUBLIC_API_URL` (URL API production). API NestJS **tidak** di-deploy ke Vercel oleh pipeline ini — hanya `apps/web`.
 
 ## Run
 

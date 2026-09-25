@@ -14,14 +14,11 @@ on:
           - patch
           - minor
           - major
-      deploy_env:
-        description: "Vercel environment"
-        required: true
-        default: production
-        type: choice
-        options:
-          - production
-          - preview
+      skip_deploy:
+        description: "Only bump version (skip VPS deploy)"
+        required: false
+        default: false
+        type: boolean
 
 concurrency:
   group: release-deploy
@@ -93,67 +90,59 @@ jobs:
           echo "Released ${TAG}"
 
   deploy:
-    name: Deploy to Vercel
+    name: Deploy to VPS
     needs: version
+    if: ${{ github.event.inputs.skip_deploy != 'true' }}
     runs-on: ubuntu-latest
     environment:
-      name: ${{ github.event.inputs.deploy_env || 'production' }}
-      url: ${{ steps.deploy.outputs.url }}
+      name: production
+      url: http://${{ secrets.VPS_HOST }}:3000
     steps:
-      - name: Checkout
+      - name: Checkout release
         uses: actions/checkout@v4
         with:
-          ref: main
-          fetch-depth: 0
+          ref: ${{ needs.version.outputs.tag }}
+          fetch-depth: 1
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-          cache: npm
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Install Vercel CLI
-        run: npm install -g vercel@latest
-
-      - name: Pull Vercel project settings
-        run: >
-          vercel pull --yes
-          --environment=${{ github.event.inputs.deploy_env || 'production' }}
-          --token=${{ secrets.VERCEL_TOKEN }}
-        env:
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-
-      - name: Build for Vercel
-        run: >
-          vercel build
-          ${{ (github.event.inputs.deploy_env || 'production') == 'production' && '--prod' || '' }}
-          --token=${{ secrets.VERCEL_TOKEN }}
-        env:
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-          NEXT_PUBLIC_USE_MOCK: "1"
-
-      - name: Deploy to Vercel
-        id: deploy
+      - name: Setup SSH
         run: |
           set -euo pipefail
-          ENV="${{ github.event.inputs.deploy_env || 'production' }}"
-          if [ "$ENV" = "production" ]; then
-            URL=$(vercel deploy --prebuilt --prod --token="${{ secrets.VERCEL_TOKEN }}")
-          else
-            URL=$(vercel deploy --prebuilt --token="${{ secrets.VERCEL_TOKEN }}")
-          fi
-          echo "url=${URL}" >> "$GITHUB_OUTPUT"
+          mkdir -p ~/.ssh
+          echo "${{ secrets.VPS_SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "${{ secrets.VPS_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null || true
+
+      - name: Sync files to VPS
+        run: |
+          set -euo pipefail
+          HOST="${{ secrets.VPS_HOST }}"
+          USER="${{ secrets.VPS_USER }}"
+          DIR="${{ secrets.VPS_DEPLOY_PATH || '/opt/zittosite' }}"
+          rsync -az --delete \
+            --exclude '.git' \
+            --exclude 'node_modules' \
+            --exclude '.next' \
+            --exclude 'dist' \
+            --exclude '.env' \
+            --exclude '.vercel' \
+            -e "ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes" \
+            ./ "${USER}@${HOST}:${DIR}/"
+
+      - name: Remote deploy
+        run: |
+          set -euo pipefail
+          HOST="${{ secrets.VPS_HOST }}"
+          USER="${{ secrets.VPS_USER }}"
+          DIR="${{ secrets.VPS_DEPLOY_PATH || '/opt/zittosite' }}"
+          ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes "${USER}@${HOST}" \
+            "DEPLOY_DIR='${DIR}' bash '${DIR}/scripts/deploy.sh'"
+
+      - name: Summary
+        run: |
           {
             echo "### Deployed ${{ needs.version.outputs.tag }}"
             echo "- Version: \`${{ needs.version.outputs.version }}\`"
-            echo "- Environment: \`${ENV}\`"
-            echo "- URL: ${URL}"
+            echo "- Host: \`${{ secrets.VPS_HOST }}\`"
+            echo "- Web: http://${{ secrets.VPS_HOST }}:3000"
+            echo "- API: http://${{ secrets.VPS_HOST }}:4000/health"
           } >> "$GITHUB_STEP_SUMMARY"
-        env:
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
