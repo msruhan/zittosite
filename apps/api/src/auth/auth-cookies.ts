@@ -1,5 +1,5 @@
 import type { Response } from "express";
-import { secureCookies } from "../config/env";
+import { cookieDomain, secureCookies } from "../config/env";
 
 export const USER_AUTH_COOKIE = "zittosite_user_token";
 export const ADMIN_AUTH_COOKIE = "zittosite_admin_token";
@@ -8,10 +8,8 @@ const MAX_AGE_MS = 12 * 60 * 60 * 1000;
 
 function cookieOptions() {
   return {
-    httpOnly: true,
+    ...clearOptions(),
     secure: secureCookies(),
-    sameSite: "lax" as const,
-    path: "/",
     maxAge: MAX_AGE_MS,
   };
 }
@@ -21,6 +19,7 @@ function clearOptions() {
     httpOnly: true,
     sameSite: "lax" as const,
     path: "/",
+    domain: cookieDomain(),
   };
 }
 

@@ -27,12 +27,37 @@ export function secureCookies(): boolean {
   return isProduction() && webPublicUrl().startsWith("https://");
 }
 
+/**
+ * The web server reads auth cookies on its own host (e.g. zittosite.com) while the
+ * API sets them from api.zittosite.com, so they must be scoped to the shared parent.
+ * COOKIE_DOMAIN overrides; otherwise it is derived from WEB_PUBLIC_URL behind HTTPS.
+ */
+export function cookieDomain(): string | undefined {
+  const explicit = process.env.COOKIE_DOMAIN?.trim();
+  if (explicit) return explicit;
+  if (!secureCookies()) return undefined;
+  const host = new URL(webPublicUrl()).hostname;
+  if (host === "localhost" || /^[\d.]+$/.test(host) || host.includes(":")) {
+    return undefined;
+  }
+  return host.replace(/^www\./, "");
+}
+
 export function corsOrigins(): string[] {
   const raw = process.env.CORS_ORIGINS ?? process.env.WEB_PUBLIC_URL ?? "http://localhost:3000";
-  return raw
+  const origins = raw
     .split(",")
-    .map((s) => s.trim())
+    .map((s) => s.trim().replace(/\/$/, ""))
     .filter(Boolean);
+  // The site answers on both apex and www, so allow each origin's counterpart.
+  const counterparts = origins
+    .filter((origin) => origin.startsWith("https://"))
+    .map((origin) =>
+      origin.startsWith("https://www.")
+        ? origin.replace("https://www.", "https://")
+        : origin.replace("https://", "https://www."),
+    );
+  return [...new Set([...origins, ...counterparts])];
 }
 
 export function paymentSimulationEnabled(): boolean {
