@@ -41,10 +41,10 @@ export class AdminUsersService {
     const username = String(input.username ?? "")
       .trim()
       .toLowerCase();
-    const fullName = String(input.fullName ?? "").trim();
+    const fullName = String(input.fullName ?? "").trim() || username;
     const password = String(input.password ?? "");
-    if (!username || !fullName) {
-      throw new BadRequestException("Username dan nama lengkap wajib.");
+    if (!username) {
+      throw new BadRequestException("Username wajib diisi.");
     }
     const policyError = passwordPolicyError(password);
     if (policyError) throw new BadRequestException(policyError);

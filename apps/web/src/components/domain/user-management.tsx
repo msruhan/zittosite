@@ -259,12 +259,7 @@ export function UserManagement({ initialUsers }: { initialUsers: User[] }) {
                 : "Coba ubah kata kunci pencarian."
             }
             action={
-              users.length === 0 ? (
-                <Button onClick={() => setCreating(true)}>
-                  <Plus className="size-4" aria-hidden="true" />
-                  Tambah User
-                </Button>
-              ) : (
+              users.length === 0 ? undefined : (
                 <Button variant="outline" onClick={() => setQuery("")}>
                   Reset pencarian
                 </Button>
@@ -322,7 +317,7 @@ function UserFormDialog({
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     const nextErrors: typeof errors = {};
-    if (!draft.fullName.trim()) {
+    if (!creating && !draft.fullName.trim()) {
       nextErrors.fullName = "Masukkan nama lengkap user.";
     }
     if (!draft.username.trim()) {
@@ -373,16 +368,18 @@ function UserFormDialog({
       }
     >
       <form id="user-form" onSubmit={handleSubmit} noValidate className="space-y-4">
-        <Field label="Nama lengkap" htmlFor="fullName" required error={errors.fullName}>
-          <Input
-            id="fullName"
-            value={draft.fullName}
-            invalid={Boolean(errors.fullName)}
-            onChange={(event) =>
-              setDraft((current) => ({ ...current, fullName: event.target.value }))
-            }
-          />
-        </Field>
+        {creating ? null : (
+          <Field label="Nama lengkap" htmlFor="fullName" required error={errors.fullName}>
+            <Input
+              id="fullName"
+              value={draft.fullName}
+              invalid={Boolean(errors.fullName)}
+              onChange={(event) =>
+                setDraft((current) => ({ ...current, fullName: event.target.value }))
+              }
+            />
+          </Field>
+        )}
         <Field label="Username" htmlFor="username" required error={errors.username}>
           <Input
             id="username"
@@ -411,11 +408,11 @@ function UserFormDialog({
             onChange={(event) => setPassword(event.target.value)}
           />
         </Field>
-        <Field label="Telegram handle" htmlFor="telegram">
+        <Field label="Username Telegram" htmlFor="telegram">
           <Input
             id="telegram"
             value={draft.telegramHandle ?? ""}
-            placeholder="@handle"
+            placeholder="@username"
             onChange={(event) =>
               setDraft((current) => ({
                 ...current,
@@ -424,26 +421,28 @@ function UserFormDialog({
             }
           />
         </Field>
-        <Field
-          label="Harga khusus Aktivasi IMEI"
-          htmlFor="price"
-          hint="Kosongkan untuk mengikuti harga layanan default."
-        >
-          <Input
-            id="price"
-            inputMode="numeric"
-            className="font-data tabular"
-            value={draft.customPrice ?? ""}
-            placeholder="Contoh 140000"
-            onChange={(event) => {
-              const raw = event.target.value.replace(/\D/g, "");
-              setDraft((current) => ({
-                ...current,
-                customPrice: raw ? Number(raw) : null,
-              }));
-            }}
-          />
-        </Field>
+        {creating ? null : (
+          <Field
+            label="Harga khusus Aktivasi IMEI"
+            htmlFor="price"
+            hint="Kosongkan untuk mengikuti harga layanan default."
+          >
+            <Input
+              id="price"
+              inputMode="numeric"
+              className="font-data tabular"
+              value={draft.customPrice ?? ""}
+              placeholder="Contoh 140000"
+              onChange={(event) => {
+                const raw = event.target.value.replace(/\D/g, "");
+                setDraft((current) => ({
+                  ...current,
+                  customPrice: raw ? Number(raw) : null,
+                }));
+              }}
+            />
+          </Field>
+        )}
         <Field label="Status" htmlFor="status">
           <Select
             id="status"
