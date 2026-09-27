@@ -22,7 +22,7 @@ export function TicketStub({
       {Array.from({ length: teeth }, (_, i) => (
         <span
           key={i}
-          className="mb-[-5px] size-2.5 shrink-0 rounded-full bg-mist"
+            className="mb-[-5px] size-2.5 shrink-0 rounded-full bg-ground"
         />
       ))}
     </div>

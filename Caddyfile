@@ -1,0 +1,16 @@
+# TLS termination for production. Caddy obtains and renews Let's Encrypt
+# certificates automatically; both domains must point (DNS A record) to the VPS.
+{
+	email {$ACME_EMAIL}
+}
+
+{$WEB_DOMAIN} {
+	encode zstd gzip
+	reverse_proxy web:3000
+}
+
+{$API_DOMAIN} {
+	encode zstd gzip
+	header Strict-Transport-Security "max-age=63072000; includeSubDomains"
+	reverse_proxy api:4000
+}

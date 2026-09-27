@@ -18,6 +18,8 @@ import {
   extractAuthToken,
 } from "../auth/auth-cookies";
 import { clientMetaFromReq } from "../auth/client-meta";
+import { Throttle } from "@nestjs/throttler";
+import { AUTH_THROTTLE, SENSITIVE_THROTTLE } from "../security/throttle";
 
 @Controller("admin")
 export class AdminAuthController {
@@ -27,6 +29,7 @@ export class AdminAuthController {
   ) {}
 
   @Post("auth/login")
+  @Throttle(AUTH_THROTTLE)
   async login(
     @Body() body: { username?: string; password?: string },
     @Req() req: any,
@@ -49,6 +52,7 @@ export class AdminAuthController {
   }
 
   @Post("auth/totp")
+  @Throttle(AUTH_THROTTLE)
   async loginTotp(
     @Body() body: { pendingToken?: string; code?: string },
     @Req() req: any,
@@ -86,6 +90,7 @@ export class AdminAuthController {
 
   @Post("me/password")
   @UseGuards(AdminAuthGuard)
+  @Throttle(SENSITIVE_THROTTLE)
   async changePassword(
     @Req() req: any,
     @Res({ passthrough: true }) res: Response,
@@ -120,12 +125,14 @@ export class AdminAuthController {
 
   @Post("me/totp/enable")
   @UseGuards(AdminAuthGuard)
+  @Throttle(SENSITIVE_THROTTLE)
   totpEnable(@Req() req: any, @Body() body: { code?: string }) {
     return this.totp.enable(req.admin.sub, String(body.code ?? ""));
   }
 
   @Post("me/totp/disable")
   @UseGuards(AdminAuthGuard)
+  @Throttle(SENSITIVE_THROTTLE)
   totpDisable(
     @Req() req: any,
     @Body() body: { password?: string; code?: string },

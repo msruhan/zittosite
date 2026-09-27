@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Send } from "lucide-react";
+import { PaperPlaneTilt } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
@@ -37,24 +37,27 @@ export function TelegramLinkCard({
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState("");
 
-  async function load() {
-    setLoading(true);
-    try {
-      const next = await api<TelegramStatus>(statusEndpoint);
-      setStatus(next);
-      setError("");
-    } catch (err) {
-      setError(
-        err instanceof ApiError ? err.message : "Gagal memuat status Telegram.",
-      );
-    } finally {
-      setLoading(false);
-    }
-  }
+  const load = React.useCallback(
+    () =>
+      api<TelegramStatus>(statusEndpoint)
+        .then((next) => {
+          setStatus(next);
+          setError("");
+        })
+        .catch((err: unknown) => {
+          setError(
+            err instanceof ApiError
+              ? err.message
+              : "Gagal memuat status Telegram.",
+          );
+        })
+        .finally(() => setLoading(false)),
+    [statusEndpoint],
+  );
 
   React.useEffect(() => {
     void load();
-  }, [statusEndpoint]);
+  }, [load]);
 
   async function startLink() {
     setBusy(true);
@@ -101,7 +104,7 @@ export function TelegramLinkCard({
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <Send className="size-4 text-action" aria-hidden="true" />
+          <PaperPlaneTilt className="size-4 text-action" aria-hidden="true" />
           Telegram
         </CardTitle>
       </CardHeader>
@@ -160,7 +163,7 @@ export function TelegramLinkCard({
           </Field>
         ) : null}
 
-        {error ? <p className="text-body text-metric-red">{error}</p> : null}
+        {error ? <p className="text-body text-refused-ink">{error}</p> : null}
 
         <div className="flex flex-wrap justify-end gap-2">
           {linked || oauthOnly ? (

@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
-import { ShieldCheck } from "lucide-react";
+import { ShieldCheck } from "@phosphor-icons/react/dist/ssr";
 import { PageHeader } from "@/components/shell/app-shell";
 import { Card, CardBody } from "@/components/ui/card";
 import { CreateOrderForm } from "@/components/domain/create-order-form";
@@ -81,7 +81,7 @@ export default async function CreateOrderPage() {
           <div className="flex gap-2.5 rounded-lg border border-hairline bg-surface p-4 shadow-resting">
             <ShieldCheck
               aria-hidden="true"
-              strokeWidth={1.5}
+              weight="regular"
               className="mt-0.5 size-4 shrink-0 text-cleared-ink"
             />
             <p className="text-body text-ink-soft">

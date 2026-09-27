@@ -8,6 +8,7 @@ import {
   orderCardTakenHtml,
   orderCardRejectedHtml,
   orderCardDoneHtml,
+  superAdminFollowUpHtml,
 } from "./telegram-messages";
 
 @Injectable()
@@ -60,21 +61,36 @@ export class AdminNotifyService {
 
     const order = await this.prisma.order.findUnique({
       where: { id: internalOrderId },
-      include: { service: true },
+      include: { service: true, user: { select: { username: true } } },
     });
     if (!order || order.status !== "waiting_action") return;
 
-    const destinations = await this.adminTelegram.notificationDestinations();
+    const assigned = new Set(
+      (
+        await this.prisma.serviceAssignment.findMany({
+          where: { serviceId: order.serviceId },
+          select: { adminId: true },
+        })
+      ).map((row) => row.adminId),
+    );
+    const destinations = (
+      await this.adminTelegram.notificationDestinations()
+    ).filter((d) => d.role === "super_admin" || assigned.has(d.adminId));
     if (!destinations.length) {
       this.logger.warn("No linked admin chats for new order notify");
       return;
     }
 
-    const html = newOrderAdminHtml({
+    const cardInput = {
       orderId: order.orderId,
       imei: order.imei,
       serviceName: order.service.name,
       price: order.price,
+    };
+    const operatorHtml = newOrderAdminHtml(cardInput);
+    const superAdminHtml = newOrderAdminHtml({
+      ...cardInput,
+      customer: { username: order.user.username, channel: order.channel },
     });
     const replyMarkup = {
       inline_keyboard: [
@@ -95,7 +111,7 @@ export class AdminNotifyService {
       try {
         const body = await this.sendMessageRaw(token, {
           chat_id: dest.chatId,
-          text: html,
+          text: dest.role === "super_admin" ? superAdminHtml : operatorHtml,
           parse_mode: "HTML",
           disable_web_page_preview: true,
           reply_markup: replyMarkup,
@@ -226,6 +242,77 @@ export class AdminNotifyService {
           }`,
         );
       }
+    }
+  }
+
+  /** Fresh (audible) message to super admins, skipping the acting admin. Never throws. */
+  async notifySuperAdminsFollowUp(
+    internalOrderId: string,
+    kind: "taken" | "rejected" | "done",
+    actor: { id: string; username: string; fullName: string },
+    note?: string,
+  ): Promise<void> {
+    const token = process.env.TELEGRAM_BOT_TOKEN?.trim();
+    if (!token) return;
+    try {
+      const order = await this.prisma.order.findUnique({
+        where: { id: internalOrderId },
+        include: { service: true, user: { select: { username: true } } },
+      });
+      if (!order) return;
+
+      const recipients = (
+        await this.adminTelegram.notificationDestinations()
+      ).filter((d) => d.role === "super_admin" && d.adminId !== actor.id);
+      if (!recipients.length) return;
+
+      const html = superAdminFollowUpHtml({
+        kind,
+        orderId: order.orderId,
+        customerUsername: order.user.username,
+        serviceName: order.service.name,
+        adminUsername: actor.username,
+        adminFullName: actor.fullName,
+        note,
+      });
+      for (const dest of recipients) {
+        await this.sendMessage(token, dest.chatId, html);
+      }
+    } catch (err) {
+      this.logger.warn(
+        `Super admin follow-up notify error: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
+    }
+  }
+
+  /** HTML message to one chat, optionally with inline buttons. Never throws. */
+  async sendHtml(
+    chatId: string,
+    html: string,
+    inlineKeyboard?: { text: string; callback_data: string }[][],
+  ): Promise<boolean> {
+    const token = process.env.TELEGRAM_BOT_TOKEN?.trim();
+    if (!token) return false;
+    try {
+      const body = await this.sendMessageRaw(token, {
+        chat_id: chatId,
+        text: html,
+        parse_mode: "HTML",
+        disable_web_page_preview: true,
+        ...(inlineKeyboard
+          ? { reply_markup: { inline_keyboard: inlineKeyboard } }
+          : {}),
+      });
+      return Boolean(body?.ok);
+    } catch (err) {
+      this.logger.warn(
+        `sendHtml failed chat=${chatId}: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
+      return false;
     }
   }
 

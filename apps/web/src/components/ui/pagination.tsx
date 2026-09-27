@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { CaretLeft, CaretRight } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
 
 function pageWindow(current: number, total: number): (number | "gap")[] {
@@ -49,7 +49,7 @@ export function Pagination({
             disabled={page === 1}
             onClick={() => onPageChange(page - 1)}
           >
-            <ChevronLeft className="size-4" aria-hidden="true" />
+            <CaretLeft className="size-4" weight="regular" aria-hidden="true" />
           </button>
 
           {pageWindow(page, totalPages).map((entry, index) =>
@@ -88,7 +88,7 @@ export function Pagination({
             disabled={page === totalPages}
             onClick={() => onPageChange(page + 1)}
           >
-            <ChevronRight className="size-4" aria-hidden="true" />
+            <CaretRight className="size-4" weight="regular" aria-hidden="true" />
           </button>
         </nav>
       ) : null}

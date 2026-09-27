@@ -3,7 +3,7 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import QRCode from "react-qr-code";
-import { CircleAlert, RefreshCw, TriangleAlert } from "lucide-react";
+import { ArrowsClockwise, Warning, WarningCircle } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Countdown } from "@/components/domain/countdown";
@@ -11,6 +11,8 @@ import { DataValue } from "@/components/ui/data-value";
 import { PaymentBadge } from "@/components/ui/status-badge";
 import { ApiError, api } from "@/lib/api";
 import { formatRupiah } from "@/lib/format";
+
+const PAYMENT_SIMULATION = process.env.NEXT_PUBLIC_PAYMENT_SIMULATION === "1";
 
 export function PaymentPanel({
   orderId,
@@ -55,7 +57,7 @@ export function PaymentPanel({
           aria-hidden="true"
           className="flex size-11 items-center justify-center rounded-full bg-void-wash text-void-ink"
         >
-          <TriangleAlert className="size-5" strokeWidth={1.5} />
+          <Warning className="size-5" weight="regular" />
         </span>
         <div className="space-y-1">
           <p className="text-title text-ink">Batas waktu pembayaran habis</p>
@@ -65,7 +67,7 @@ export function PaymentPanel({
           </p>
         </div>
         <Button onClick={() => router.push("/app/order")}>
-          <RefreshCw className="size-4" aria-hidden="true" />
+          <ArrowsClockwise className="size-4" weight="regular" aria-hidden="true" />
           Buat order baru
         </Button>
       </div>
@@ -106,32 +108,35 @@ export function PaymentPanel({
         </div>
 
         <p className="flex max-w-[40ch] items-start gap-2 text-center text-body text-ink-soft">
-          <CircleAlert
+          <WarningCircle
             aria-hidden="true"
-            strokeWidth={1.5}
+            weight="regular"
             className="mt-0.5 size-4 shrink-0"
           />
           <span>
-            Pembayaran otomatis belum aktif. Gunakan konfirmasi di bawah setelah
-            transfer selesai, atau hubungi support bila membutuhkan bantuan.
+            {PAYMENT_SIMULATION
+              ? "Mode simulasi: gunakan konfirmasi di bawah untuk menandai pembayaran."
+              : "Order otomatis masuk antrean setelah pembayaran terverifikasi. Hubungi support bila membutuhkan bantuan."}
           </span>
         </p>
       </div>
 
-      <div className="mt-5 space-y-2">
-        <Button
-          block
-          variant="secondary"
-          onClick={handleConfirm}
-          loading={confirming}
-          loadingLabel="Memeriksa pembayaran"
-        >
-          Saya sudah bayar
-        </Button>
-        <p className="text-center text-body text-ink-soft">
-          Setelah transfer, tekan konfirmasi agar order masuk antrean.
-        </p>
-      </div>
+      {PAYMENT_SIMULATION ? (
+        <div className="mt-5 space-y-2">
+          <Button
+            block
+            variant="secondary"
+            onClick={handleConfirm}
+            loading={confirming}
+            loadingLabel="Memeriksa pembayaran"
+          >
+            Saya sudah bayar
+          </Button>
+          <p className="text-center text-body text-ink-soft">
+            Setelah transfer, tekan konfirmasi agar order masuk antrean.
+          </p>
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -19,6 +19,8 @@ import {
   oauthCookieOptions,
 } from "./telegram-oauth-cookie";
 import { TelegramOauthService } from "./telegram-oauth.service";
+import { Throttle } from "@nestjs/throttler";
+import { SENSITIVE_THROTTLE } from "../security/throttle";
 
 function clearOauthCookie(response: Response, actorType: "user" | "admin") {
   const { maxAge: _maxAge, ...options } = oauthCookieOptions(actorType);
@@ -78,6 +80,7 @@ export class AdminTelegramOauthController {
   ) {}
 
   @Post("oauth/start")
+  @Throttle(SENSITIVE_THROTTLE)
   async start(
     @Req() req: any,
     @Res({ passthrough: true }) response: Response,

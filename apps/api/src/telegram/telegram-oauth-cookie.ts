@@ -5,7 +5,7 @@ import { TelegramActorType } from "@prisma/client";
 import {
   getAdminJwtSecret,
   getUserJwtSecret,
-  isProduction,
+  secureCookies,
 } from "../config/env";
 
 type OauthStatePayload = {
@@ -29,7 +29,7 @@ export function oauthCookieName(actorType: TelegramActorType): string {
 export function oauthCookieOptions(actorType: TelegramActorType): CookieOptions {
   return {
     httpOnly: true,
-    secure: isProduction(),
+    secure: secureCookies(),
     sameSite: "lax",
     path:
       actorType === "admin"

@@ -1,45 +1,45 @@
 import {
-  ClipboardList,
+  ClipboardText,
+  ClockCounterClockwise,
   FileText,
   Gauge,
-  History,
-  LayoutDashboard,
+  Gear,
   Package,
-  Send,
-  Settings,
+  PaperPlaneTilt,
   Shield,
   ShieldCheck,
-  UserRound,
+  SquaresFour,
+  User,
   Users,
-} from "lucide-react";
-import type { LucideIcon } from "lucide-react";
+} from "@phosphor-icons/react";
+import type { Icon } from "@phosphor-icons/react";
 
 export interface NavItem {
   href: string;
   label: string;
-  icon: LucideIcon;
+  icon: Icon;
   /** Match nested routes under this href, not just the exact path. */
   nested?: boolean;
 }
 
 export const userNav: NavItem[] = [
-  { href: "/app/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/app/dashboard", label: "Dashboard", icon: SquaresFour },
   { href: "/app/order", label: "Order", icon: Package, nested: true },
-  { href: "/app/riwayat", label: "Riwayat Order", icon: History },
-  { href: "/app/telegram", label: "Telegram", icon: Send },
-  { href: "/app/profil", label: "Profil", icon: UserRound },
+  { href: "/app/riwayat", label: "Riwayat Order", icon: ClockCounterClockwise },
+  { href: "/app/telegram", label: "Telegram", icon: PaperPlaneTilt },
+  { href: "/app/profil", label: "Profil", icon: User },
   { href: "/app/security", label: "Security", icon: Shield },
 ];
 
 export const adminNav: NavItem[] = [
   { href: "/admin/dashboard", label: "Dashboard", icon: Gauge },
-  { href: "/admin/orders", label: "Orders", icon: ClipboardList, nested: true },
+  { href: "/admin/orders", label: "Orders", icon: ClipboardText, nested: true },
   { href: "/admin/users", label: "Users", icon: Users },
   { href: "/admin/admins", label: "Admins", icon: ShieldCheck },
   { href: "/admin/services", label: "Services", icon: Package },
   { href: "/admin/reports", label: "Reports", icon: FileText },
   { href: "/admin/security", label: "Security", icon: Shield },
-  { href: "/admin/settings", label: "Settings", icon: Settings },
+  { href: "/admin/settings", label: "Settings", icon: Gear },
 ];
 
 /**

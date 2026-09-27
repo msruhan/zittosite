@@ -1,94 +1,91 @@
 ---
 name: ZITTOSITE
-description: Digital IMEI Activation Platform — order counter, status board, and operator ledger.
+description: Digital IMEI Activation Platform — infrastructure admin console for supervised IMEI operations.
+currentDirection:
+  name: "Infrastructure Admin Console"
+  note: "Supersedes the earlier paper-counter direction. The product should feel like a serious operational system: dense, precise, ledger-like, and premium without oversized hero cards or decorative gradients."
+  mode: "Operate"
+  rules:
+    - "Clarity, scanability, and status recognition beat visual spectacle."
+    - "Use restrained dark rails, cool neutral surfaces, tight hairlines, tabular data, and a small number of high-confidence accents."
+    - "Avoid AI dashboard fingerprints: cinematic hero cards, rainbow metric tiles, glass everywhere, glow halos, fake charts, and huge display type."
+    - "Keep route labels, business copy, form fields, and status vocabulary stable unless explicitly requested."
 colors:
-  action-blue: "#2563EB"
-  action-blue-pressed: "#1D4ED8"
-  action-blue-wash: "#EFF6FF"
-  accent-sky: "#18BFFF"
-  chart-blue-soft: "#93C5FD"
-  chart-blue-mist: "#BFDBFE"
-  counter-white: "#FFFFFF"
-  ledger-mist: "#F9FAFB"
-  hairline: "#E6EBF1"
-  ink: "#111928"
-  ink-soft: "#6B7280"
-  ink-faint: "#9CA3AF"
-  nav-ink: "#4B5563"
-  panel-night: "#0B1220"
-  panel-black: "#020617"
-  metric-green: "#22AD5C"
-  metric-orange: "#FF9C55"
-  metric-red: "#F23030"
-  hold-amber-wash: "#FEF9C3"
-  hold-amber-ink: "#854D0E"
-  hold-amber-edge: "#FDE047"
-  cleared-green-wash: "#DCFCE7"
-  cleared-green-ink: "#166534"
-  cleared-green-edge: "#86EFAC"
-  queued-violet-wash: "#EDE9FE"
-  queued-violet-ink: "#5B21B6"
-  queued-violet-edge: "#C4B5FD"
-  working-amber-wash: "#FEF3C7"
-  working-amber-ink: "#92400E"
-  working-amber-edge: "#FCD34D"
-  refused-red-wash: "#FEE2E2"
-  refused-red-ink: "#991B1B"
-  refused-red-edge: "#FCA5A5"
-  void-slate-wash: "#F1F5F9"
-  void-slate-ink: "#475569"
-  void-slate-edge: "#CBD5E1"
+  action: "#1E63FF"
+  action-pressed: "#174FD1"
+  action-deep: "#0E2F7D"
+  action-wash: "#EAF1FF"
+  surface: "#FBFCFE"
+  ground: "#EEF2F7"
+  mist: "#E5EAF1"
+  hairline: "#C9D2DE"
+  ink: "#111827"
+  ink-soft: "#536070"
+  ink-faint: "#8A95A3"
+  nav-ink: "#D6DFEA"
+  hold-wash: "#FEF9C3"
+  hold-ink: "#854D0E"
+  hold-edge: "#EAB308"
+  cleared-wash: "#DCFCE7"
+  cleared-ink: "#166534"
+  cleared-edge: "#4ADE80"
+  queued-wash: "#EDE9FE"
+  queued-ink: "#5B21B6"
+  queued-edge: "#A78BFA"
+  working-wash: "#FEF3C7"
+  working-ink: "#92400E"
+  working-edge: "#FBBF24"
+  refused-wash: "#FEE2E2"
+  refused-ink: "#991B1B"
+  refused-edge: "#F87171"
+  void-wash: "#F1F5F9"
+  void-ink: "#475569"
+  void-edge: "#94A3B8"
 typography:
   display:
-    fontFamily: "Satoshi, ui-sans-serif, system-ui, sans-serif"
+    fontFamily: "Atkinson Hyperlegible, ui-sans-serif, system-ui, sans-serif"
     fontSize: "1.75rem"
     fontWeight: 700
-    lineHeight: "2.5rem"
+    lineHeight: "2.15rem"
     letterSpacing: "-0.02em"
   metric:
-    fontFamily: "Satoshi, ui-sans-serif, system-ui, sans-serif"
+    fontFamily: "Atkinson Hyperlegible, ui-sans-serif, system-ui, sans-serif"
     fontSize: "1.5rem"
     fontWeight: 700
-    lineHeight: "1.875rem"
+    lineHeight: "1.75rem"
     letterSpacing: "-0.02em"
   headline:
-    fontFamily: "Satoshi, ui-sans-serif, system-ui, sans-serif"
-    fontSize: "1.375rem"
+    fontFamily: "Atkinson Hyperlegible, ui-sans-serif, system-ui, sans-serif"
+    fontSize: "1.25rem"
     fontWeight: 700
-    lineHeight: "1.75rem"
+    lineHeight: "1.6rem"
     letterSpacing: "-0.015em"
   title:
-    fontFamily: "Satoshi, ui-sans-serif, system-ui, sans-serif"
+    fontFamily: "Atkinson Hyperlegible, ui-sans-serif, system-ui, sans-serif"
     fontSize: "1rem"
-    fontWeight: 500
+    fontWeight: 700
     lineHeight: "1.5rem"
-    letterSpacing: "normal"
   body:
-    fontFamily: "Satoshi, ui-sans-serif, system-ui, sans-serif"
-    fontSize: "0.875rem"
-    fontWeight: 500
-    lineHeight: "1.375rem"
-    letterSpacing: "normal"
+    fontFamily: "Atkinson Hyperlegible, ui-sans-serif, system-ui, sans-serif"
+    fontSize: "0.9375rem"
+    fontWeight: 400
+    lineHeight: "1.45rem"
   label:
-    fontFamily: "Satoshi, ui-sans-serif, system-ui, sans-serif"
+    fontFamily: "Atkinson Hyperlegible, ui-sans-serif, system-ui, sans-serif"
     fontSize: "0.75rem"
-    fontWeight: 500
-    lineHeight: "1.25rem"
-    letterSpacing: "0.02em"
+    fontWeight: 400
+    lineHeight: "1.15rem"
   data:
-    fontFamily: "Satoshi, ui-sans-serif, system-ui, sans-serif"
-    fontSize: "0.875rem"
-    fontWeight: 500
+    fontFamily: "Atkinson Hyperlegible, ui-sans-serif, system-ui, sans-serif"
+    fontSize: "0.9375rem"
+    fontWeight: 700
     lineHeight: 1.4
-    letterSpacing: "normal"
     fontFeature: "\"tnum\" 1"
 rounded:
-  sm: "5px"
+  sm: "4px"
   md: "8px"
   lg: "10px"
-  xl: "14px"
-  "2xl": "16px"
-  card: "24px"
+  card: "12px"
   full: "999px"
 spacing:
   xs: "4px"
@@ -99,263 +96,236 @@ spacing:
   "2xl": "32px"
 components:
   button-primary:
-    backgroundColor: "{colors.action-blue}"
-    textColor: "{colors.counter-white}"
+    backgroundColor: "{colors.action}"
+    textColor: "{colors.surface}"
     typography: "{typography.title}"
-    rounded: "{rounded.xl}"
-    padding: "10px 20px"
+    rounded: "{rounded.lg}"
+    padding: "10px 18px"
     height: "44px"
   button-primary-hover:
-    backgroundColor: "{colors.action-blue-pressed}"
+    backgroundColor: "{colors.action-pressed}"
   button-secondary:
-    backgroundColor: "{colors.counter-white}"
-    textColor: "{colors.action-blue}"
+    backgroundColor: "{colors.surface}"
+    textColor: "{colors.action}"
     typography: "{typography.title}"
-    rounded: "{rounded.xl}"
-    padding: "10px 20px"
+    rounded: "{rounded.lg}"
+    padding: "10px 18px"
     height: "44px"
   button-ghost:
     backgroundColor: "transparent"
     textColor: "{colors.ink-soft}"
     typography: "{typography.title}"
-    rounded: "{rounded.xl}"
+    rounded: "{rounded.lg}"
     padding: "10px 14px"
     height: "44px"
-  button-danger:
-    backgroundColor: "{colors.refused-red-ink}"
-    textColor: "{colors.counter-white}"
-    typography: "{typography.title}"
-    rounded: "{rounded.xl}"
-    padding: "10px 20px"
-    height: "44px"
   input-field:
-    backgroundColor: "{colors.counter-white}"
+    backgroundColor: "{colors.surface}"
     textColor: "{colors.ink}"
     typography: "{typography.body}"
     rounded: "{rounded.md}"
     padding: "10px 12px"
-    height: "40px"
-  metric-card:
-    background: "counter-white + animated mesh washes + diagonal hatch"
-    textColor: "{colors.ink}"
-    rounded: "{rounded.card}"
-    padding: "20px / 24px"
-    border: "1px hairline"
-    shadow: "resting"
+    height: "44px"
   card-surface:
-    backgroundColor: "{colors.counter-white}"
+    backgroundColor: "{colors.surface}"
     textColor: "{colors.ink}"
     rounded: "{rounded.card}"
     padding: "20px"
-    atmosphere: "mesh blobs (action/status washes) + diagonal hatch"
   badge-status:
     typography: "{typography.label}"
     rounded: "{rounded.full}"
     padding: "3px 10px"
   nav-item-active:
-    backgroundColor: "{colors.action-blue-wash}"
-    textColor: "{colors.action-blue}"
+    backgroundColor: "{colors.action-wash}"
+    textColor: "{colors.action}"
     typography: "{typography.title}"
     rounded: "{rounded.md}"
-    padding: "9px 12px"
-  table-header-cell:
-    backgroundColor: "{colors.ledger-mist}"
-    textColor: "{colors.ink-soft}"
-    typography: "{typography.label}"
-    padding: "10px 16px"
+    padding: "8px 12px"
 ---
 
 # Design System: ZITTOSITE
 
 ## Overview
 
-**Creative North Star: "The Service Counter"**
+**Creative North Star: "The Counter Slip"**
 
-ZITTOSITE is a counter you walk up to. You hand over one device number, you get back a ticket with a permanent number on it, and from then on the only question that matters is where that ticket currently sits. Every surface in this system is one of three things a real service counter has: the **ticket** you were handed, the **status board** you keep glancing at, and the **clerk's ledger** behind the glass. Nothing else needs to exist.
+ZITTOSITE is a slip you are handed at a service window. One device number goes in. One Order ID comes back. From then on the only question is where that slip currently sits. The website is the counter surface and the status board, not a glowing dashboard and not an agency landing page.
 
-That is why the world is white paper and one working blue. The counter is bright and lit; the ink is near-black; the only saturated blue on screen is the thing you can act on right now. Status does not borrow that blue — status is a stamp, and stamps have their own colors: amber for held, violet for queued, green for cleared, red for refused, slate for void. A user who is waiting checks this screen five times an hour from a phone in one hand, so the stamp has to read from arm's length without being read carefully.
+The world is cold paper and one working blue. The room is lit like a municipal desk at noon: off-white ground, near-black ink, hairlines instead of shadow. Action Blue marks the next thing you can do. Status never borrows that blue. Status is a stamp with its own wash, ink, and edge.
 
-Depth is almost absent on purpose. Structure comes from hairline rules and faintly tinted fills, the way a printed form is structured — not from stacked shadow. Shadow is reserved for the two or three things that genuinely lift off the page: a dropdown, a modal, the mobile drawer. The system is calm because the data is not: order IDs, IMEI strings, rupiah amounts, and a payment countdown all live here — set in Satoshi with tabular figures so digits stay in their columns and never jitter.
+Type is Atkinson Hyperlegible because the primary scene is a phone held in one hand, often at arm's length, while the visitor waits. Icons are Phosphor at regular weight so they sit at the same stroke as the hairlines.
 
 **Key Characteristics:**
 
-- Ticket-first: the `Order ID` is the most durable object on any order surface
+- Ticket-first: the Order ID is the most durable object on any order surface
 - One working blue; every other color is a status stamp
-- Hairline structure, tonal fills, shadow only for genuinely lifted layers
-- Monospaced tabular figures for every identifier, amount, and timer
+- Hairline structure, no mesh, no orbs, no glass, no fake charts
+- Tabular figures for identifiers, amounts, and timers
 - Waiting is designed as carefully as success
-- Mobile-first density; the phone is the primary reading scene
+- One light theme for the whole product, including login
 
 ## Colors
 
-A bright counter surface with one saturated working blue and six status stamps, each carrying its own wash, ink, and edge so a stamp is legible without relying on hue alone.
+Restrained: neutrals plus one accent. The visitor came to operate.
 
 ### Primary
 
-- **Action Blue** (`#2563EB`): The only saturated blue on screen. It marks the one thing the visitor can do next (the filled primary button), the currently active navigation item, the current step on a progress stepper, and interactive text. It never marks a status.
-- **Action Blue Pressed** (`#1D4ED8`): Hover and active fill for the primary button. Also the focus-ring hue at reduced alpha.
-- **Action Blue Wash** (`#EFF6FF`): Tinted fill behind the active navigation item, the hovered table row, and the promotional "Buat Order Baru" panel's inner detail. Wide areas of wash are allowed; wide areas of Action Blue are not.
+- **Action** (`#1453C7`): The only saturated blue. Primary button, active nav, current stepper step, interactive text. Never a status. Never a full-bleed tile fill.
+- **Action Pressed** (`#0E3FA0`): Hover and active fill.
+- **Action Wash** (`#E7F0FC`): Active nav fill, hovered table row, selected page number.
+- **Action Deep** (`#0A2C72`): Focus-adjacent ink, never a background field.
 
 ### Neutral
 
-- **Counter White** (`#FFFFFF`): Page ground and card surface. The default; a card does not tint itself to prove it is a card.
-- **Ledger Mist** (`#F8FAFC`): Table header rows, sidebar ground, disabled field fill, and skeleton bars. The faintest possible separation from Counter White.
-- **Hairline** (`#E2E8F0`): Every border, divider, and table rule in the system, at exactly 1px.
-- **Ink** (`#0F172A`): Headings, table values, and any number the visitor came to read.
-- **Ink Soft** (`#64748B`): Field labels, column headers, metadata, timestamps, and secondary description.
-- **Ink Faint** (`#94A3B8`): Placeholder text and disabled labels only. Never used for content a visitor must read.
+- **Ground** (`#F1F3F6`): Page canvas.
+- **Surface** (`#F8F9FB`): Cards, sidebar, inputs, dialogs. Not pure white.
+- **Mist** (`#EBEEF2`): Table headers, disabled fills, skeletons.
+- **Hairline** (`#D5DCE4`): Every 1px rule.
+- **Ink** (`#141A22`): Headings, values, anything that must be read.
+- **Ink Soft** (`#5C6774`): Labels, metadata, secondary description.
+- **Ink Faint** (`#8B95A1`): Placeholders and disabled labels only.
 
 ### Status Stamps
 
-Each stamp is a triplet: wash (fill), ink (text), edge (1px border). Never split a triplet across families.
+Each stamp is a triplet: wash, ink, edge. Never split a triplet.
 
-- **Hold Amber** — wash `#FEF9C3`, ink `#854D0E`, edge `#FDE047`: `Waiting Payment`. The order exists but the counter has not been paid.
-- **Cleared Green** — wash `#DCFCE7`, ink `#166534`, edge `#86EFAC`: `Paid` and `Done`. Money confirmed, or work finished.
-- **Queued Violet** — wash `#EDE9FE`, ink `#5B21B6`, edge `#C4B5FD`: `Waiting Action`. Sitting in the admin queue, nobody has claimed it.
-- **Working Amber** — wash `#FEF3C7`, ink `#92400E`, edge `#FCD34D`: `In Process`. A named admin holds this order right now.
-- **Refused Red** — wash `#FEE2E2`, ink `#991B1B`, edge `#FCA5A5`: `Rejected`. An admin declined it.
-- **Void Slate** — wash `#F1F5F9`, ink `#475569`, edge `#CBD5E1`: `Cancel`. Abandoned, expired, or withdrawn — deliberately the quietest stamp, because a void order is not news.
+- **Hold Amber**: Waiting Payment
+- **Cleared Green**: Paid, Done
+- **Queued Violet**: Waiting Action
+- **Working Amber**: In Process
+- **Refused Red**: Rejected
+- **Void Slate**: Cancel
 
 ### Named Rules
 
-**The One Blue Rule.** Action Blue means "act" or "now", nothing else. A single view carries at most one filled Action Blue button. If a second action wants the same weight, one of them is not primary.
+**The One Blue Rule.** Action means "act" or "now". A view carries at most one filled Action button.
 
-**The Stamp Rule.** A status is never communicated by color alone and never by a bare dot. It is always a pill carrying its own text, its own wash, and its own 1px edge. Two statuses that share a wash (`Paid` and `Done` both use Cleared Green) are still told apart by their text, never by a shade nobody can name.
+**The Stamp Rule.** Status is never color alone and never a bare dot. Always a pill with text, wash, and a 1px edge.
 
-**The Tinted Secondary Rule.** On any tinted surface, secondary text is tinted from that surface's own hue at reduced lightness. Gray text on a colored ground is forbidden.
+**The Theme Lock.** The whole product is light paper. Login does not invert. Metric tiles do not invert. No mid-page dark panels.
+
+**The Atmosphere Ban.** No mesh blobs, floating orbs, diagonal hatch decoration, sparkline costumes, or outer glows.
 
 ## Typography
 
-**Display / UI / Data Font:** Satoshi (with `ui-sans-serif`, `system-ui`, `sans-serif`) — one face throughout, same as NextAdmin
+**Face:** Atkinson Hyperlegible (400 / 700) via `next/font`. Chosen for the phone-in-one-hand reading scene, not as a generic grotesk.
 
-**Character:** Satoshi carries the whole product the way NextAdmin does: medium for controls, bold for titles, black only when a number must dominate. Identifiers, amounts, timestamps, and the payment countdown stay on Satoshi with tabular figures (`tnum`) so columns align — never a separate monospace costume.
+**Character:** Regular for body and labels. Bold for titles, metrics, and ticket data. Two weights only. Numbers use tabular figures so columns and countdown digits do not jitter.
 
 ### Hierarchy
 
-- **Display** (700, 1.75rem / 2.5rem, `-0.02em`): Page titles (NextAdmin heading-5). One per screen.
-- **Metric** (700, 1.5rem / 1.875rem, `-0.02em`): Overview / stat numbers (NextAdmin heading-6).
-- **Headline** (700, 1.375rem / 1.75rem, `-0.015em`): Card and section titles (NextAdmin body-2xlg).
-- **Title** (500, 1rem / 1.5rem): Emphasized UI labels and denser headings.
-- **Body** (500, 0.875rem / 1.375rem): Nav items, buttons, descriptions, table cells (NextAdmin body-sm).
-- **Label** (500, 0.75rem / 1.25rem, `0.02em`): Table column headers and micro captions (NextAdmin body-xs).
-- **Data** (500, 0.875rem, 1.4, `tnum`): Order IDs, IMEI, rupiah amounts, countdown, timestamps — Satoshi with tabular figures.
+- **Display** (700, 1.75rem): One page title per screen.
+- **Metric** (700, 1.5rem): Figures inside the metric strip.
+- **Headline** (700, 1.25rem): Card titles and the Order ID on a ticket.
+- **Title** (700, 1rem): Emphasized UI labels and primary buttons.
+- **Body** (400, 0.9375rem): Nav, descriptions, table cells.
+- **Label** (400, 0.75rem): Column headers and captions. Not tracked uppercase by default.
+- **Data** (700, 0.9375rem, `tnum`): Order ID, IMEI, rupiah, countdown.
 
 ### Named Rules
 
-**The Ticket Rule.** On any surface showing a single order, the `Order ID` is set in the data face at Headline size or larger, is never truncated, and is never abbreviated. It is the one string the visitor will read aloud on the phone to support.
+**The Ticket Rule.** On a single-order surface, the Order ID is Headline or larger, never truncated, never abbreviated.
 
-**The No-Jitter Rule.** Any number that changes while the visitor is watching — the payment countdown above all — is set in the data face with tabular figures, so no digit change shifts the layout by a subpixel.
+**The No-Jitter Rule.** Any number that changes while watched uses tabular figures.
+
+**The Eyebrow Rule.** At most one small kicker per screen. Section titles do not wear tracked uppercase costumes.
 
 ## Layout
 
-A fixed 220px sidebar on the left with a scrolling content column to its right, on a page ground of Counter White. Content is capped at 1280px and gutters at 24px on desktop, 16px on mobile. The vertical rhythm is a single 4px-based scale (4 / 8 / 12 / 16 / 24 / 32), and a heading always carries more space above it than below, so a section reads as belonging to what follows it.
+Fixed 240px sidebar on the left, scrolling content on Ground. Content caps at 1200px. Gutters 24px desktop, 16px mobile. Vertical rhythm is 4 / 8 / 12 / 16 / 24 / 32. More space above a heading than below it.
 
-Density is deliberate per surface: the user portal breathes (20–24px card padding, four stat tiles across) because a user reads one order at a time; the Super Admin ledger tightens (10–16px cell padding, no card wrapper around tables) because a Super Admin scans hundreds of rows.
+User portal: one primary ticket, then a metric strip, then the latest rows. Admin ledger: tighter cells, no decorative stage.
 
-**Responsive behavior.** At `md` (768px) the sidebar leaves the layout and becomes a left-edge drawer over a dimmed page, reached from a topbar control; stat tiles drop from four columns to two, then to one below 480px; tables become horizontally scrollable within their own region, with the leading identifier column readable first, and the page itself never scrolls sideways. The phone is the primary scene for the user portal, so its layout is designed first and the desktop composition is the expansion.
+At 768px the sidebar becomes a left drawer. Stat strips wrap to two columns, then one. Tables scroll inside their region.
 
 ## Elevation & Depth
 
-This system is flat at rest. A card is defined by Counter White against Ledger Mist and a 1px Hairline border, not by shadow — the same way a printed form is structured by rules rather than by relief. Shadow appears only when an element genuinely leaves the page plane, and every shadow carries both an offset and a soft blur; a zero-offset colored halo is never used.
+Flat at rest. A card is Surface against Ground plus a 1px Hairline. Shadow appears only when something leaves the page: dropdown, dialog, mobile drawer.
 
-### Shadow Vocabulary
+- **Resting:** none, or `0 1px 2px rgba(20,26,34,0.04)` if a card must separate from a matching ground
+- **Lifted:** `0 4px 16px rgba(20,26,34,0.10)`
+- **Overlay:** `0 8px 28px rgba(20,26,34,0.14)`
 
-- **Resting** (`box-shadow: 0 1px 3px rgba(15,23,42,0.06), 0 1px 2px rgba(15,23,42,0.04)`): Cards and stat tiles. Barely there; it separates a surface from the ground without implying the surface can be picked up.
-- **Lifted** (`box-shadow: 0 4px 16px rgba(15,23,42,0.10)`): Dropdowns, popovers, select menus. Things that appeared just now and will disappear.
-- **Overlay** (`box-shadow: 0 8px 32px rgba(15,23,42,0.14)`): Modal dialogs and the mobile drawer. The only shadow strong enough to read as "this is in front of everything".
-
-### Named Rules
-
-**The Flat-At-Rest Rule.** If an element is always on the page, it gets Resting or nothing. Only elements that can appear and disappear earn Lifted or Overlay.
+**The Flat-At-Rest Rule.** If it is always on the page, it gets Resting or nothing.
 
 ## Shapes
 
-Corners are gently curved but cards are soft on purpose: 5px on small chips, **14px on buttons**, 8px on inputs, 10px on nested panels, and **24px on every content card and metric tile**. The form language stays rectangular and calm; there are no cut corners. Icons are stroke-based so they sit at the same visual weight as the hairlines around them.
+One radius system:
 
-Borders are always exactly 1px in Hairline on every side that has one.
+- 4px chips
+- 8px inputs
+- 10px buttons and nav items
+- 12px cards and dialogs
+- 999px status stamps only
+
+No 24px soft dashboard cards. Icons are Phosphor regular, one family, no hand-rolled decorative marks except the brand shield.
 
 ## Components
 
 ### Buttons
 
-- **Shape:** Softly rounded (14px / `rounded-xl`), 44px tall, never full-width on desktop except inside a narrow form column.
-- **Primary:** Action Blue fill, **Counter White** label and icon, 10px/20px padding. One per view.
-- **Hover / Focus:** Fill deepens to Action Blue Pressed over 150ms; focus shows a 2px Action Blue ring at 35% alpha, offset 2px, and is never removed.
-- **Active:** Scales to 0.97 over 160ms with an exponential ease-out. Every pressable element in the system does this — it is how the interface admits it heard the press.
-- **Secondary:** Counter White fill, 1px Action Blue border, Action Blue label. Used for the second action in a pair and for "Saya Sudah Membayar".
-- **Ghost:** No fill, Ink Soft label; for low-stakes actions like `Batal` in a modal.
-- **Danger:** Refused Red Ink fill, white label; only for destructive record actions in the Super Admin ledger.
-- **Loading:** Label is replaced by an inline spinner plus the present-progressive of the action ("Memproses…"), the button is disabled, and its width is held so the layout does not jump.
+- 10px radius, 44px tall.
+- Primary: Action fill, Surface label. One per view.
+- Hover: Action Pressed, 150ms.
+- Active: `scale(0.97)` at 160ms on pointer devices.
+- Secondary: Surface fill, 1px Action border, Action label.
+- Ghost: Ink Soft, no fill.
+- Danger: Refused Ink fill, Surface label.
+- Loading: inline spinner, width held.
 
-### Cards / Containers
+### Cards
 
-- **Corner Style:** 24px (`rounded.card`) for content cards and metric tiles.
-- **Background:** Counter White with a soft **card atmosphere**: slow-moving pastel mesh blobs (Action / Cleared / Working / chart blue washes only) plus a faint diagonal hatch that fades down the face. Atmosphere sits behind content; it never becomes a second surface or a frosted glass overlay.
-- **Shadow Strategy:** Resting only (see Elevation & Depth).
-- **Border:** 1px Hairline on all sides.
-- **Internal Padding:** 20–28px. A card never contains another card.
+- 12px radius, Surface, 1px Hairline, no atmosphere layer.
+- Padding 20px. A card never contains another card.
 
-### Metric Overview Card
+### Metric strip
 
-Title row (bold Title + optional info hint + overflow control), a Display figure with an optional soft trend chip beside it, then a footer of comparison caption and a "Lihat detail →" link. No icon discs. The trend chip is a soft Cleared/Refused wash pill with a circular arrow glyph — not a status stamp. Atmosphere tone follows the metric's meaning.
+One paper object with two or four cells, separated by hairlines. Label, figure, optional caption. No icon disc, no sparkline, no gradient fill, no hover lift.
 
-### Inputs / Fields
+### Inputs
 
-- **Style:** Counter White fill, 1px Hairline border, 8px radius, 40px tall, label always rendered above the field as its own element.
-- **Focus:** Border shifts to Action Blue and a 2px Action Blue ring at 30% alpha appears; the transition runs 150ms.
-- **Error:** Border becomes Refused Red Edge, and a message in Refused Red Ink appears directly below the field naming both the problem and the fix.
-- **Disabled:** Ledger Mist fill, Ink Faint label, cursor not-allowed.
+- Surface, 1px Hairline, 8px, 44px tall, label above.
+- Focus: Action border + 3px Action ring at 18% alpha.
+- Error: Refused edge and an error line that names the problem and the fix.
 
 ### Status Badge
 
-The system's signature component. An inline pill (999px) carrying uppercase Label type at 600 weight, 3px/10px padding, with its wash as fill, its ink as text, and its edge as a 1px border — the triplet from Colors. Badge text is the Indonesian status name in the product's own vocabulary. The badge is the single most-read element in the product, so it is the one place where a 1px border is non-negotiable: it holds the shape legible against both Counter White and Ledger Mist.
+Pill, Label type, 3px/10px, wash + ink + 1px edge. Indonesian product vocabulary.
 
 ### Tables
 
-- **Header:** Ledger Mist ground, Label type in Ink Soft, 10px/16px padding.
-- **Rows:** Counter White, separated by a 1px Hairline bottom rule only. No vertical rules, no outer box, no zebra striping.
-- **Hover:** Row ground shifts to Action Blue Wash at 40% over 150ms.
-- **Leading column:** Always the identifier (`Order ID` or user name), set in the data face where it is an ID.
-- **Empty and loading:** A table never renders as a bare header. Loading shows Ledger Mist skeleton bars at row height; empty shows a centered line naming what is missing plus the action that would fill it.
+- Mist header, Label in Ink Soft.
+- Rows separated by a bottom hairline only.
+- Hover: Action Wash at 40%.
+- Leading column is the identifier.
 
 ### Navigation
 
-- **Style:** A vertical list on Ledger Mist ground, 220px wide, items at 9px/12px padding with an 18px stroke icon and a Title-weight label.
-- **Default:** Ink Soft label, transparent ground.
-- **Hover:** Ground becomes Counter White, label becomes Ink.
-- **Active:** Ground becomes Action Blue Wash, label and icon become Action Blue at 600 weight. The active marker is a tinted fill, never a colored edge bar.
-- **Mobile:** Below 768px the list moves into a left-edge drawer carrying the Overlay shadow over a page dimmed to 40%, sliding on the drawer curve.
+- 240px Surface column.
+- Active item: Action Wash + Action label. No edge bar.
+- Section heading is plain Body in Ink Soft, not a tracked banner.
 
-### Progress Stepper
+### Progress Stepper and Countdown
 
-The order's status board, rendered vertically so each step can carry its own timestamp on the right. A completed step is a Cleared Green disc with a white check; the current step is a filled Action Blue disc with its label at 600 weight; a pending step is a Hairline ring on Counter White with an Ink Soft label. Steps are connected by a 2px vertical rule that is Cleared Green behind completed steps and Hairline ahead of the current one, so the visitor's eye finds "where am I" before reading a word.
-
-### Payment Countdown
-
-A single large figure in the data face with tabular figures, above the QR panel. It is Ink while there is plenty of time, shifts to Working Amber Ink under five minutes, and to Refused Red Ink under one minute; the digit itself changes with a 150ms vertical slide of 8px so the change is felt without being read. When it reaches zero the panel replaces itself with an expired state that names the next step, never a dead timer.
+Unchanged in job: vertical status board; countdown uses data figures and shifts to Working then Refused ink as time runs out.
 
 ## Do's and Don'ts
 
-### Do:
+### Do
 
-- **Do** give every status a pill carrying text, a 1px edge, and its own wash from the Colors triplets.
-- **Do** set every identifier, amount, timestamp, and timer in the data face with tabular figures (`tnum`).
-- **Do** mark the active navigation item with an Action Blue Wash fill and an Action Blue label.
-- **Do** keep exactly one filled Action Blue button per view.
-- **Do** design `Waiting Payment` and `Waiting Action` as fully as `Done` — they are what the visitor actually sees most.
-- **Do** give every pressable element a `scale(0.97)` press response at 160ms.
-- **Do** hold a button's width while it is loading, and hold a table's height while it is skeletoning.
-- **Do** tint secondary text on the blue promotional panel from the blue hue, not from the gray ramp.
+- Give every status a pill with text, wash, and edge.
+- Set identifiers, amounts, and timers in tabular figures.
+- Keep exactly one filled Action button per view.
+- Design waiting states as fully as Done.
+- Give pointer-triggered controls a `scale(0.97)` press.
 
-### Don't:
+### Don't
 
-- **Don't** nest a card inside a card. If content needs its own frame inside a card, it needs a hairline divider instead.
-- **Don't** mark the active navigation item with a colored left or right edge bar above 1px.
-- **Don't** put gray text on any colored ground.
-- **Don't** use Action Blue for a status, or a status color for an action.
-- **Don't** use gradient text or frosted-glass overlays. Soft mesh blur and diagonal hatch are allowed only as **card atmosphere** behind content, using system washes — never as a full-screen effect.
-- **Don't** animate an action the visitor triggers from the keyboard.
-- **Don't** animate an element in from `scale(0)`; entrances start at `scale(0.95)` with opacity.
-- **Don't** write `transition: all`; name the properties.
-- **Don't** let any UI transition exceed 300ms, except the mobile drawer at 280ms and a deliberately slow hold-to-confirm.
-- **Don't** render a table, list, or stat tile with no empty state and no loading state.
+- Do not use mesh, orbs, glass, gradient text, or fake sparklines.
+- Do not invert a section to dark or fill a metric tile with Action.
+- Do not nest cards.
+- Do not use Action for status, or a status color for a primary action.
+- Do not put gray text on a colored ground.
+- Do not mark active nav with an edge bar thicker than 1px.
+- Do not write `transition: all`.
+- Do not let a UI transition exceed 300ms except the 280ms drawer.
+- Do not change routes, nav item labels, form field names, or business copy to chase a look.

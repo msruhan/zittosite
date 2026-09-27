@@ -1,13 +1,15 @@
 import "reflect-metadata";
 import { NestFactory } from "@nestjs/core";
 import { NestExpressApplication } from "@nestjs/platform-express";
+import { Logger } from "@nestjs/common";
 import helmet from "helmet";
 import cookieParser from "cookie-parser";
 import { AppModule } from "./app.module";
 import { corsOrigins, validateStartupEnv } from "./config/env";
 
 async function bootstrap() {
-  validateStartupEnv();
+  const startupLogger = new Logger("Startup");
+  validateStartupEnv((message) => startupLogger.warn(message));
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
   app.set("trust proxy", 1);
   app.use(cookieParser());

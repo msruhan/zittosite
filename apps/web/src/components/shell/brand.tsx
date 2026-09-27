@@ -44,13 +44,13 @@ export function BrandLockup({
 }) {
   return (
     <span className={cn("flex items-center gap-3", className)}>
-      <BrandMark className="size-8 text-action" />
+      <BrandMark className="size-8 text-action brand-mark" />
       <span className="flex flex-col leading-none">
-        <span className="text-headline font-bold tracking-[-0.02em] text-ink">
+        <span className="brand-word text-headline tracking-[-0.02em] text-ink">
           ZITTOSITE
         </span>
         {showTagline ? (
-          <span className="mt-1.5 text-label uppercase text-ink-soft">
+          <span className="brand-tagline mt-1.5 text-label text-ink-soft">
             Digital IMEI Activation Platform
           </span>
         ) : null}

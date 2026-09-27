@@ -145,8 +145,13 @@ export function serializeOrderListItem(
       ? { ...serializeInvoice(order.invoice)!, orderId: order.orderId }
       : null,
     result: serializeResult(order.result, order.orderId),
-    activity: order.activity.map((log) =>
-      serializeActivity(log, order.orderId),
-    ),
+    activity: order.activity.map((log) => {
+      const entry = serializeActivity(log, order.orderId);
+      const actorIsCustomer =
+        log.actor === order.user.fullName || log.actor === order.user.username;
+      return opts?.redactUser && actorIsCustomer
+        ? { ...entry, actor: "Customer" }
+        : entry;
+    }),
   };
 }

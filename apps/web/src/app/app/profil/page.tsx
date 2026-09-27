@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Send } from "lucide-react";
+import { PaperPlaneTilt } from "@phosphor-icons/react/dist/ssr";
 import { PageHeader } from "@/components/shell/app-shell";
 import { Avatar } from "@/components/shell/user-chip";
 import { Button } from "@/components/ui/button";
@@ -61,7 +61,7 @@ export default async function ProfilPage() {
               <DetailRow label="Telegram">
                 {user.telegramHandle ? (
                   <span className="inline-flex items-center gap-1.5 font-medium text-ink">
-                    <Send className="size-3.5 text-action" aria-hidden="true" />
+                    <PaperPlaneTilt className="size-3.5 text-action" aria-hidden="true" />
                     {user.telegramHandle}
                   </span>
                 ) : (
@@ -105,7 +105,7 @@ export default async function ProfilPage() {
             </p>
             <Button asChild className="mt-4" variant="secondary">
               <Link href="/app/telegram">
-                <Send className="size-4" aria-hidden="true" />
+                <PaperPlaneTilt className="size-4" aria-hidden="true" />
                 Mulai penautan
               </Link>
             </Button>

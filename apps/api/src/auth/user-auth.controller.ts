@@ -17,12 +17,15 @@ import {
   extractAuthToken,
 } from "./auth-cookies";
 import { clientMetaFromReq } from "./client-meta";
+import { Throttle } from "@nestjs/throttler";
+import { AUTH_THROTTLE, SENSITIVE_THROTTLE } from "../security/throttle";
 
 @Controller()
 export class UserAuthController {
   constructor(private readonly auth: UserAuthService) {}
 
   @Post("auth/login")
+  @Throttle(AUTH_THROTTLE)
   async login(
     @Body() body: { username?: string; password?: string },
     @Req() req: any,
@@ -60,6 +63,7 @@ export class UserAuthController {
 
   @Post("me/password")
   @UseGuards(UserAuthGuard)
+  @Throttle(SENSITIVE_THROTTLE)
   async changePassword(
     @Req() req: any,
     @Res({ passthrough: true }) res: Response,

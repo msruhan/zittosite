@@ -29,28 +29,28 @@ export function RevenueChart({
         >
           <defs>
             <linearGradient id="revenueFill" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#2563EB" stopOpacity={0.55} />
-              <stop offset="100%" stopColor="#2563EB" stopOpacity={0} />
+              <stop offset="0%" stopColor="#1453C7" stopOpacity={0.28} />
+              <stop offset="100%" stopColor="#1453C7" stopOpacity={0} />
             </linearGradient>
             <linearGradient id="ordersFill" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#18BFFF" stopOpacity={0.35} />
-              <stop offset="100%" stopColor="#18BFFF" stopOpacity={0} />
+              <stop offset="0%" stopColor="#5C6774" stopOpacity={0.18} />
+              <stop offset="100%" stopColor="#5C6774" stopOpacity={0} />
             </linearGradient>
           </defs>
           <CartesianGrid
-            stroke="#E6EBF1"
+            stroke="#D5DCE4"
             strokeDasharray="5 5"
             vertical={false}
           />
           <XAxis
             dataKey="label"
-            tick={{ fill: "#6B7280", fontSize: 12 }}
+            tick={{ fill: "#5C6774", fontSize: 12 }}
             tickLine={false}
             axisLine={false}
           />
           <YAxis
             yAxisId="revenue"
-            tick={{ fill: "#6B7280", fontSize: 12 }}
+            tick={{ fill: "#5C6774", fontSize: 12 }}
             tickLine={false}
             axisLine={false}
             width={56}
@@ -63,10 +63,10 @@ export function RevenueChart({
           />
           <YAxis yAxisId="orders" orientation="right" hide />
           <Tooltip
-            cursor={{ stroke: "#2563EB", strokeWidth: 1, strokeDasharray: "4 4" }}
+            cursor={{ stroke: "#1453C7", strokeWidth: 1, strokeDasharray: "4 4" }}
             contentStyle={{
               borderRadius: 10,
-              border: "1px solid #E6EBF1",
+              border: "1px solid #D5DCE4",
               boxShadow: "0 1px 2px rgba(84,87,118,0.12)",
               fontSize: 13,
             }}
@@ -82,7 +82,7 @@ export function RevenueChart({
             type="monotone"
             dataKey="revenue"
             name="revenue"
-            stroke="#2563EB"
+            stroke="#1453C7"
             strokeWidth={3}
             fill="url(#revenueFill)"
             activeDot={{ r: 5, strokeWidth: 0 }}
@@ -92,7 +92,7 @@ export function RevenueChart({
             type="monotone"
             dataKey="orders"
             name="orders"
-            stroke="#18BFFF"
+            stroke="#5C6774"
             strokeWidth={2}
             fill="url(#ordersFill)"
             activeDot={{ r: 4, strokeWidth: 0 }}

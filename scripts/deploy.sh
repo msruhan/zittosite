@@ -14,6 +14,27 @@ if [[ ! -f .env ]]; then
   exit 1
 fi
 
+env_value() {
+  grep -E "^$1=" .env | tail -n 1 | cut -d= -f2- | tr -d "\"' \r" || true
+}
+
+# With a domain configured, Caddy terminates TLS and the app ports stay on localhost.
+# Without one, the app is served directly on :3000 / :4000 over plain HTTP.
+WEB_DOMAIN_VALUE="$(env_value WEB_DOMAIN)"
+if [[ -n "$WEB_DOMAIN_VALUE" ]]; then
+  for required in API_DOMAIN ACME_EMAIL; do
+    if [[ -z "$(env_value "$required")" ]]; then
+      echo "ERROR: WEB_DOMAIN is set but $required is missing in .env"
+      exit 1
+    fi
+  done
+  export COMPOSE_PROFILES=tls
+  export PUBLIC_BIND_ADDR=127.0.0.1
+  echo "==> Mode: HTTPS via Caddy ($WEB_DOMAIN_VALUE)"
+else
+  echo "==> Mode: plain HTTP on ports 3000/4000 (set WEB_DOMAIN in .env to enable HTTPS)"
+fi
+
 echo "==> Pulling base images / building..."
 docker compose -f "$COMPOSE_FILE" build --pull
 

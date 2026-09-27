@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
-import { ArrowRight, Package } from "lucide-react";
+import { ArrowRight, Package } from "@phosphor-icons/react/dist/ssr";
 import { Button } from "@/components/ui/button";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { DataValue, TicketId } from "@/components/ui/data-value";
@@ -12,7 +12,6 @@ import { StatusBadge, Tag } from "@/components/ui/status-badge";
 import { TicketStub } from "@/components/ui/ticket-stub";
 import { DashboardMonthFilter } from "@/components/domain/dashboard-month-filter";
 import { StatGrid, StatTile } from "@/components/domain/stat-tile";
-import { TicketShowcase } from "@/components/domain/ticket-showcase";
 import { UserOrderTable } from "@/components/domain/user-order-table";
 import { ORDER_STATUS } from "@/lib/status";
 import { ApiError } from "@/lib/api";
@@ -165,18 +164,12 @@ export default async function UserDashboardPage({
         />
       </StatGrid>
 
-      <Reveal delay={60}>
-        <TicketShowcase
-          body="Pilih layanan, bayar, lalu pantau statusnya di sini sampai selesai. Nomor tiket Anda tidak berubah."
-        />
-      </Reveal>
-
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,0.9fr)]">
         <Reveal delay={80} as="article">
           <Card className="overflow-hidden">
             <CardHeader>
               <div>
-                <p className="text-label uppercase text-ink-soft">Tiket aktif</p>
+                <p className="text-label text-ink-soft">Tiket aktif</p>
                 <CardTitle className="mt-1">Order terakhir</CardTitle>
               </div>
               {latest ? <StatusBadge status={latest.status} stampIn /> : null}
@@ -228,7 +221,7 @@ export default async function UserDashboardPage({
                   <Button asChild variant="outline" block>
                     <Link href={`/app/order/${latest.orderId}`}>
                       Lihat detail
-                      <ArrowRight className="size-4" aria-hidden="true" />
+                      <ArrowRight className="size-4" weight="bold" aria-hidden="true" />
                     </Link>
                   </Button>
                 </div>
@@ -236,7 +229,7 @@ export default async function UserDashboardPage({
               </>
             ) : (
               <EmptyState
-                icon={<Package strokeWidth={1.5} />}
+                icon={<Package weight="regular" />}
                 title="Tidak ada order di periode ini"
                 description={`Belum ada order untuk ${periodLabel.toLowerCase()}. Coba bulan lain atau buat order baru.`}
                 action={
@@ -253,7 +246,7 @@ export default async function UserDashboardPage({
           <Card className="flex h-full flex-col justify-between">
             <CardBody className="flex flex-1 flex-col justify-between gap-5 pt-5">
               <div>
-                <p className="text-label uppercase text-ink-soft">Mulai sekarang</p>
+                <p className="text-label text-ink-soft">Mulai sekarang</p>
                 <CardTitle className="mt-1.5">Buat order baru</CardTitle>
                 <p className="mt-2 max-w-[36ch] text-body text-ink-soft">
                   Pilih layanan, masukkan IMEI, dan bayar lewat QRIS. Nomor tiket
@@ -263,7 +256,7 @@ export default async function UserDashboardPage({
               <Button asChild>
                 <Link href="/app/order">
                   Order sekarang
-                  <ArrowRight className="size-4" aria-hidden="true" />
+                  <ArrowRight className="size-4" weight="bold" aria-hidden="true" />
                 </Link>
               </Button>
             </CardBody>
@@ -287,7 +280,7 @@ export default async function UserDashboardPage({
               <UserOrderTable orders={recent} />
             ) : (
               <EmptyState
-                icon={<Package strokeWidth={1.5} />}
+                icon={<Package weight="regular" />}
                 title="Riwayat kosong untuk periode ini"
                 description={`Tidak ada order pada ${periodLabel.toLowerCase()}.`}
                 action={

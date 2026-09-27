@@ -26,6 +26,6 @@ import { SuperAdminGuard } from "./super-admin.guard";
     AdminAdminsService,
     AdminReportsService,
   ],
-  exports: [AdminAuthService, AdminAuthGuard, AdminTotpService],
+  exports: [AdminAuthService, AdminAuthGuard, SuperAdminGuard, AdminTotpService],
 })
 export class AdminModule {}

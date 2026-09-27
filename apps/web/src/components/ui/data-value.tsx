@@ -1,8 +1,8 @@
 import { cn } from "@/lib/utils";
 
 /**
- * Identifiers, amounts, timestamps, and timers — Satoshi with tabular figures
- * so digits hold their columns and never jitter (no separate mono face).
+ * Identifiers, amounts, timestamps, and timers use tabular figures
+ * so digits hold their columns and never jitter.
  */
 export function DataValue({
   children,

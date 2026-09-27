@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { LogOut } from "lucide-react";
+import { SignOut } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import {
   NAV_BY_VARIANT,
@@ -12,19 +12,17 @@ import {
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
-/**
- * Sidebar nav — larger hit targets & type than the base NextAdmin item.
- */
 const itemBase = [
-  "flex w-full items-center gap-3.5 rounded-lg px-4 py-3.5",
-  "text-title font-medium",
-  "transition-[background-color,color] duration-200 ease-out-strong",
+  "flex w-full items-center gap-3 rounded-md px-3 py-2.5",
+  "text-body",
+  "transition-[background-color,color,transform] duration-150 ease-out-strong",
+  "active:scale-[0.98]",
 ];
 
 export function NavList({
   variant,
   onNavigate,
-  sectionLabel = "MAIN MENU",
+  sectionLabel = "Menu",
   hideHrefs,
 }: {
   variant: NavVariant;
@@ -40,12 +38,10 @@ export function NavList({
 
   return (
     <div>
-      <h2 className="mb-5 text-body font-medium tracking-[0.04em] text-nav-ink">
-        {sectionLabel}
-      </h2>
+      <h2 className="mb-3 px-3 text-label text-white/42">{sectionLabel}</h2>
 
       <nav aria-label={sectionLabel}>
-        <ul className="space-y-2.5">
+        <ul className="space-y-0.5">
           {items.map((item) => {
             const active = isNavItemActive(item, pathname);
             const Icon = item.icon;
@@ -59,17 +55,14 @@ export function NavList({
                   className={cn(
                     itemBase,
                     active
-                      ? "bg-action/[0.07] text-action"
-                      : "text-nav-ink hover:bg-mist hover:text-ink",
+                      ? "bg-white/10 font-bold text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]"
+                      : "text-nav-ink/76 hover:bg-white/7 hover:text-white",
                   )}
                 >
                   <Icon
                     aria-hidden="true"
-                    strokeWidth={1.75}
-                    className={cn(
-                      "size-7 shrink-0",
-                      active ? "text-action" : "text-nav-ink",
-                    )}
+                    weight="regular"
+                    className="size-5 shrink-0"
                   />
                   <span>{item.label}</span>
                 </Link>
@@ -116,14 +109,10 @@ export function LogoutLink({
       onClick={() => void handleLogout()}
       className={cn(
         itemBase,
-        "text-left text-nav-ink hover:bg-refused-wash hover:text-refused-ink",
+        "text-left text-nav-ink/70 hover:bg-refused-wash/10 hover:text-white",
       )}
     >
-      <LogOut
-        aria-hidden="true"
-        strokeWidth={1.75}
-        className="size-7 shrink-0"
-      />
+      <SignOut aria-hidden="true" weight="regular" className="size-5 shrink-0" />
       <span>Logout</span>
     </button>
   );

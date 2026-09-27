@@ -32,11 +32,13 @@ export function Countdown({
   const firedRef = React.useRef(false);
 
   React.useEffect(() => {
-    setSeconds(remainingSeconds(expiresAt));
-    const timer = window.setInterval(() => {
-      setSeconds(remainingSeconds(expiresAt));
-    }, 1000);
-    return () => window.clearInterval(timer);
+    const tick = () => setSeconds(remainingSeconds(expiresAt));
+    const first = window.setTimeout(tick, 0);
+    const timer = window.setInterval(tick, 1000);
+    return () => {
+      window.clearTimeout(first);
+      window.clearInterval(timer);
+    };
   }, [expiresAt]);
 
   React.useEffect(() => {

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft } from "@phosphor-icons/react/dist/ssr";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { DataValue, TicketId } from "@/components/ui/data-value";
 import { PaymentPanel } from "@/components/domain/payment-panel";

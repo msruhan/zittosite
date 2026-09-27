@@ -25,7 +25,7 @@ const ALL_STATUSES: OrderStatus[] = [
   "cancel",
 ];
 
-function jakartaYmd(date: Date): string {
+export function jakartaYmd(date: Date): string {
   return new Intl.DateTimeFormat("en-CA", {
     timeZone: TZ,
     year: "numeric",
@@ -35,11 +35,11 @@ function jakartaYmd(date: Date): string {
 }
 
 /** Midnight Asia/Jakarta for the calendar day of `date`, as a UTC Date. */
-function jakartaDayStart(date: Date): Date {
+export function jakartaDayStart(date: Date): Date {
   return new Date(`${jakartaYmd(date)}T00:00:00+07:00`);
 }
 
-function addJakartaDays(dayStart: Date, days: number): Date {
+export function addJakartaDays(dayStart: Date, days: number): Date {
   const [y, m, d] = jakartaYmd(dayStart).split("-").map(Number);
   const probe = new Date(Date.UTC(y!, m! - 1, d! + days, 12, 0, 0));
   return new Date(`${jakartaYmd(probe)}T00:00:00+07:00`);

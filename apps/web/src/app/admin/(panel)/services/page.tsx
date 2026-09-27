@@ -4,7 +4,7 @@ import { PageHeader } from "@/components/shell/app-shell";
 import { ServiceManagement } from "@/components/domain/service-management";
 import { ApiError } from "@/lib/api";
 import { serverApi } from "@/lib/server-api";
-import type { Service } from "@/lib/types";
+import type { Admin, Service } from "@/lib/types";
 
 export const metadata: Metadata = {
   title: "Services",
@@ -23,8 +23,12 @@ export default async function AdminServicesPage() {
   }
 
   let services: Service[] = [];
+  let admins: Admin[] = [];
   try {
-    services = await serverApi<Service[]>("/admin/services");
+    [services, admins] = await Promise.all([
+      serverApi<Service[]>("/admin/services"),
+      serverApi<Admin[]>("/admin/admins"),
+    ]);
   } catch (err) {
     if (err instanceof ApiError && err.status === 401) redirect("/admin/login");
     if (err instanceof ApiError && err.status === 403) redirect("/admin/orders");
@@ -35,9 +39,12 @@ export default async function AdminServicesPage() {
     <>
       <PageHeader
         title="Services"
-        description="Atur layanan aktivasi, harga, dan status aktif."
+        description="Atur layanan, harga, status aktif, dan operator yang menanganinya."
       />
-      <ServiceManagement initialServices={services} />
+      <ServiceManagement
+        initialServices={services}
+        operators={admins.filter((admin) => admin.role !== "super_admin")}
+      />
     </>
   );
 }

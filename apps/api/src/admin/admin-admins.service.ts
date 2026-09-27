@@ -5,11 +5,46 @@ import {
   NotFoundException,
 } from "@nestjs/common";
 import * as bcrypt from "bcryptjs";
-import type { Admin, AdminRole, AdminStatus } from "@prisma/client";
+import { randomBytes } from "crypto";
+import type {
+  Admin,
+  AdminRole,
+  AdminStatus,
+  AdminTelegramInvite,
+  Prisma,
+} from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
+import { passwordPolicyError } from "../security/password";
+
+const ADMIN_INCLUDE = {
+  _count: { select: { assignedOrders: true } },
+  telegramInvites: {
+    where: { status: { in: ["pending", "claimed"] } },
+    orderBy: { createdAt: "desc" },
+    take: 1,
+  },
+} satisfies Prisma.AdminInclude;
+
+function serializeInvite(invite: AdminTelegramInvite | undefined) {
+  if (!invite) return null;
+  if (invite.status === "pending" && invite.expiresAt <= new Date()) {
+    return null;
+  }
+  return {
+    status: invite.status as "pending" | "claimed",
+    expiresAt: invite.expiresAt.toISOString(),
+    telegramUsername: invite.claimUsername,
+    telegramName: invite.claimName,
+    telegramUserId: invite.claimTelegramUserId,
+    claimedAt: invite.claimedAt?.toISOString() ?? null,
+  };
+}
 
 export function serializeAdminAccount(
-  admin: Admin & { _count?: { assignedOrders: number } },
+  admin: Admin & {
+    _count?: { assignedOrders: number };
+    telegramInvites?: AdminTelegramInvite[];
+  },
 ) {
   const handle = admin.telegramUsername?.trim();
   return {
@@ -22,11 +57,18 @@ export function serializeAdminAccount(
         ? handle
         : `@${handle}`
       : null,
+    telegramLinked: Boolean(admin.telegramChatId),
+    telegramInvite: serializeInvite(admin.telegramInvites?.[0]),
     active: admin.status === "active",
     handledCount: admin._count?.assignedOrders ?? 0,
     totpEnabled: Boolean(admin.totpEnabledAt),
     createdAt: admin.createdAt.toISOString(),
   };
+}
+
+/** Operators never sign in on the web, so they get a random, never-shared password. */
+function unusablePasswordHash() {
+  return bcrypt.hash(randomBytes(32).toString("base64url"), 10);
 }
 
 @Injectable()
@@ -45,7 +87,7 @@ export class AdminAdminsService {
             ],
           }
         : undefined,
-      include: { _count: { select: { assignedOrders: true } } },
+      include: ADMIN_INCLUDE,
       orderBy: { createdAt: "desc" },
     });
     return admins.map(serializeAdminAccount);
@@ -67,11 +109,12 @@ export class AdminAdminsService {
     if (!username || !fullName) {
       throw new BadRequestException("Username dan nama lengkap wajib.");
     }
-    if (password.length < 8) {
-      throw new BadRequestException("Password minimal 8 karakter.");
-    }
     if (role !== "admin" && role !== "super_admin") {
       throw new BadRequestException("Role tidak valid.");
+    }
+    if (role === "super_admin") {
+      const policyError = passwordPolicyError(password);
+      if (policyError) throw new BadRequestException(policyError);
     }
 
     const exists = await this.prisma.admin.findUnique({ where: { username } });
@@ -81,11 +124,14 @@ export class AdminAdminsService {
       data: {
         username,
         fullName,
-        passwordHash: await bcrypt.hash(password, 10),
+        passwordHash:
+          role === "super_admin"
+            ? await bcrypt.hash(password, 10)
+            : await unusablePasswordHash(),
         role,
         status: "active",
       },
-      include: { _count: { select: { assignedOrders: true } } },
+      include: ADMIN_INCLUDE,
     });
     return serializeAdminAccount(admin);
   }
@@ -125,10 +171,18 @@ export class AdminAdminsService {
       throw new BadRequestException("Status tidak valid.");
     }
 
-    const password = input.password ? String(input.password) : "";
-    if (password && password.length < 8) {
-      throw new BadRequestException("Password minimal 8 karakter.");
+    const nextRole = input.role ?? existing.role;
+    const password =
+      input.password && nextRole === "super_admin" ? String(input.password) : "";
+    const policyError = password ? passwordPolicyError(password) : null;
+    if (policyError) throw new BadRequestException(policyError);
+    const promoting = existing.role !== "super_admin" && nextRole === "super_admin";
+    if (promoting && !password) {
+      throw new BadRequestException(
+        "Tetapkan password baru saat menjadikan operator Super Admin.",
+      );
     }
+    const demoting = existing.role === "super_admin" && nextRole === "admin";
 
     if (
       existing.role === "super_admin" &&
@@ -146,11 +200,12 @@ export class AdminAdminsService {
         ...(input.role ? { role: input.role } : {}),
         ...(input.status ? { status: input.status } : {}),
         ...(password ? { passwordHash: await bcrypt.hash(password, 10) } : {}),
+        ...(demoting ? { passwordHash: await unusablePasswordHash() } : {}),
       },
-      include: { _count: { select: { assignedOrders: true } } },
+      include: ADMIN_INCLUDE,
     });
 
-    if (input.status === "blocked" || password) {
+    if (input.status === "blocked" || password || demoting) {
       await this.revokeSessions(id);
     }
 
@@ -183,7 +238,7 @@ export class AdminAdminsService {
       const admin = await this.prisma.admin.update({
         where: { id },
         data: { status: "blocked" },
-        include: { _count: { select: { assignedOrders: true } } },
+        include: ADMIN_INCLUDE,
       });
       await this.revokeSessions(id);
       return {

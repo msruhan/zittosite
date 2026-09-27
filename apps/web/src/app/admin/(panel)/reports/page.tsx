@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
-import { ArrowDownRight, ArrowUpRight } from "lucide-react";
+import { ArrowDownRight, ArrowUpRight } from "@phosphor-icons/react/dist/ssr";
 import { PageHeader } from "@/components/shell/app-shell";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { DataValue } from "@/components/ui/data-value";
@@ -154,7 +154,7 @@ export default async function AdminReportsPage() {
                 <p
                   className={cn(
                     "mt-0.5 inline-flex items-center gap-1 text-body font-medium",
-                    trendUp ? "text-metric-green" : "text-metric-red",
+                    trendUp ? "text-cleared-ink" : "text-refused-ink",
                   )}
                 >
                   {trendUp ? (

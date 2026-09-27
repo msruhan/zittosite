@@ -17,31 +17,31 @@ export interface StatusStamp {
 export const ORDER_STATUS: Record<OrderStatus, StatusStamp> = {
   waiting_payment: {
     label: "Waiting Payment",
-    stamp: "bg-hold-wash text-hold-ink border-transparent",
+    stamp: "bg-hold-wash text-hold-ink border-hold-edge",
     solid: "bg-hold-edge",
     meaning: "Order sudah dibuat, menunggu pembayaran diselesaikan.",
   },
   paid: {
     label: "Paid",
-    stamp: "bg-cleared-wash text-cleared-ink border-transparent",
+    stamp: "bg-cleared-wash text-cleared-ink border-cleared-edge",
     solid: "bg-cleared-edge",
     meaning: "Pembayaran sudah diverifikasi.",
   },
   waiting_action: {
     label: "Waiting Action",
-    stamp: "bg-queued-wash text-queued-ink border-transparent",
+    stamp: "bg-queued-wash text-queued-ink border-queued-edge",
     solid: "bg-queued-edge",
     meaning: "Sudah masuk antrean, menunggu admin mengambil order.",
   },
   in_process: {
     label: "In Process",
-    stamp: "bg-working-wash text-working-ink border-transparent",
+    stamp: "bg-working-wash text-working-ink border-working-edge",
     solid: "bg-working-edge",
     meaning: "Sedang dikerjakan admin.",
   },
   done: {
     label: "Done",
-    stamp: "bg-cleared-wash text-cleared-ink border-transparent",
+    stamp: "bg-cleared-wash text-cleared-ink border-cleared-edge",
     solid: "bg-cleared-edge",
     meaning: "Pengerjaan selesai dan hasilnya sudah tersedia.",
   },
@@ -62,13 +62,13 @@ export const ORDER_STATUS: Record<OrderStatus, StatusStamp> = {
 export const PAYMENT_STATUS: Record<PaymentStatus, StatusStamp> = {
   pending: {
     label: "Pending",
-    stamp: "bg-hold-wash text-hold-ink border-transparent",
+    stamp: "bg-hold-wash text-hold-ink border-hold-edge",
     solid: "bg-hold-edge",
     meaning: "Menunggu pembayaran masuk.",
   },
   paid: {
     label: "Paid",
-    stamp: "bg-cleared-wash text-cleared-ink border-transparent",
+    stamp: "bg-cleared-wash text-cleared-ink border-cleared-edge",
     solid: "bg-cleared-edge",
     meaning: "Pembayaran diterima.",
   },
@@ -95,13 +95,13 @@ export const PAYMENT_STATUS: Record<PaymentStatus, StatusStamp> = {
 export const RESULT_STATUS: Record<ResultStatus, StatusStamp> = {
   success: {
     label: "Berhasil",
-    stamp: "bg-cleared-wash text-cleared-ink border-transparent",
+    stamp: "bg-cleared-wash text-cleared-ink border-cleared-edge",
     solid: "bg-cleared-edge",
     meaning: "Aktivasi berhasil dan terdaftar.",
   },
   partial: {
     label: "Sebagian",
-    stamp: "bg-working-wash text-working-ink border-transparent",
+    stamp: "bg-working-wash text-working-ink border-working-edge",
     solid: "bg-working-edge",
     meaning: "Sebagian permintaan berhasil, sisanya perlu tindak lanjut.",
   },

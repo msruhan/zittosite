@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { Info, QrCode } from "lucide-react";
+import { Info, QrCode } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Textarea } from "@/components/ui/field";
@@ -110,7 +110,7 @@ export function CreateOrderForm({
         <div className="flex gap-2.5 rounded-md border border-hairline bg-mist px-3.5 py-3">
           <Info
             aria-hidden="true"
-            strokeWidth={1.5}
+            weight="regular"
             className="mt-0.5 size-4 shrink-0 text-ink-soft"
           />
           <div className="space-y-1">
@@ -149,7 +149,7 @@ export function CreateOrderForm({
       >
         <Info
           aria-hidden="true"
-          strokeWidth={1.5}
+          weight="regular"
           className="mt-0.5 size-4 shrink-0 text-hold-ink"
         />
         <p className="text-body text-hold-ink">

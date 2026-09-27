@@ -21,8 +21,8 @@ export function Avatar({
       aria-hidden="true"
       className={cn(
         "flex size-11 shrink-0 items-center justify-center rounded-full",
-        "border border-hairline bg-action-wash text-label font-semibold text-action",
-        "shadow-resting",
+        "border border-white/60 bg-action-wash text-label font-bold text-action",
+        "shadow-[0_12px_28px_rgba(0,108,255,0.18)]",
         className,
       )}
     >
@@ -41,7 +41,7 @@ export function UserChip({
   return (
     <div className="flex items-center gap-2.5">
       <div className="hidden text-right leading-tight sm:block">
-        <p className="text-body font-semibold text-ink">{fullName}</p>
+        <p className="text-body font-bold text-ink">{fullName}</p>
         <p className="font-data text-body text-ink-soft">{subtitle}</p>
       </div>
       <Avatar fullName={fullName} />

@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { Eye, Search } from "lucide-react";
+import { Eye, MagnifyingGlass } from "@phosphor-icons/react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { DataValue } from "@/components/ui/data-value";
@@ -57,9 +57,9 @@ export function AdminOrderManagement({
       <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
         <label className="relative flex-1">
           <span className="sr-only">Cari order</span>
-          <Search
+          <MagnifyingGlass
             aria-hidden="true"
-            strokeWidth={1.5}
+            weight="regular"
             className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-ink-faint"
           />
           <Input

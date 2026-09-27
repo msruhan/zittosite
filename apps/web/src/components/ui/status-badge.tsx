@@ -3,15 +3,11 @@ import { cn } from "@/lib/utils";
 import { ORDER_STATUS, PAYMENT_STATUS, RESULT_STATUS } from "@/lib/status";
 import type { OrderStatus, PaymentStatus, ResultStatus } from "@/lib/types";
 
-/**
- * Soft-fill status badge — NextAdmin table craft:
- * small radius, medium weight, Title Case, pastel wash (or outline for exits).
- */
 const shell = [
   "inline-flex max-w-fit items-center justify-center whitespace-nowrap",
-  "rounded-[5px] border px-2.5 py-[3px]",
-  "text-body font-medium leading-5",
-  "transition-[background-color,color,border-color,transform] duration-300 ease-out-strong",
+  "rounded-full border px-2.5 py-[3px]",
+  "text-label font-bold leading-4",
+  "transition-[background-color,color,border-color,transform] duration-200 ease-out-strong",
 ];
 
 export function StatusBadge({
@@ -57,7 +53,6 @@ export function ResultBadge({
   );
 }
 
-/** Neutral soft chip for non-status facts (channel, mock-data tag). */
 export function Tag({
   children,
   className,
@@ -69,7 +64,7 @@ export function Tag({
     <span
       className={cn(
         shell,
-        "border-transparent bg-mist text-nav-ink",
+        "border-hairline bg-mist text-nav-ink",
         className,
       )}
     >

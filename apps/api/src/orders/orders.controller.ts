@@ -10,6 +10,7 @@ import {
 } from "@nestjs/common";
 import { UserAuthGuard } from "../auth/user-auth.guard";
 import { OrdersService } from "./orders.service";
+import { optString } from "../security/input";
 
 @Controller("orders")
 @UseGuards(UserAuthGuard)
@@ -22,11 +23,13 @@ export class OrdersController {
   }
 
   @Post()
-  create(
-    @Req() req: any,
-    @Body() body: { serviceId?: string; imei?: string; notes?: string },
-  ) {
-    return this.orders.createOrder(req.user.sub, body);
+  create(@Req() req: any, @Body() body: Record<string, unknown>) {
+    return this.orders.createOrder(req.user.sub, {
+      serviceId: optString(body.serviceId, "Layanan", 64),
+      imei: optString(body.imei, "IMEI", 32),
+      notes: optString(body.notes, "Catatan", 500),
+      channel: "web",
+    });
   }
 
   @Get(":orderId")

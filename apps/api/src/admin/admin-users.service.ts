@@ -7,6 +7,7 @@ import {
 import * as bcrypt from "bcryptjs";
 import { PrismaService } from "../prisma/prisma.service";
 import { serializeUser } from "../orders/orders.serializer";
+import { passwordPolicyError } from "../security/password";
 
 @Injectable()
 export class AdminUsersService {
@@ -45,9 +46,8 @@ export class AdminUsersService {
     if (!username || !fullName) {
       throw new BadRequestException("Username dan nama lengkap wajib.");
     }
-    if (password.length < 8) {
-      throw new BadRequestException("Password minimal 8 karakter.");
-    }
+    const policyError = passwordPolicyError(password);
+    if (policyError) throw new BadRequestException(policyError);
     const exists = await this.prisma.user.findUnique({ where: { username } });
     if (exists) throw new ConflictException("Username sudah dipakai.");
 
@@ -83,9 +83,8 @@ export class AdminUsersService {
     if (!existing) throw new NotFoundException("User tidak ditemukan.");
 
     const password = input.password ? String(input.password) : "";
-    if (password && password.length < 8) {
-      throw new BadRequestException("Password minimal 8 karakter.");
-    }
+    const policyError = password ? passwordPolicyError(password) : null;
+    if (policyError) throw new BadRequestException(policyError);
 
     const user = await this.prisma.user.update({
       where: { id },

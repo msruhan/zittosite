@@ -34,6 +34,15 @@ export interface Service {
   price: number;
   estimate: string;
   active: boolean;
+  /** Admin panel only: operators who receive and may process this service's orders. */
+  assignedAdmins?: ServiceAssignee[];
+}
+
+export interface ServiceAssignee {
+  id: string;
+  username: string;
+  fullName: string;
+  active: boolean;
 }
 
 export interface User {
@@ -48,6 +57,16 @@ export interface User {
   createdAt: string;
 }
 
+export interface AdminTelegramInvite {
+  /** pending = link belum dibuka; claimed = menunggu persetujuan Super Admin. */
+  status: "pending" | "claimed";
+  expiresAt: string;
+  telegramUsername: string | null;
+  telegramName: string | null;
+  telegramUserId: string | null;
+  claimedAt: string | null;
+}
+
 export interface Admin {
   id: string;
   username: string;
@@ -55,6 +74,8 @@ export interface Admin {
   role?: "super_admin" | "admin";
   /** Null when Telegram belum ditautkan. */
   telegramHandle: string | null;
+  telegramLinked?: boolean;
+  telegramInvite?: AdminTelegramInvite | null;
   active: boolean;
   handledCount: number;
   totpEnabled?: boolean;

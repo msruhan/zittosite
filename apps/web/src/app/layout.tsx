@@ -1,6 +1,14 @@
 import type { Metadata, Viewport } from "next";
+import { Atkinson_Hyperlegible } from "next/font/google";
 import { Toaster } from "@/components/ui/toaster";
 import "./globals.css";
+
+const atkinson = Atkinson_Hyperlegible({
+  subsets: ["latin", "latin-ext"],
+  weight: ["400", "700"],
+  variable: "--font-atkinson",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   title: {
@@ -12,7 +20,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#2563eb",
+  themeColor: "#1453C7",
   width: "device-width",
   initialScale: 1,
 };
@@ -21,7 +29,7 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="id" className="h-full">
+    <html lang="id" className={`h-full ${atkinson.variable}`}>
       <body className="min-h-full font-sans antialiased">
         {children}
         <Toaster />

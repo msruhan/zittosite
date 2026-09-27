@@ -8,6 +8,7 @@ import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field, Input } from "@/components/ui/field";
 import { Tag } from "@/components/ui/status-badge";
 import { ApiError, api } from "@/lib/api";
+import { passwordPolicyError } from "@/lib/password";
 
 export function ChangePasswordCard({
   endpoint,
@@ -30,8 +31,9 @@ export function ChangePasswordCard({
   async function onSubmit(event: React.FormEvent) {
     event.preventDefault();
     setError("");
-    if (newPassword.length < 8) {
-      setError("Password baru minimal 8 karakter.");
+    const policyError = passwordPolicyError(newPassword);
+    if (policyError) {
+      setError(policyError);
       return;
     }
     if (newPassword !== confirmPassword) {
@@ -114,7 +116,7 @@ export function ChangePasswordCard({
               />
             </Field>
           ) : null}
-          {error ? <p className="text-body text-metric-red">{error}</p> : null}
+          {error ? <p className="text-body text-refused-ink">{error}</p> : null}
           <div className="flex justify-end">
             <Button type="submit" loading={saving} loadingLabel="Menyimpan">
               Simpan password
@@ -138,23 +140,21 @@ export function AdminTotpCard() {
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState("");
 
-  async function load() {
-    setLoading(true);
-    try {
-      const status = await api<{
-        enabled: boolean;
-        enabledAt: string | null;
-      }>("/admin/me/totp");
-      setEnabled(status.enabled);
-      setEnabledAt(status.enabledAt);
-      setError("");
-    } catch (err) {
-      setError(
-        err instanceof ApiError ? err.message : "Gagal memuat status 2FA.",
-      );
-    } finally {
-      setLoading(false);
-    }
+  function load() {
+    return api<{ enabled: boolean; enabledAt: string | null }>(
+      "/admin/me/totp",
+    )
+      .then((status) => {
+        setEnabled(status.enabled);
+        setEnabledAt(status.enabledAt);
+        setError("");
+      })
+      .catch((err: unknown) => {
+        setError(
+          err instanceof ApiError ? err.message : "Gagal memuat status 2FA.",
+        );
+      })
+      .finally(() => setLoading(false));
   }
 
   React.useEffect(() => {
@@ -314,7 +314,7 @@ export function AdminTotpCard() {
           </form>
         ) : null}
 
-        {error ? <p className="text-body text-metric-red">{error}</p> : null}
+        {error ? <p className="text-body text-refused-ink">{error}</p> : null}
       </CardBody>
     </Card>
   );

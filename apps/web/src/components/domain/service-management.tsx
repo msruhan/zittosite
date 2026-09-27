@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Pencil, Plus, Search } from "lucide-react";
+import { MagnifyingGlass, PencilSimple, Plus } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -22,21 +22,34 @@ import {
 } from "@/components/ui/table";
 import { formatRupiah } from "@/lib/format";
 import { ApiError, api } from "@/lib/api";
-import type { Service } from "@/lib/types";
+import type { Admin, Service, ServiceAssignee } from "@/lib/types";
+
+type ServiceDraft = Service & { assignedAdminIds: string[] };
+
+function toDraft(service: Service): ServiceDraft {
+  return {
+    ...service,
+    assignedAdminIds: (service.assignedAdmins ?? []).map((admin) => admin.id),
+  };
+}
 
 export function ServiceManagement({
   initialServices,
+  operators,
 }: {
   initialServices: Service[];
+  operators: Admin[];
 }) {
   const [services, setServices] = React.useState(initialServices);
   const [query, setQuery] = React.useState("");
-  const [editing, setEditing] = React.useState<Service | null>(null);
+  const [editing, setEditing] = React.useState<ServiceDraft | null>(null);
   const [creating, setCreating] = React.useState(false);
 
-  React.useEffect(() => {
+  const [syncedServices, setSyncedServices] = React.useState(initialServices);
+  if (initialServices !== syncedServices) {
+    setSyncedServices(initialServices);
     setServices(initialServices);
-  }, [initialServices]);
+  }
 
   const filtered = React.useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -53,7 +66,7 @@ export function ServiceManagement({
     setServices(await api<Service[]>("/admin/services"));
   }
 
-  async function handleSave(next: Service) {
+  async function handleSave(next: ServiceDraft) {
     try {
       if (creating) {
         await api("/admin/services", {
@@ -65,6 +78,7 @@ export function ServiceManagement({
             price: next.price,
             estimate: next.estimate,
             active: next.active,
+            assignedAdminIds: next.assignedAdminIds,
           }),
         });
       } else {
@@ -76,6 +90,7 @@ export function ServiceManagement({
             price: next.price,
             estimate: next.estimate,
             active: next.active,
+            assignedAdminIds: next.assignedAdminIds,
           }),
         });
       }
@@ -108,14 +123,28 @@ export function ServiceManagement({
     }
   }
 
+  function openCreate() {
+    setCreating(true);
+    setEditing({
+      id: `svc-${Date.now()}`,
+      code: "",
+      name: "",
+      description: "",
+      price: 150_000,
+      estimate: "1–3 jam",
+      active: true,
+      assignedAdminIds: [],
+    });
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
         <label className="relative flex-1">
           <span className="sr-only">Cari layanan</span>
-          <Search
+          <MagnifyingGlass
             aria-hidden="true"
-            strokeWidth={1.5}
+            weight="regular"
             className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-ink-faint"
           />
           <Input
@@ -125,20 +154,7 @@ export function ServiceManagement({
             className="pl-9"
           />
         </label>
-        <Button
-          onClick={() => {
-            setCreating(true);
-            setEditing({
-              id: `svc-${Date.now()}`,
-              code: "",
-              name: "",
-              description: "",
-              price: 150_000,
-              estimate: "1–3 jam",
-              active: true,
-            });
-          }}
-        >
+        <Button onClick={openCreate}>
           <Plus className="size-4" aria-hidden="true" />
           Tambah Layanan
         </Button>
@@ -154,6 +170,7 @@ export function ServiceManagement({
                     <TH>Layanan</TH>
                     <TH>Harga</TH>
                     <TH>Estimasi</TH>
+                    <TH>Assign</TH>
                     <TH>Status</TH>
                     <TH className="w-28">Aksi</TH>
                   </TR>
@@ -180,6 +197,9 @@ export function ServiceManagement({
                         </DataValue>
                       </TD>
                       <TD>
+                        <AssigneeList assignees={service.assignedAdmins ?? []} />
+                      </TD>
+                      <TD>
                         {service.active ? (
                           <Tag className="border-cleared-edge bg-cleared-wash text-cleared-ink">
                             Aktif
@@ -198,10 +218,10 @@ export function ServiceManagement({
                             aria-label={`Edit ${service.name}`}
                             onClick={() => {
                               setCreating(false);
-                              setEditing(service);
+                              setEditing(toDraft(service));
                             }}
                           >
-                            <Pencil className="size-4 text-action" />
+                            <PencilSimple className="size-4 text-action" />
                           </Button>
                           <Button
                             size="sm"
@@ -235,19 +255,7 @@ export function ServiceManagement({
             }
             action={
               services.length === 0 ? (
-                <Button
-                  onClick={() => {
-                    setCreating(true);
-                    setEditing({
-                      id: `svc-${Date.now()}`,
-                      name: "",
-                      description: "",
-                      price: 150_000,
-                      estimate: "1–3 jam",
-                      active: true,
-                    });
-                  }}
-                >
+                <Button onClick={openCreate}>
                   <Plus className="size-4" aria-hidden="true" />
                   Tambah Layanan
                 </Button>
@@ -273,6 +281,7 @@ export function ServiceManagement({
         {editing ? (
           <ServiceFormDialog
             service={editing}
+            operators={operators}
             creating={creating}
             onCancel={() => {
               setEditing(null);
@@ -286,18 +295,120 @@ export function ServiceManagement({
   );
 }
 
+function AssigneeList({ assignees }: { assignees: ServiceAssignee[] }) {
+  if (!assignees.length) {
+    return (
+      <span className="text-body text-working-ink">
+        Belum di-assign
+      </span>
+    );
+  }
+  return (
+    <div className="flex max-w-56 flex-wrap gap-1">
+      {assignees.map((admin) => (
+        <Tag
+          key={admin.id}
+          className={
+            admin.active
+              ? "border-hairline bg-mist text-ink"
+              : "border-void-edge bg-void-wash text-void-ink line-through"
+          }
+        >
+          {admin.fullName}
+        </Tag>
+      ))}
+    </div>
+  );
+}
+
+function OperatorPicker({
+  operators,
+  selected,
+  onChange,
+}: {
+  operators: Admin[];
+  selected: string[];
+  onChange: (ids: string[]) => void;
+}) {
+  function toggle(id: string, checked: boolean) {
+    onChange(
+      checked
+        ? [...selected, id]
+        : selected.filter((selectedId) => selectedId !== id),
+    );
+  }
+
+  return (
+    <fieldset className="flex flex-col gap-1.5">
+      <legend className="mb-1.5 text-body font-medium text-ink">
+        Assign operator
+      </legend>
+      {operators.length ? (
+        <div className="max-h-48 divide-y divide-hairline overflow-y-auto rounded-md border border-hairline">
+          {operators.map((operator) => (
+            <label
+              key={operator.id}
+              className="flex cursor-pointer items-center gap-3 px-3.5 py-2.5 hover:bg-mist"
+            >
+              <input
+                type="checkbox"
+                checked={selected.includes(operator.id)}
+                onChange={(event) => toggle(operator.id, event.target.checked)}
+                className="size-4 rounded-sm border-hairline accent-action"
+              />
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-body font-medium text-ink">
+                  {operator.fullName}
+                </span>
+                <span className="block truncate font-data text-label text-ink-soft">
+                  @{operator.username}
+                  {operator.telegramHandle ? ` · ${operator.telegramHandle}` : " · Telegram belum tertaut"}
+                </span>
+              </span>
+              {!operator.active ? (
+                <Tag className="border-void-edge bg-void-wash text-void-ink">
+                  Diblokir
+                </Tag>
+              ) : null}
+            </label>
+          ))}
+        </div>
+      ) : (
+        <p className="rounded-md border border-dashed border-hairline px-3.5 py-3 text-body text-ink-soft">
+          Belum ada akun operator. Tambahkan di halaman Admins.
+        </p>
+      )}
+      <p className="text-body text-ink-soft">
+        {selected.length
+          ? `${selected.length} operator akan menerima dan memproses order layanan ini.`
+          : "Tanpa assign, order layanan ini hanya terlihat oleh Super Admin."}
+      </p>
+    </fieldset>
+  );
+}
+
 function ServiceFormDialog({
   service,
+  operators,
   creating,
   onCancel,
   onSave,
 }: {
-  service: Service;
+  service: ServiceDraft;
+  operators: Admin[];
   creating: boolean;
   onCancel: () => void;
-  onSave: (service: Service) => void | Promise<void>;
+  onSave: (service: ServiceDraft) => void | Promise<void>;
 }) {
-  const [draft, setDraft] = React.useState(service);
+  const [draft, setDraft] = React.useState(() => {
+    const operatorIds = new Set(operators.map((operator) => operator.id));
+    return {
+      ...service,
+      assignedAdminIds: service.assignedAdminIds.filter((id) =>
+        operatorIds.has(id),
+      ),
+    };
+  });
   const [saving, setSaving] = React.useState(false);
   const [errors, setErrors] = React.useState<{
     name?: string;
@@ -454,6 +565,13 @@ function ServiceFormDialog({
             ]}
           />
         </Field>
+        <OperatorPicker
+          operators={operators}
+          selected={draft.assignedAdminIds}
+          onChange={(assignedAdminIds) =>
+            setDraft((current) => ({ ...current, assignedAdminIds }))
+          }
+        />
       </form>
     </DialogContent>
   );

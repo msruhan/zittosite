@@ -3,7 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import * as PopoverPrimitive from "@radix-ui/react-popover";
-import { Bell } from "lucide-react";
+import { Bell } from "@phosphor-icons/react";
 import { DataValue } from "@/components/ui/data-value";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -37,11 +37,11 @@ export function Notifications({ items }: { items: NotificationItem[] }) {
           "hover:bg-mist hover:text-ink hover:shadow-lifted active:scale-[0.97]",
         )}
       >
-        <Bell className="size-[18px]" strokeWidth={1.5} aria-hidden="true" />
+        <Bell className="size-[18px]" weight="regular" aria-hidden="true" />
         {unread > 0 ? (
           <span
             aria-hidden="true"
-            className="absolute right-2 top-2 size-2 rounded-full border-2 border-surface bg-metric-red"
+            className="absolute right-2 top-2 size-2 rounded-full border-2 border-surface bg-refused-ink"
           />
         ) : null}
       </PopoverPrimitive.Trigger>

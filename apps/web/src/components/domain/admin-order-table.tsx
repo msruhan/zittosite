@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ChevronRight } from "lucide-react";
+import { CaretRight } from "@phosphor-icons/react/dist/ssr";
 import { Avatar } from "@/components/shell/user-chip";
 import { DataValue } from "@/components/ui/data-value";
 import { StatusBadge, Tag } from "@/components/ui/status-badge";
@@ -120,7 +120,7 @@ export function AdminOrderTable({
                   aria-label={`Buka detail order ${order.orderId}`}
                   className="inline-flex size-7 items-center justify-center rounded-md text-ink-faint transition-colors duration-150 ease-out-strong hover:bg-mist hover:text-ink"
                 >
-                  <ChevronRight className="size-4" aria-hidden="true" />
+                  <CaretRight className="size-4" weight="regular" aria-hidden="true" />
                 </Link>
               </TD>
             </TR>

@@ -5,14 +5,23 @@ import { PrismaService } from "../prisma/prisma.service";
 import { webPublicUrl } from "../config/env";
 import { OrdersService } from "../orders/orders.service";
 import { TelegramLinkTokenService } from "./telegram-link-token.service";
+import { OrderRecapService } from "./order-recap.service";
+import {
+  AdminTelegramInviteService,
+  INVITE_PREFIX,
+} from "./admin-telegram-invite.service";
 import {
   TELEGRAM_PARSE_MODE,
   blockedHtml,
   botDisabledHtml,
   escapeHtml,
   formatRp,
+  inviteClaimPendingHtml,
+  inviteDecidedHtml,
+  inviteFailedHtml,
   linkFailedHtml,
   linkSuccessHtml,
+  operatorRecapHtml,
   orderCreatedHtml,
   orderHistoryHtml,
   saldoAdminHtml,
@@ -21,16 +30,44 @@ import {
   startLinkedMemberHtml,
   statusAdminHtml,
   statusMemberHtml,
+  superAdminRecapHtml,
   unlinkedHtml,
 } from "./telegram-messages";
 
 const BOT_COMMANDS = [
   { command: "start", description: "Mulai / status tautan" },
+  { command: "menu", description: "Menu utama" },
   { command: "status", description: "Info akun tertaut" },
   { command: "saldo", description: "Cek saldo kredit" },
   { command: "order", description: "Buat order baru" },
   { command: "riwayat", description: "5 order terakhir" },
+  { command: "rekap", description: "Rekap order hari ini (admin)" },
 ] as const;
+
+function adminMenuKeyboard() {
+  return new InlineKeyboard()
+    .text("📊 Rekap hari ini", "menu:rekap")
+    .text("📋 Antrean", "menu:riwayat");
+}
+
+function recapKeyboard() {
+  return new InlineKeyboard()
+    .text("🔄 Perbarui", "menu:rekap")
+    .text("📋 Antrean", "menu:riwayat");
+}
+
+function memberMenuKeyboard() {
+  return new InlineKeyboard()
+    .text("🛒 Buat Order", "menu:order")
+    .text("📋 Riwayat", "menu:riwayat")
+    .row()
+    .text("💎 Saldo", "menu:saldo")
+    .text("👤 Status", "menu:status");
+}
+
+function backToMenuKeyboard() {
+  return new InlineKeyboard().text("⬅️ Menu", "menu:home");
+}
 
 type TelegramActor =
   | {
@@ -62,6 +99,8 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
     private readonly prisma: PrismaService,
     private readonly linkTokens: TelegramLinkTokenService,
     private readonly orders: OrdersService,
+    private readonly invites: AdminTelegramInviteService,
+    private readonly recap: OrderRecapService,
   ) {}
 
   getBot(): Bot | null {
@@ -172,6 +211,31 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
     bot.command("start", async (ctx) => {
       const chatId = String(ctx.chat?.id ?? "");
       const token = String(ctx.match ?? "").trim();
+      if (token.startsWith(INVITE_PREFIX)) {
+        try {
+          const name = [ctx.from?.first_name, ctx.from?.last_name]
+            .filter(Boolean)
+            .join(" ");
+          const claimed = await this.invites.claim({
+            token,
+            telegramUserId: String(ctx.from?.id ?? ""),
+            chatId,
+            username: ctx.from?.username,
+            name: name || undefined,
+          });
+          await this.replyHtml(ctx, inviteClaimPendingHtml(claimed.fullName));
+        } catch (err: any) {
+          await this.replyHtml(
+            ctx,
+            inviteFailedHtml(
+              err?.status && err.status < 500
+                ? String(err.message)
+                : "Terjadi kesalahan. Coba lagi nanti.",
+            ),
+          );
+        }
+        return;
+      }
       if (token) {
         try {
           const linked = await this.linkTokens.consume({
@@ -201,6 +265,7 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
             username: actor.admin.username,
             role: actor.admin.role,
           }),
+          { reply_markup: adminMenuKeyboard() },
         );
         return;
       }
@@ -210,119 +275,16 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
           username: actor.user.username,
           balance: actor.user.creditBalance,
         }),
+        { reply_markup: memberMenuKeyboard() },
       );
     });
 
-    bot.command("status", async (ctx) => {
-      const actor = await this.requireMemberOrAdmin(ctx);
-      if (!actor) return;
-      if (actor.kind === "admin") {
-        await this.replyHtml(
-          ctx,
-          statusAdminHtml({
-            username: actor.admin.username,
-            role: actor.admin.role,
-            status: actor.admin.status,
-            portalUrl: `${webPublicUrl()}/admin`,
-          }),
-        );
-        return;
-      }
-      await this.replyHtml(
-        ctx,
-        statusMemberHtml({
-          fullName: actor.user.fullName,
-          username: actor.user.username,
-          balance: actor.user.creditBalance,
-          status: actor.user.status,
-          portalUrl: `${webPublicUrl()}/app`,
-        }),
-      );
-    });
-
-    bot.command("saldo", async (ctx) => {
-      const actor = await this.requireMemberOrAdmin(ctx);
-      if (!actor) return;
-      if (actor.kind === "admin") {
-        await this.replyHtml(ctx, saldoAdminHtml());
-        return;
-      }
-      await this.replyHtml(
-        ctx,
-        saldoMemberHtml({
-          balance: actor.user.creditBalance,
-          portalUrl: `${webPublicUrl()}/app`,
-        }),
-      );
-    });
-
-    bot.command("order", async (ctx) => {
-      const actor = await this.requireMemberOrAdmin(ctx);
-      if (!actor) return;
-      if (actor.kind === "admin") {
-        await this.replyHtml(
-          ctx,
-          "Admin tidak membuat order. Gunakan notifikasi Terima/Tolak/Done.",
-        );
-        return;
-      }
-      try {
-        const services = await this.orders.listServices(actor.user.id);
-        if (!services.length) {
-          await this.replyHtml(ctx, "Belum ada layanan aktif.");
-          return;
-        }
-        const keyboard = new InlineKeyboard();
-        for (const service of services) {
-          keyboard
-            .text(
-              `${service.name} — ${formatRp(service.price)}`,
-              `uord:svc:${service.code ?? service.id}`,
-            )
-            .row();
-        }
-        await this.replyHtml(ctx, "📦 <b>Buat order</b>\nPilih layanan:", {
-          reply_markup: keyboard,
-        });
-      } catch (err: any) {
-        await this.replyHtml(
-          ctx,
-          `⚠️ ${escapeHtml(err?.message ?? "Gagal memuat layanan")}`,
-        );
-      }
-    });
-
-    bot.command("riwayat", async (ctx) => {
-      const actor = await this.requireMemberOrAdmin(ctx);
-      if (!actor) return;
-      if (actor.kind === "admin") {
-        const rows = await this.orders.listAdminQueue(actor.admin.id, 5);
-        await this.replyHtml(
-          ctx,
-          orderHistoryHtml(
-            rows.map((o) => ({
-              orderId: o.orderId,
-              serviceName: o.service.name,
-              status: o.status,
-              imei: o.imei,
-            })),
-          ),
-        );
-        return;
-      }
-      const rows = await this.orders.listRecentForUser(actor.user.id, 5);
-      await this.replyHtml(
-        ctx,
-        orderHistoryHtml(
-          rows.map((o) => ({
-            orderId: o.orderId,
-            serviceName: o.service.name,
-            status: o.status,
-            imei: o.imei,
-          })),
-        ),
-      );
-    });
+    bot.command("menu", (ctx) => this.showMenu(ctx));
+    bot.command("status", (ctx) => this.showStatus(ctx));
+    bot.command("saldo", (ctx) => this.showSaldo(ctx));
+    bot.command("order", (ctx) => this.showOrderPicker(ctx));
+    bot.command("riwayat", (ctx) => this.showHistory(ctx));
+    bot.command("rekap", (ctx) => this.showRecap(ctx));
 
     bot.on("callback_query:data", async (ctx) => {
       const data = ctx.callbackQuery.data ?? "";
@@ -338,6 +300,14 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
           await this.handleDoneStatus(ctx, data.slice("ord:rs:".length));
         } else if (data.startsWith("uord:svc:")) {
           await this.handleUserServicePick(ctx, data.slice("uord:svc:".length));
+        } else if (data.startsWith("menu:")) {
+          await this.handleMenuPick(ctx, data.slice("menu:".length));
+        } else if (data.startsWith("inv:ok:") || data.startsWith("inv:no:")) {
+          await this.handleInviteDecision(
+            ctx,
+            data.slice("inv:ok:".length),
+            data.startsWith("inv:ok:"),
+          );
         } else {
           await ctx.answerCallbackQuery({ text: "Aksi tidak dikenal" });
         }
@@ -418,6 +388,7 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
               payUrl,
               amount: order.price,
             }),
+            { reply_markup: backToMenuKeyboard() },
           );
         } catch (err: any) {
           await this.replyHtml(
@@ -430,6 +401,156 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
 
       return next();
     });
+  }
+
+  private async showMenu(ctx: Context) {
+    const actor = await this.requireMemberOrAdmin(ctx);
+    if (!actor) return;
+    if (actor.kind === "admin") {
+      await this.replyHtml(
+        ctx,
+        "📍 <b>Menu admin</b>\nProses order lewat notifikasi Terima/Tolak/Done, atau pilih di bawah:",
+        { reply_markup: adminMenuKeyboard() },
+      );
+      return;
+    }
+    await this.replyHtml(ctx, "📍 <b>Menu utama</b>\nPilih yang ingin dilakukan:", {
+      reply_markup: memberMenuKeyboard(),
+    });
+  }
+
+  private async handleMenuPick(ctx: Context, item: string) {
+    await ctx.answerCallbackQuery();
+    if (item === "order") return this.showOrderPicker(ctx);
+    if (item === "riwayat") return this.showHistory(ctx);
+    if (item === "saldo") return this.showSaldo(ctx);
+    if (item === "status") return this.showStatus(ctx);
+    if (item === "rekap") return this.showRecap(ctx);
+    return this.showMenu(ctx);
+  }
+
+  private async showRecap(ctx: Context) {
+    const actor = await this.requireMemberOrAdmin(ctx);
+    if (!actor) return;
+    if (actor.kind !== "admin") {
+      await this.replyHtml(ctx, "Rekap order khusus admin.", {
+        reply_markup: backToMenuKeyboard(),
+      });
+      return;
+    }
+    const html =
+      actor.admin.role === "super_admin"
+        ? superAdminRecapHtml(await this.recap.superAdmin())
+        : operatorRecapHtml(await this.recap.operator(actor.admin.id));
+    await this.replyHtml(ctx, html, { reply_markup: recapKeyboard() });
+  }
+
+  private async showStatus(ctx: Context) {
+    const actor = await this.requireMemberOrAdmin(ctx);
+    if (!actor) return;
+    if (actor.kind === "admin") {
+      await this.replyHtml(
+        ctx,
+        statusAdminHtml({
+          username: actor.admin.username,
+          role: actor.admin.role,
+          status: actor.admin.status,
+          portalUrl:
+            actor.admin.role === "super_admin"
+              ? `${webPublicUrl()}/admin`
+              : undefined,
+        }),
+      );
+      return;
+    }
+    await this.replyHtml(
+      ctx,
+      statusMemberHtml({
+        fullName: actor.user.fullName,
+        username: actor.user.username,
+        balance: actor.user.creditBalance,
+        status: actor.user.status,
+        portalUrl: `${webPublicUrl()}/app`,
+      }),
+      { reply_markup: backToMenuKeyboard() },
+    );
+  }
+
+  private async showSaldo(ctx: Context) {
+    const actor = await this.requireMemberOrAdmin(ctx);
+    if (!actor) return;
+    if (actor.kind === "admin") {
+      await this.replyHtml(ctx, saldoAdminHtml());
+      return;
+    }
+    await this.replyHtml(
+      ctx,
+      saldoMemberHtml({
+        balance: actor.user.creditBalance,
+        portalUrl: `${webPublicUrl()}/app`,
+      }),
+      { reply_markup: backToMenuKeyboard() },
+    );
+  }
+
+  private async showOrderPicker(ctx: Context) {
+    const actor = await this.requireMemberOrAdmin(ctx);
+    if (!actor) return;
+    if (actor.kind === "admin") {
+      await this.replyHtml(
+        ctx,
+        "Admin tidak membuat order. Gunakan notifikasi Terima/Tolak/Done.",
+      );
+      return;
+    }
+    try {
+      const services = await this.orders.listServices(actor.user.id);
+      if (!services.length) {
+        await this.replyHtml(ctx, "Belum ada layanan aktif.", {
+          reply_markup: backToMenuKeyboard(),
+        });
+        return;
+      }
+      const keyboard = new InlineKeyboard();
+      for (const service of services) {
+        keyboard
+          .text(
+            `${service.name} — ${formatRp(service.price)}`,
+            `uord:svc:${service.code ?? service.id}`,
+          )
+          .row();
+      }
+      keyboard.text("⬅️ Menu", "menu:home");
+      await this.replyHtml(ctx, "📦 <b>Buat order</b>\nPilih layanan:", {
+        reply_markup: keyboard,
+      });
+    } catch (err: any) {
+      await this.replyHtml(
+        ctx,
+        `⚠️ ${escapeHtml(err?.message ?? "Gagal memuat layanan")}`,
+      );
+    }
+  }
+
+  private async showHistory(ctx: Context) {
+    const actor = await this.requireMemberOrAdmin(ctx);
+    if (!actor) return;
+    const rows =
+      actor.kind === "admin"
+        ? await this.orders.listAdminQueue(actor.admin.id, 5)
+        : await this.orders.listRecentForUser(actor.user.id, 5);
+    await this.replyHtml(
+      ctx,
+      orderHistoryHtml(
+        rows.map((o) => ({
+          orderId: o.orderId,
+          serviceName: o.service.name,
+          status: o.status,
+          imei: o.imei,
+        })),
+      ),
+      actor.kind === "member" ? { reply_markup: backToMenuKeyboard() } : {},
+    );
   }
 
   private async handleAccept(ctx: Context, orderId: string) {
@@ -496,6 +617,28 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
       ctx,
       `Kirim <b>catatan hasil</b> untuk <code>${escapeHtml(orderId)}</code> (${resultStatus}).`,
     );
+  }
+
+  private async handleInviteDecision(
+    ctx: Context,
+    inviteId: string,
+    approve: boolean,
+  ) {
+    const actor = await this.requireAdmin(ctx);
+    if (!actor) return;
+    if (actor.admin.role !== "super_admin") {
+      await ctx.answerCallbackQuery({ text: "Khusus Super Admin", show_alert: true });
+      return;
+    }
+    const decided = await this.invites.decide(actor.admin.id, inviteId, approve);
+    await ctx.answerCallbackQuery({
+      text: approve ? "Operator disetujui" : "Permintaan ditolak",
+    });
+    await ctx
+      .editMessageText(inviteDecidedHtml(decided), {
+        parse_mode: TELEGRAM_PARSE_MODE,
+      })
+      .catch(() => undefined);
   }
 
   private async handleUserServicePick(ctx: Context, serviceCode: string) {

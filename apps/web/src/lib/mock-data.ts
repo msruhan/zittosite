@@ -614,8 +614,8 @@ export function getChannelMix(): { name: string; amount: number; color: string }
   const web = orders.filter((o) => o.channel === "web").length;
   const telegram = orders.filter((o) => o.channel === "telegram").length;
   return [
-    { name: "Website", amount: web, color: "#2563EB" },
-    { name: "Telegram", amount: telegram, color: "#18BFFF" },
+    { name: "Website", amount: web, color: "#1453C7" },
+    { name: "Telegram", amount: telegram, color: "#5C6774" },
   ].filter((item) => item.amount > 0);
 }
 
@@ -637,7 +637,7 @@ export function getWeeklyOrderBars(): { label: string; orders: number }[] {
 
 /** Orders grouped by service — secondary donut. */
 export function getServiceMix(): { name: string; amount: number; color: string }[] {
-  const palette = ["#2563EB", "#1D4ED8", "#18BFFF", "#93C5FD", "#BFDBFE"];
+  const palette = ["#1453C7", "#0E3FA0", "#5C6774", "#8B95A1", "#0A2C72"];
   return services
     .map((service, index) => ({
       name: service.name,

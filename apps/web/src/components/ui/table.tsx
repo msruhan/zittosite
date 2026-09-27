@@ -27,7 +27,7 @@ export function Table({
 }: React.ComponentProps<"table">) {
   return (
     <table
-      className={cn("w-full border-collapse text-left", className)}
+      className={cn("ledger w-full border-collapse text-left", className)}
       {...props}
     >
       {children}
@@ -41,7 +41,7 @@ export function THead({
   ...props
 }: React.ComponentProps<"thead">) {
   return (
-    <thead className={cn("bg-mist", className)} {...props}>
+    <thead className={cn("bg-action-wash/55", className)} {...props}>
       {children}
     </thead>
   );
@@ -57,7 +57,7 @@ export function TH({
       scope="col"
       className={cn(
         "h-12 border-b border-hairline px-4 text-left align-middle",
-        "text-label font-medium uppercase tracking-[0.02em] text-ink-soft whitespace-nowrap",
+        "whitespace-nowrap text-label font-bold text-action-deep",
         className,
       )}
       {...props}
@@ -88,7 +88,7 @@ export function TR({
     <tr
       className={cn(
         "border-b border-hairline last:border-b-0",
-        "transition-colors duration-150 ease-out-strong hover:bg-action-wash/50",
+        "transition-colors duration-150 ease-out-strong hover:bg-action-wash/65",
         className,
       )}
       {...props}

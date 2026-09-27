@@ -5,8 +5,14 @@ import {
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
-import { Prisma, type OrderChannel, type ResultStatus } from "@prisma/client";
+import {
+  Prisma,
+  type AdminRole,
+  type OrderChannel,
+  type ResultStatus,
+} from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
+import { paymentSimulationEnabled } from "../config/env";
 import { AdminNotifyService } from "../telegram/admin-notify.service";
 import { serializeOrderListItem, serializeService } from "./orders.serializer";
 
@@ -20,6 +26,13 @@ const orderInclude = {
   result: true,
   activity: { orderBy: { createdAt: "asc" as const } },
 } satisfies Prisma.OrderInclude;
+
+/** Orders whose service is assigned to this operator. */
+export function assignedServiceFilter(adminId: string) {
+  return {
+    service: { assignments: { some: { adminId } } },
+  } satisfies Prisma.OrderWhereInput;
+}
 
 @Injectable()
 export class OrdersService {
@@ -190,6 +203,11 @@ export class OrdersService {
   }
 
   async markPaid(userId: string, publicOrderId: string) {
+    if (!paymentSimulationEnabled()) {
+      throw new ForbiddenException(
+        "Konfirmasi pembayaran manual tidak tersedia.",
+      );
+    }
     const order = await this.findOwned(userId, publicOrderId);
     const current = await this.ensureNotExpired(order);
 
@@ -258,6 +276,7 @@ export class OrdersService {
         where: { orderId: publicOrderId },
       });
       if (!order) throw new NotFoundException("Order tidak ditemukan.");
+      await this.assertAssignedToService(tx, admin, order.serviceId);
 
       const result = await tx.order.updateMany({
         where: { id: order.id, status: "waiting_action" },
@@ -287,6 +306,7 @@ export class OrdersService {
     await this.adminNotify.syncOrderCards(claimed.id, "taken", {
       actorName: admin.fullName,
     });
+    void this.adminNotify.notifySuperAdminsFollowUp(claimed.id, "taken", admin);
     void this.adminNotify.notifyUserById(
       claimed.userId,
       `🛠️ Order <b>${claimed.orderId}</b> sedang dikerjakan admin.`,
@@ -307,9 +327,10 @@ export class OrdersService {
       if (!order) throw new NotFoundException("Order tidak ditemukan.");
 
       if (order.status === "waiting_action") {
+        await this.assertAssignedToService(tx, admin, order.serviceId);
         const result = await tx.order.updateMany({
           where: { id: order.id, status: "waiting_action" },
-          data: { status: "rejected" },
+          data: { status: "rejected", assignedAdminId: adminId },
         });
         if (result.count !== 1) {
           throw new ConflictException("Status order berubah.");
@@ -346,6 +367,12 @@ export class OrdersService {
       actorName: admin.fullName,
       note,
     });
+    void this.adminNotify.notifySuperAdminsFollowUp(
+      updated.id,
+      "rejected",
+      admin,
+      note,
+    );
     void this.adminNotify.notifyUserById(
       updated.userId,
       `❌ Order <b>${updated.orderId}</b> ditolak.\nAlasan: ${note}`,
@@ -413,6 +440,12 @@ export class OrdersService {
       actorName: admin.fullName,
       note: resultNote,
     });
+    void this.adminNotify.notifySuperAdminsFollowUp(
+      updated.id,
+      "done",
+      admin,
+      resultNote,
+    );
     void this.adminNotify.notifyUserById(
       updated.userId,
       [
@@ -435,10 +468,19 @@ export class OrdersService {
   }
 
   async listAdminQueue(adminId: string, take = 5) {
+    const admin = await this.prisma.admin.findUniqueOrThrow({
+      where: { id: adminId },
+      select: { role: true },
+    });
     const rows = await this.prisma.order.findMany({
       where: {
         OR: [
-          { status: "waiting_action" },
+          {
+            status: "waiting_action",
+            ...(admin.role === "super_admin"
+              ? {}
+              : assignedServiceFilter(adminId)),
+          },
           { status: "in_process", assignedAdminId: adminId },
         ],
       },
@@ -447,6 +489,21 @@ export class OrdersService {
       take,
     });
     return rows.map((row) => serializeOrderListItem(row));
+  }
+
+  private async assertAssignedToService(
+    tx: Prisma.TransactionClient,
+    admin: { id: string; role: AdminRole },
+    serviceId: string,
+  ) {
+    if (admin.role === "super_admin") return;
+    const assignment = await tx.serviceAssignment.findUnique({
+      where: { serviceId_adminId: { serviceId, adminId: admin.id } },
+      select: { adminId: true },
+    });
+    if (!assignment) {
+      throw new ForbiddenException("Layanan ini tidak di-assign ke Anda.");
+    }
   }
 
   private effectivePrice(

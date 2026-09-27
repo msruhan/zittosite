@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { AuthLayout } from "@/components/auth/auth-layout";
 import { Button } from "@/components/ui/button";
 import { ApiError, api } from "@/lib/api";
@@ -13,27 +14,33 @@ type CompleteResult = {
 };
 
 export default function TelegramOauthCallbackPage() {
+  return (
+    <React.Suspense fallback={null}>
+      <TelegramOauthCallback />
+    </React.Suspense>
+  );
+}
+
+function TelegramOauthCallback() {
+  const query = useSearchParams();
+  const code = query.get("code") ?? "";
+  const state = query.get("state") ?? "";
+  const oauthError = query.get("error_description") ?? query.get("error");
+  const actor: "user" | "admin" = state.startsWith("a_") ? "admin" : "user";
+
   const started = React.useRef(false);
   const [result, setResult] = React.useState<CompleteResult | null>(null);
-  const [actor, setActor] = React.useState<"user" | "admin">("user");
   const [activated, setActivated] = React.useState(false);
-  const [error, setError] = React.useState("");
+  const [requestError, setRequestError] = React.useState("");
+  const error = oauthError
+    ? `Telegram membatalkan OAuth: ${oauthError}`
+    : requestError;
 
   React.useEffect(() => {
-    if (started.current) return;
+    if (started.current || oauthError) return;
     started.current = true;
-    const query = new URLSearchParams(window.location.search);
-    const code = query.get("code") ?? "";
-    const state = query.get("state") ?? "";
-    const oauthError = query.get("error_description") ?? query.get("error");
-    if (oauthError) {
-      setError(`Telegram membatalkan OAuth: ${oauthError}`);
-      return;
-    }
-    const nextActor = state.startsWith("a_") ? "admin" : "user";
-    setActor(nextActor);
     api<CompleteResult>(
-      nextActor === "admin"
+      actor === "admin"
         ? "/admin/settings/telegram/oauth/complete"
         : "/me/telegram/oauth/complete",
       {
@@ -43,13 +50,13 @@ export default function TelegramOauthCallbackPage() {
     )
       .then(setResult)
       .catch((reason: unknown) => {
-        setError(
+        setRequestError(
           reason instanceof ApiError
             ? reason.message
             : "Gagal memverifikasi OAuth Telegram",
         );
       });
-  }, []);
+  }, [actor, code, oauthError, state]);
 
   React.useEffect(() => {
     if (!result || activated) return;

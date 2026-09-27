@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import * as SelectPrimitive from "@radix-ui/react-select";
-import { Check, ChevronDown } from "lucide-react";
+import { CaretDown, Check } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
 
 export interface SelectOption {
@@ -55,8 +55,9 @@ export function Select({
       >
         <SelectPrimitive.Value placeholder={placeholder} />
         <SelectPrimitive.Icon asChild>
-          <ChevronDown
+          <CaretDown
             className="size-4 shrink-0 text-ink-soft"
+            weight="regular"
             aria-hidden="true"
           />
         </SelectPrimitive.Icon>

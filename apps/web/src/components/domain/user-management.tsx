@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Pencil, Plus, Search, Trash2 } from "lucide-react";
+import { MagnifyingGlass, PencilSimple, Plus, Trash } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/table";
 import { formatDate, formatRupiah } from "@/lib/format";
 import { ApiError, api } from "@/lib/api";
+import { passwordPolicyError } from "@/lib/password";
 import type { User } from "@/lib/types";
 
 export function UserManagement({ initialUsers }: { initialUsers: User[] }) {
@@ -30,9 +31,11 @@ export function UserManagement({ initialUsers }: { initialUsers: User[] }) {
   const [editing, setEditing] = React.useState<User | null>(null);
   const [creating, setCreating] = React.useState(false);
 
-  React.useEffect(() => {
+  const [syncedUsers, setSyncedUsers] = React.useState(initialUsers);
+  if (initialUsers !== syncedUsers) {
+    setSyncedUsers(initialUsers);
     setUsers(initialUsers);
-  }, [initialUsers]);
+  }
 
   const filtered = React.useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -115,9 +118,9 @@ export function UserManagement({ initialUsers }: { initialUsers: User[] }) {
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
         <label className="relative flex-1">
           <span className="sr-only">Cari user</span>
-          <Search
+          <MagnifyingGlass
             aria-hidden="true"
-            strokeWidth={1.5}
+            weight="regular"
             className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-ink-faint"
           />
           <Input
@@ -226,7 +229,7 @@ export function UserManagement({ initialUsers }: { initialUsers: User[] }) {
                               setEditing(user);
                             }}
                           >
-                            <Pencil className="size-4 text-action" />
+                            <PencilSimple className="size-4 text-action" />
                           </Button>
                           <Button
                             size="icon"
@@ -234,7 +237,7 @@ export function UserManagement({ initialUsers }: { initialUsers: User[] }) {
                             aria-label={`Hapus ${user.fullName}`}
                             onClick={() => handleDelete(user)}
                           >
-                            <Trash2 className="size-4 text-refused-ink" />
+                            <Trash className="size-4 text-refused-ink" />
                           </Button>
                         </div>
                       </TD>
@@ -325,9 +328,9 @@ function UserFormDialog({
     if (!draft.username.trim()) {
       nextErrors.username = "Masukkan username unik.";
     }
-    if (creating && password.length < 8) {
-      nextErrors.password = "Password minimal 8 karakter.";
-    }
+    const policyError =
+      creating || password ? passwordPolicyError(password) : null;
+    if (policyError) nextErrors.password = policyError;
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length > 0) return;
 

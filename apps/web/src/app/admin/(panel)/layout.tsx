@@ -26,7 +26,7 @@ export default async function AdminPanelLayout({
   return (
     <AppShell
       variant="admin"
-      navLabel="MAIN MENU"
+      navLabel="Menu"
       hideHrefs={
         admin.role === "super_admin"
           ? undefined

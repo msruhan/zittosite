@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   UnauthorizedException,
 } from "@nestjs/common";
@@ -8,20 +9,28 @@ import * as jwt from "jsonwebtoken";
 import { PrismaService } from "../prisma/prisma.service";
 import { getAdminJwtSecret } from "../config/env";
 import type { ClientMeta } from "../auth/client-meta";
+import { AuditLogService } from "../security/audit-log.service";
+import { LoginAttemptService } from "../security/login-attempt.service";
+import { DUMMY_PASSWORD_HASH, passwordPolicyError } from "../security/password";
 import { AdminTotpService } from "./admin-totp.service";
+
+const OPERATOR_WEB_DENIED =
+  "Akun operator hanya dapat diakses melalui bot Telegram.";
 
 @Injectable()
 export class AdminAuthService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly totp: AdminTotpService,
+    private readonly attempts: LoginAttemptService,
+    private readonly audit: AuditLogService,
   ) {}
 
   private sign(adminId: string, username: string, sessionId: string) {
     return jwt.sign(
       { sub: adminId, username, role: "admin", jti: sessionId },
       getAdminJwtSecret(),
-      { expiresIn: "12h" },
+      { expiresIn: "12h", algorithm: "HS256" },
     );
   }
 
@@ -29,19 +38,35 @@ export class AdminAuthService {
     return jwt.sign(
       { sub: adminId, purpose: "admin_totp" },
       getAdminJwtSecret(),
-      { expiresIn: "5m" },
+      { expiresIn: "5m", algorithm: "HS256" },
     );
   }
 
   async login(rawUsername: string, password: string, meta: ClientMeta = {}) {
-    const username = String(rawUsername ?? "").trim().toLowerCase();
+    const username = String(rawUsername ?? "").trim().toLowerCase().slice(0, 64);
+    const lockKey = `admin:${username}`;
+    this.attempts.assertNotLocked(lockKey);
+
     const admin = await this.prisma.admin.findUnique({ where: { username } });
-    if (!admin || admin.status !== "active") {
+    const ok = await bcrypt.compare(
+      password,
+      admin?.passwordHash ?? DUMMY_PASSWORD_HASH,
+    );
+    if (!admin || admin.status !== "active" || !ok) {
+      const locked = this.attempts.recordFailure(lockKey);
+      this.audit.record(
+        locked ? "auth.admin.locked" : "auth.admin.login_failed",
+        { username, ip: meta.ip },
+      );
       throw new UnauthorizedException("Username atau password salah.");
     }
-    const ok = await bcrypt.compare(password, admin.passwordHash);
-    if (!ok) {
-      throw new UnauthorizedException("Username atau password salah.");
+    this.attempts.recordSuccess(lockKey);
+    if (admin.role !== "super_admin") {
+      this.audit.record("auth.admin.login_denied_operator", {
+        adminId: admin.id,
+        ip: meta.ip,
+      });
+      throw new ForbiddenException(OPERATOR_WEB_DENIED);
     }
 
     if (await this.totp.needsLoginTotp(admin)) {
@@ -62,7 +87,9 @@ export class AdminAuthService {
   ) {
     let payload: { sub?: string; purpose?: string };
     try {
-      payload = jwt.verify(String(pendingToken ?? ""), getAdminJwtSecret()) as {
+      payload = jwt.verify(String(pendingToken ?? ""), getAdminJwtSecret(), {
+        algorithms: ["HS256"],
+      }) as {
         sub?: string;
         purpose?: string;
       };
@@ -80,10 +107,19 @@ export class AdminAuthService {
     }
     const admin = await this.prisma.admin.findUniqueOrThrow({
       where: { id: payload.sub },
-      select: { id: true, username: true, fullName: true, status: true },
+      select: {
+        id: true,
+        username: true,
+        fullName: true,
+        status: true,
+        role: true,
+      },
     });
     if (admin.status !== "active") {
       throw new UnauthorizedException("Akun admin tidak aktif.");
+    }
+    if (admin.role !== "super_admin") {
+      throw new ForbiddenException(OPERATOR_WEB_DENIED);
     }
     return this.issueSession(admin.id, admin.username, admin.fullName, meta);
   }
@@ -101,6 +137,7 @@ export class AdminAuthService {
         userAgent: meta.userAgent,
       },
     });
+    this.audit.record("auth.admin.login_success", { adminId, ip: meta.ip });
     const accessToken = this.sign(adminId, username, session.id);
     return {
       requiresTotp: false as const,
@@ -140,9 +177,8 @@ export class AdminAuthService {
     newPassword: string,
     totpCode?: string,
   ) {
-    if (!newPassword || newPassword.length < 8) {
-      throw new BadRequestException("Password baru minimal 8 karakter.");
-    }
+    const policyError = passwordPolicyError(String(newPassword ?? ""));
+    if (policyError) throw new BadRequestException(policyError);
     await this.totp.assertAction(adminId, "password", totpCode);
     const admin = await this.prisma.admin.findUniqueOrThrow({
       where: { id: adminId },
@@ -159,12 +195,15 @@ export class AdminAuthService {
       where: { adminId, revokedAt: null },
       data: { revokedAt: new Date() },
     });
+    this.audit.record("auth.admin.password_changed", { adminId });
     return { ok: true };
   }
 
   async verifyToken(token: string) {
     try {
-      const payload = jwt.verify(token, getAdminJwtSecret()) as {
+      const payload = jwt.verify(token, getAdminJwtSecret(), {
+        algorithms: ["HS256"],
+      }) as {
         sub?: string;
         jti?: string;
         role?: string;
@@ -177,7 +216,7 @@ export class AdminAuthService {
           id: payload.jti,
           adminId: payload.sub,
           revokedAt: null,
-          admin: { status: "active" },
+          admin: { status: "active", role: "super_admin" },
         },
         select: { id: true },
       });

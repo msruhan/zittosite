@@ -14,7 +14,7 @@ export default function DashboardLoading() {
         <Skeleton className="mt-2 h-4 w-52" />
       </div>
 
-      <div className="grid grid-cols-1 gap-3 min-[480px]:grid-cols-2 xl:grid-cols-4 sm:gap-4">
+      <div className="card-shell grid grid-cols-2 divide-x divide-y divide-hairline overflow-hidden xl:grid-cols-4 xl:divide-y-0">
         {Array.from({ length: 4 }).map((_, index) => (
           <StatTileSkeleton key={index} />
         ))}

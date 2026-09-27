@@ -66,7 +66,7 @@ export function startLinkedMemberHtml(input: {
     row("👤", "Username", input.username),
     row("💎", "Saldo", formatCredits(input.balance)),
     "",
-    "Ketik / untuk daftar perintah.",
+    "Pilih menu di bawah, atau ketik /menu kapan saja.",
   ].join("\n");
 }
 
@@ -109,17 +109,218 @@ export function statusAdminHtml(input: {
   username: string;
   role: string;
   status: string;
-  portalUrl: string;
+  portalUrl?: string;
 }): string {
-  return [
+  const lines = [
     "🛡️ <b>Status Admin ZITTOSITE</b>",
     "",
     row("👤", "Username", input.username),
     row("🏷️", "Role", input.role),
     row("🟢", "Status", input.status),
     row("🔗", "Telegram", "tertaut"),
+  ];
+  if (input.portalUrl) {
+    lines.push("", `🌐 Portal Admin: ${escapeHtml(input.portalUrl)}`);
+  }
+  return lines.join("\n");
+}
+
+const RECAP_STATUS: Record<string, { icon: string; label: string }> = {
+  waiting_payment: { icon: "⏳", label: "Menunggu bayar" },
+  paid: { icon: "💳", label: "Dibayar" },
+  waiting_action: { icon: "📥", label: "Antrean" },
+  in_process: { icon: "🛠️", label: "Dikerjakan" },
+  done: { icon: "✅", label: "Selesai" },
+  rejected: { icon: "❌", label: "Ditolak" },
+  cancel: { icon: "🚫", label: "Batal" },
+};
+
+function recapDay(day: Date): string {
+  return new Intl.DateTimeFormat("id-ID", {
+    timeZone: "Asia/Jakarta",
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  }).format(day);
+}
+
+function recapStamp(): string {
+  return new Intl.DateTimeFormat("id-ID", {
+    timeZone: "Asia/Jakarta",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date());
+}
+
+function handledLine(s: {
+  taken: number;
+  done: number;
+  rejected: number;
+  inProcess: number;
+}): string {
+  return `ambil ${s.taken} · selesai ${s.done} · tolak ${s.rejected} · proses ${s.inProcess}`;
+}
+
+export function superAdminRecapHtml(input: {
+  day: Date;
+  created: {
+    total: number;
+    web: number;
+    telegram: number;
+    byStatus: Partial<Record<string, number>>;
+  };
+  revenue: { amount: number; payments: number };
+  handled: { taken: number; done: number; rejected: number; inProcess: number };
+  queue: number;
+  perAdmin: Array<{
+    fullName: string;
+    telegramHandle: string | null;
+    taken: number;
+    done: number;
+    rejected: number;
+    inProcess: number;
+  }>;
+}): string {
+  const statusLines = Object.entries(RECAP_STATUS)
+    .filter(([status]) => (input.created.byStatus[status] ?? 0) > 0)
+    .map(
+      ([status, meta]) =>
+        `   ${meta.icon} ${meta.label}: <b>${input.created.byStatus[status]}</b>`,
+    );
+  const adminLines = input.perAdmin.map((a) => {
+    const handle = a.telegramHandle
+      ? ` ${escapeHtml(a.telegramHandle.startsWith("@") ? a.telegramHandle : `@${a.telegramHandle}`)}`
+      : "";
+    return `• <b>${escapeHtml(a.fullName)}</b>${handle}\n   ${handledLine(a)}`;
+  });
+
+  return [
+    "📊 <b>Rekap Order Hari Ini</b>",
+    `<i>${escapeHtml(recapDay(input.day))} · per ${recapStamp()} WIB</i>`,
     "",
-    `🌐 Portal Admin: ${escapeHtml(input.portalUrl)}`,
+    row(
+      "🧾",
+      "Order masuk",
+      `${input.created.total} (Web ${input.created.web} · Telegram ${input.created.telegram})`,
+    ),
+    ...statusLines,
+    row(
+      "💰",
+      "Pendapatan",
+      `${formatRp(input.revenue.amount)} dari ${input.revenue.payments} pembayaran`,
+    ),
+    "",
+    "🛡️ <b>Tindak lanjut admin hari ini</b>",
+    `   ${handledLine(input.handled)}`,
+    row("📥", "Antrean belum diambil", String(input.queue)),
+    "",
+    "👥 <b>Per admin</b>",
+    ...(adminLines.length ? adminLines : ["<i>Belum ada aktivitas admin hari ini.</i>"]),
+  ].join("\n");
+}
+
+export function operatorRecapHtml(input: {
+  day: Date;
+  stats: { taken: number; done: number; rejected: number; inProcess: number };
+  queue: number;
+  orders: Array<{ orderId: string; serviceName: string; status: string; imei: string }>;
+}): string {
+  const orderLines = input.orders.map((o) => {
+    const meta = RECAP_STATUS[o.status] ?? { icon: "•", label: o.status };
+    return `${meta.icon} <code>${escapeHtml(o.orderId)}</code> — ${escapeHtml(o.serviceName)}\n   ${meta.label} · ${maskImeiHtml(o.imei)}`;
+  });
+  return [
+    "📊 <b>Rekap Anda Hari Ini</b>",
+    `<i>${escapeHtml(recapDay(input.day))} · per ${recapStamp()} WIB</i>`,
+    "",
+    row("🛠️", "Diambil", String(input.stats.taken)),
+    row("✅", "Selesai", String(input.stats.done)),
+    row("❌", "Ditolak", String(input.stats.rejected)),
+    row("⏱️", "Masih dikerjakan", String(input.stats.inProcess)),
+    row("📥", "Antrean menunggu diambil", String(input.queue)),
+    "",
+    "📋 <b>Order yang Anda tangani</b>",
+    ...(orderLines.length ? orderLines : ["<i>Belum ada order hari ini.</i>"]),
+  ].join("\n");
+}
+
+export function inviteClaimPendingHtml(fullName: string): string {
+  return [
+    "⏳ <b>Undangan diterima</b>",
+    `Permintaan menautkan Telegram ini ke akun operator <b>${escapeHtml(fullName)}</b> sudah dikirim ke Super Admin.`,
+    "",
+    "<i>Anda akan mendapat pesan di sini setelah disetujui.</i>",
+  ].join("\n");
+}
+
+export function inviteFailedHtml(reason: string): string {
+  return [
+    "⚠️ <b>Undangan tidak dapat dipakai</b>",
+    escapeHtml(reason),
+    "",
+    "<i>Minta Super Admin membuat link undangan baru.</i>",
+  ].join("\n");
+}
+
+export function inviteApprovalRequestHtml(input: {
+  adminUsername: string;
+  adminFullName: string;
+  telegramUserId: string;
+  telegramUsername?: string | null;
+  telegramName?: string | null;
+}): string {
+  return [
+    "🔐 <b>Permintaan tautan operator</b>",
+    "",
+    row("🛡️", "Akun", `${input.adminFullName} (@${input.adminUsername})`),
+    row(
+      "💬",
+      "Telegram",
+      input.telegramUsername ? `@${input.telegramUsername}` : "tanpa username",
+    ),
+    ...(input.telegramName ? [row("🪪", "Nama", input.telegramName)] : []),
+    row("#️⃣", "Telegram ID", input.telegramUserId, true),
+    "",
+    "<i>Setujui hanya jika ini benar akun Telegram operator tersebut.</i>",
+  ].join("\n");
+}
+
+export function inviteDecidedHtml(input: {
+  approved: boolean;
+  adminUsername: string;
+  deciderUsername: string;
+}): string {
+  return [
+    input.approved
+      ? "✅ <b>Tautan operator disetujui</b>"
+      : "🚫 <b>Tautan operator ditolak</b>",
+    row("🛡️", "Akun", `@${input.adminUsername}`),
+    row("👤", "Oleh", `@${input.deciderUsername}`),
+  ].join("\n");
+}
+
+export function inviteApprovedOperatorHtml(fullName: string): string {
+  return [
+    "✅ <b>Akun operator aktif</b>",
+    `Halo <b>${escapeHtml(fullName)}</b>, Telegram Anda sudah tertaut.`,
+    "",
+    "Order baru akan masuk ke chat ini. Proses lewat tombol <b>Terima</b>, <b>Tolak</b>, dan <b>Done</b>.",
+    "Ketik /riwayat untuk melihat antrean Anda.",
+  ].join("\n");
+}
+
+export function inviteRejectedOperatorHtml(): string {
+  return [
+    "🚫 <b>Permintaan ditolak</b>",
+    "Super Admin menolak menautkan Telegram ini.",
+  ].join("\n");
+}
+
+export function operatorUnlinkedHtml(): string {
+  return [
+    "🔌 <b>Tautan operator dicabut</b>",
+    "Telegram ini tidak lagi menerima order ZITTOSITE.",
   ].join("\n");
 }
 
@@ -173,15 +374,50 @@ export function newOrderAdminHtml(input: {
   imei: string;
   serviceName: string;
   price: number;
+  customer?: { username: string; channel: string };
 }): string {
   return [
     "🆕 <b>ORDER BARU</b>",
     "",
     row("🎫", "Order ID", input.orderId, true),
+    ...(input.customer
+      ? [
+          row("👤", "User", input.customer.username, true),
+          row("📡", "Via", input.customer.channel),
+        ]
+      : []),
     row("📱", "IMEI", input.imei.slice(0, 3) + "X".repeat(Math.max(0, input.imei.length - 3)), true),
     row("📦", "Layanan", input.serviceName),
     row("💰", "Harga", formatRp(input.price)),
     row("🟢", "Status", "waiting_action"),
+  ].join("\n");
+}
+
+const FOLLOW_UP_TITLE = {
+  taken: "🛠️ <b>Order diambil admin</b>",
+  rejected: "❌ <b>Order ditolak admin</b>",
+  done: "✅ <b>Order diselesaikan admin</b>",
+} as const;
+
+export function superAdminFollowUpHtml(input: {
+  kind: keyof typeof FOLLOW_UP_TITLE;
+  orderId: string;
+  customerUsername: string;
+  serviceName: string;
+  adminUsername: string;
+  adminFullName: string;
+  note?: string;
+}): string {
+  return [
+    FOLLOW_UP_TITLE[input.kind],
+    "",
+    row("🎫", "Order ID", input.orderId, true),
+    row("👤", "User", input.customerUsername, true),
+    row("📦", "Layanan", input.serviceName),
+    row("👷", "Admin", `${input.adminUsername} (${input.adminFullName})`),
+    ...(input.note
+      ? [row("📝", input.kind === "done" ? "Hasil" : "Alasan", input.note)]
+      : []),
   ].join("\n");
 }
 

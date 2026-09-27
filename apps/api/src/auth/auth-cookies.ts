@@ -1,4 +1,5 @@
 import type { Response } from "express";
+import { secureCookies } from "../config/env";
 
 export const USER_AUTH_COOKIE = "zittosite_user_token";
 export const ADMIN_AUTH_COOKIE = "zittosite_admin_token";
@@ -6,10 +7,9 @@ export const ADMIN_AUTH_COOKIE = "zittosite_admin_token";
 const MAX_AGE_MS = 12 * 60 * 60 * 1000;
 
 function cookieOptions() {
-  const secure = process.env.NODE_ENV === "production";
   return {
     httpOnly: true,
-    secure,
+    secure: secureCookies(),
     sameSite: "lax" as const,
     path: "/",
     maxAge: MAX_AGE_MS,

@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   UnauthorizedException,
 } from "@nestjs/common";
@@ -8,7 +9,9 @@ import * as QRCode from "qrcode";
 import * as bcrypt from "bcryptjs";
 import { Prisma } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
-import { getAdminJwtSecret } from "../config/env";
+import { getAdminJwtSecret, isProduction } from "../config/env";
+import { AuditLogService } from "../security/audit-log.service";
+import { LoginAttemptService } from "../security/login-attempt.service";
 
 export type TotpAction = "login" | "password";
 export type TotpPrefs = Record<TotpAction, boolean>;
@@ -20,8 +23,15 @@ export const DEFAULT_TOTP_PREFS: TotpPrefs = {
 
 const BASE32 = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
 
+function encryptionKeys(): Buffer[] {
+  const legacy = crypto.createHash("sha256").update(getAdminJwtSecret()).digest();
+  const dedicated = process.env.TOTP_ENCRYPTION_KEY?.trim();
+  if (!dedicated) return [legacy];
+  return [crypto.createHash("sha256").update(dedicated).digest(), legacy];
+}
+
 function encryptSecret(plain: string): string {
-  const key = crypto.createHash("sha256").update(getAdminJwtSecret()).digest();
+  const [key] = encryptionKeys();
   const iv = crypto.randomBytes(12);
   const cipher = crypto.createCipheriv("aes-256-gcm", key, iv);
   const enc = Buffer.concat([cipher.update(plain, "utf8"), cipher.final()]);
@@ -30,16 +40,23 @@ function encryptSecret(plain: string): string {
 }
 
 function decryptSecret(payload: string): string {
-  const key = crypto.createHash("sha256").update(getAdminJwtSecret()).digest();
   const buf = Buffer.from(payload, "base64url");
   const iv = buf.subarray(0, 12);
   const tag = buf.subarray(12, 28);
   const data = buf.subarray(28);
-  const decipher = crypto.createDecipheriv("aes-256-gcm", key, iv);
-  decipher.setAuthTag(tag);
-  return Buffer.concat([decipher.update(data), decipher.final()]).toString(
-    "utf8",
-  );
+  let lastError: unknown;
+  for (const key of encryptionKeys()) {
+    try {
+      const decipher = crypto.createDecipheriv("aes-256-gcm", key, iv);
+      decipher.setAuthTag(tag);
+      return Buffer.concat([decipher.update(data), decipher.final()]).toString(
+        "utf8",
+      );
+    } catch (err) {
+      lastError = err;
+    }
+  }
+  throw lastError;
 }
 
 function randomBase32(bytes = 20): string {
@@ -90,15 +107,25 @@ function hotp(secret: Buffer, counter: number): string {
   return String(code % 1_000_000).padStart(6, "0");
 }
 
-function verifyTotp(secretBase32: string, token: string, window = 1): boolean {
+/** Returns the matched time step, or null. */
+function verifyTotp(
+  secretBase32: string,
+  token: string,
+  window = 1,
+): number | null {
   const code = String(token ?? "").replace(/\s/g, "");
-  if (!/^\d{6}$/.test(code)) return false;
+  if (!/^\d{6}$/.test(code)) return null;
   const key = base32ToBuffer(secretBase32);
   const step = Math.floor(Date.now() / 1000 / 30);
   for (let w = -window; w <= window; w++) {
-    if (hotp(key, step + w) === code) return true;
+    const candidate = hotp(key, step + w);
+    if (
+      crypto.timingSafeEqual(Buffer.from(candidate), Buffer.from(code))
+    ) {
+      return step + w;
+    }
   }
-  return false;
+  return null;
 }
 
 export function parseTotpPrefs(raw: unknown): TotpPrefs {
@@ -112,7 +139,33 @@ export function parseTotpPrefs(raw: unknown): TotpPrefs {
 
 @Injectable()
 export class AdminTotpService {
-  constructor(private readonly prisma: PrismaService) {}
+  /** Last accepted step per admin; rejects replay of a code within its validity window. Single-instance only. */
+  private readonly lastUsedStep = new Map<string, number>();
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly attempts: LoginAttemptService,
+    private readonly audit: AuditLogService,
+  ) {}
+
+  private checkCode(adminId: string, encryptedSecret: string, code: string) {
+    const lockKey = `totp:${adminId}`;
+    this.attempts.assertNotLocked(lockKey);
+    const step = verifyTotp(decryptSecret(encryptedSecret), code);
+    const replayed =
+      step !== null && step <= (this.lastUsedStep.get(adminId) ?? -1);
+    if (step === null || replayed) {
+      const locked = this.attempts.recordFailure(lockKey);
+      this.audit.record(
+        locked ? "auth.admin.locked" : "auth.admin.totp_failed",
+        { adminId, replayed },
+      );
+      return false;
+    }
+    this.lastUsedStep.set(adminId, step);
+    this.attempts.recordSuccess(lockKey);
+    return true;
+  }
 
   async status(adminId: string) {
     const admin = await this.prisma.admin.findUniqueOrThrow({
@@ -140,7 +193,7 @@ export class AdminTotpService {
       select: { totpSecret: true, totpEnabledAt: true },
     });
     if (!admin.totpEnabledAt || !admin.totpSecret) return false;
-    return verifyTotp(decryptSecret(admin.totpSecret), code);
+    return this.checkCode(adminId, admin.totpSecret, code);
   }
 
   async assertAction(adminId: string, action: TotpAction, code?: string) {
@@ -151,8 +204,32 @@ export class AdminTotpService {
     if (!admin.totpEnabledAt) return;
     const prefs = parseTotpPrefs(admin.totpPrefs);
     if (!prefs[action]) return;
-    if (!admin.totpSecret || !verifyTotp(decryptSecret(admin.totpSecret), String(code ?? ""))) {
+    if (
+      !admin.totpSecret ||
+      !this.checkCode(adminId, admin.totpSecret, String(code ?? ""))
+    ) {
       throw new UnauthorizedException("Kode authenticator salah atau diperlukan.");
+    }
+  }
+
+  /** Fresh 2FA proof for privilege-changing actions; production requires 2FA to be enabled. */
+  async assertStepUp(adminId: string, code?: string) {
+    const admin = await this.prisma.admin.findUniqueOrThrow({
+      where: { id: adminId },
+      select: { totpEnabledAt: true, totpSecret: true },
+    });
+    if (!admin.totpEnabledAt || !admin.totpSecret) {
+      if (isProduction()) {
+        throw new ForbiddenException(
+          "Aktifkan Google Authenticator sebelum mengelola akun admin.",
+        );
+      }
+      return;
+    }
+    if (!this.checkCode(adminId, admin.totpSecret, String(code ?? ""))) {
+      throw new UnauthorizedException(
+        "Kode authenticator salah atau diperlukan.",
+      );
     }
   }
 
@@ -187,7 +264,7 @@ export class AdminTotpService {
     if (!admin.totpSecret) {
       throw new BadRequestException("Jalankan setup 2FA terlebih dahulu.");
     }
-    if (!verifyTotp(decryptSecret(admin.totpSecret), code)) {
+    if (!this.checkCode(adminId, admin.totpSecret, code)) {
       throw new UnauthorizedException("Kode authenticator salah.");
     }
     await this.prisma.admin.update({
@@ -197,6 +274,7 @@ export class AdminTotpService {
         totpPrefs: DEFAULT_TOTP_PREFS,
       },
     });
+    this.audit.record("auth.admin.totp_enabled", { adminId });
     return { ok: true };
   }
 
@@ -209,7 +287,7 @@ export class AdminTotpService {
     }
     const okPw = await bcrypt.compare(password, admin.passwordHash);
     if (!okPw) throw new UnauthorizedException("Password salah.");
-    if (!admin.totpSecret || !verifyTotp(decryptSecret(admin.totpSecret), code)) {
+    if (!admin.totpSecret || !this.checkCode(adminId, admin.totpSecret, code)) {
       throw new UnauthorizedException("Kode authenticator salah.");
     }
     await this.prisma.admin.update({
@@ -220,6 +298,7 @@ export class AdminTotpService {
         totpPrefs: Prisma.DbNull,
       },
     });
+    this.audit.record("auth.admin.totp_disabled", { adminId });
     return { ok: true };
   }
 }

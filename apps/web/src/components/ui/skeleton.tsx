@@ -54,26 +54,10 @@ export function TableSkeleton({
 
 export function StatTileSkeleton() {
   return (
-    <div className="card-shell relative overflow-hidden p-5 sm:p-6">
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-0 z-0"
-      >
-        <span className="card-mesh-blob card-mesh-action" />
-        <span className="card-hatch" />
-      </div>
-      <div className="relative z-10 flex items-center justify-between gap-3">
-        <Skeleton className="h-5 w-28" />
-        <Skeleton className="size-8 rounded-lg" />
-      </div>
-      <div className="relative z-10 mt-5 flex items-center gap-2.5 sm:mt-6">
-        <Skeleton className="h-8 w-16" />
-        <Skeleton className="h-6 w-14 rounded-full" />
-      </div>
-      <div className="relative z-10 mt-5 flex items-center justify-between gap-3">
-        <Skeleton className="h-4 w-28" />
-        <Skeleton className="h-4 w-20" />
-      </div>
+    <div className="p-5">
+      <Skeleton className="h-3 w-24" />
+      <Skeleton className="mt-3 h-7 w-16" />
+      <Skeleton className="mt-4 h-3 w-20" />
     </div>
   );
 }

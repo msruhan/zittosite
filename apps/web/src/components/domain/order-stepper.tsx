@@ -1,4 +1,4 @@
-import { Check, Slash, X } from "lucide-react";
+import { Check, Minus, X } from "@phosphor-icons/react/dist/ssr";
 import { formatDateTime } from "@/lib/format";
 import { ORDER_STATUS, ORDER_STATUS_FLOW, type FlowStatus } from "@/lib/status";
 import type { OrderDetail, OrderStatus } from "@/lib/types";
@@ -31,7 +31,7 @@ type StepState = "complete" | "current" | "pending";
 
 function Disc({ state, failure }: { state: StepState; failure?: "rejected" | "cancel" }) {
   if (failure) {
-    const Icon = failure === "rejected" ? X : Slash;
+    const Icon = failure === "rejected" ? X : Minus;
     return (
       <span
         aria-hidden="true"
@@ -42,7 +42,7 @@ function Disc({ state, failure }: { state: StepState; failure?: "rejected" | "ca
             : "border-void-edge bg-void-ink",
         )}
       >
-        <Icon className="size-3.5" strokeWidth={2.5} />
+        <Icon className="size-3.5" weight="bold" />
       </span>
     );
   }
@@ -53,7 +53,7 @@ function Disc({ state, failure }: { state: StepState; failure?: "rejected" | "ca
         aria-hidden="true"
         className="relative z-10 flex size-6 items-center justify-center rounded-full border border-cleared-ink bg-cleared-ink text-white"
       >
-        <Check className="size-3.5" strokeWidth={2.5} />
+        <Check className="size-3.5" weight="bold" />
       </span>
     );
   }

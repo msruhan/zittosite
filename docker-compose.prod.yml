@@ -27,11 +27,14 @@ services:
     env_file:
       - .env
     environment:
+      NODE_ENV: production
       DATABASE_URL: postgresql://${POSTGRES_USER:-zittosite}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-zittosite}
       DIRECT_URL: postgresql://${POSTGRES_USER:-zittosite}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-zittosite}
       PORT: "4000"
+      PAYMENT_SIMULATION: ${PAYMENT_SIMULATION:-1}
+    # PUBLIC_BIND_ADDR=127.0.0.1 (set by deploy.sh in TLS mode) keeps it behind Caddy.
     ports:
-      - "4000:4000"
+      - "${PUBLIC_BIND_ADDR:-0.0.0.0}:4000:4000"
     networks:
       - internal
 
@@ -41,6 +44,7 @@ services:
       dockerfile: apps/web/Dockerfile
       args:
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://127.0.0.1:4000}
+        NEXT_PUBLIC_PAYMENT_SIMULATION: ${PAYMENT_SIMULATION:-1}
     restart: unless-stopped
     depends_on:
       - api
@@ -48,12 +52,37 @@ services:
       PORT: "3000"
       HOSTNAME: 0.0.0.0
     ports:
-      - "3000:3000"
+      - "${PUBLIC_BIND_ADDR:-0.0.0.0}:3000:3000"
+    networks:
+      - internal
+
+  # HTTPS reverse proxy; only started with the "tls" profile (deploy.sh enables it when WEB_DOMAIN is set).
+  caddy:
+    image: caddy:2-alpine
+    profiles: ["tls"]
+    restart: unless-stopped
+    depends_on:
+      - web
+      - api
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      WEB_DOMAIN: ${WEB_DOMAIN:-}
+      API_DOMAIN: ${API_DOMAIN:-}
+      ACME_EMAIL: ${ACME_EMAIL:-}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
     networks:
       - internal
 
 volumes:
   pgdata:
+  caddy_config:
+  caddy_data:
 
 networks:
   internal:

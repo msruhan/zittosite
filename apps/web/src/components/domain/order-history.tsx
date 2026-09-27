@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { Package, Search } from "lucide-react";
+import { MagnifyingGlass, Package } from "@phosphor-icons/react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -34,9 +34,9 @@ export function OrderHistory({ orders }: { orders: OrderDetail[] }) {
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
         <label className="relative flex-1">
           <span className="sr-only">Cari order</span>
-          <Search
+          <MagnifyingGlass
             aria-hidden="true"
-            strokeWidth={1.5}
+            weight="regular"
             className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-ink-faint"
           />
           <Input
@@ -65,7 +65,7 @@ export function OrderHistory({ orders }: { orders: OrderDetail[] }) {
           </>
         ) : orders.length === 0 ? (
           <EmptyState
-            icon={<Package strokeWidth={1.5} />}
+            icon={<Package weight="regular" />}
             title="Belum ada order"
             description="Mulai buat order pertamamu."
             action={
@@ -76,7 +76,7 @@ export function OrderHistory({ orders }: { orders: OrderDetail[] }) {
           />
         ) : (
           <EmptyState
-            icon={<Search strokeWidth={1.5} />}
+            icon={<MagnifyingGlass weight="regular" />}
             title="Tidak ada order yang cocok"
             description="Coba ubah kata kunci atau reset filter status."
             action={

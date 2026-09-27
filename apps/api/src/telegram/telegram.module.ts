@@ -12,6 +12,9 @@ import {
 } from "./telegram-oauth.controller";
 import { TelegramOauthService } from "./telegram-oauth.service";
 import { TelegramLinkTokenService } from "./telegram-link-token.service";
+import { AdminTelegramInviteService } from "./admin-telegram-invite.service";
+import { AdminTelegramInviteController } from "./admin-telegram-invite.controller";
+import { OrderRecapService } from "./order-recap.service";
 
 @Module({
   imports: [
@@ -25,11 +28,14 @@ import { TelegramLinkTokenService } from "./telegram-link-token.service";
     TelegramBotService,
     TelegramOauthService,
     TelegramLinkTokenService,
+    AdminTelegramInviteService,
+    OrderRecapService,
   ],
   controllers: [
     TelegramWebhookController,
     UserTelegramOauthController,
     AdminTelegramOauthController,
+    AdminTelegramInviteController,
   ],
   exports: [TelegramBotService, AdminNotifyModule],
 })

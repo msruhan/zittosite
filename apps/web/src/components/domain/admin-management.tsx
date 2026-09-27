@@ -1,7 +1,14 @@
 "use client";
 
 import * as React from "react";
-import { Pencil, Plus, Search, Trash2 } from "lucide-react";
+import {
+  Check,
+  Copy,
+  MagnifyingGlass,
+  PencilSimple,
+  Plus,
+  Trash,
+} from "@phosphor-icons/react";
 import { toast } from "sonner";
 import { Avatar } from "@/components/shell/user-chip";
 import { Button } from "@/components/ui/button";
@@ -22,9 +29,38 @@ import {
   TableScroll,
 } from "@/components/ui/table";
 import { ApiError, api } from "@/lib/api";
+import { passwordPolicyError } from "@/lib/password";
 import type { Admin } from "@/lib/types";
 
-type AdminDraft = Admin & { password?: string };
+type AdminDraft = Admin & { password?: string; totpCode?: string };
+
+type PendingConfirm = {
+  title: string;
+  description: string;
+  confirmLabel: string;
+  danger?: boolean;
+  run: (totpCode: string) => Promise<void>;
+};
+
+const TOTP_HINT = "Wajib bila Google Authenticator aktif di akun Anda.";
+
+function totpHeaders(code?: string): HeadersInit {
+  const trimmed = code?.replace(/\s/g, "");
+  return trimmed ? { "X-TOTP-Code": trimmed } : {};
+}
+
+type InviteLink = { admin: Admin; botUrl: string; expiresAt: string };
+
+const dateTime = new Intl.DateTimeFormat("id-ID", {
+  day: "numeric",
+  month: "short",
+  hour: "2-digit",
+  minute: "2-digit",
+});
+
+function isOperator(admin: Pick<Admin, "role">) {
+  return (admin.role ?? "admin") === "admin";
+}
 
 export function AdminManagement({
   initialAdmins,
@@ -35,10 +71,14 @@ export function AdminManagement({
   const [query, setQuery] = React.useState("");
   const [editing, setEditing] = React.useState<AdminDraft | null>(null);
   const [creating, setCreating] = React.useState(false);
+  const [confirm, setConfirm] = React.useState<PendingConfirm | null>(null);
+  const [inviteLink, setInviteLink] = React.useState<InviteLink | null>(null);
 
-  React.useEffect(() => {
+  const [syncedAdmins, setSyncedAdmins] = React.useState(initialAdmins);
+  if (initialAdmins !== syncedAdmins) {
+    setSyncedAdmins(initialAdmins);
     setAdmins(initialAdmins);
-  }, [initialAdmins]);
+  }
 
   const filtered = React.useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -57,32 +97,43 @@ export function AdminManagement({
   }
 
   async function handleSave(next: AdminDraft) {
+    const password =
+      !isOperator(next) && next.password ? next.password : undefined;
     try {
       if (creating) {
         await api("/admin/admins", {
           method: "POST",
+          headers: totpHeaders(next.totpCode),
           body: JSON.stringify({
             username: next.username,
             fullName: next.fullName,
-            password: next.password,
             role: next.role ?? "admin",
+            ...(password ? { password } : {}),
           }),
         });
       } else {
         await api(`/admin/admins/${next.id}`, {
           method: "PATCH",
+          headers: totpHeaders(next.totpCode),
           body: JSON.stringify({
             fullName: next.fullName,
             role: next.role,
             status: next.active ? "active" : "blocked",
-            ...(next.password ? { password: next.password } : {}),
+            ...(password ? { password } : {}),
           }),
         });
       }
       await reload();
       setEditing(null);
       setCreating(false);
-      toast.success(creating ? "Admin ditambahkan" : "Perubahan disimpan");
+      if (creating && isOperator(next)) {
+        toast.success("Operator ditambahkan", {
+          description:
+            "Klik “Buat undangan” di kolom Telegram untuk menautkan akun Telegram-nya.",
+        });
+      } else {
+        toast.success(creating ? "Admin ditambahkan" : "Perubahan disimpan");
+      }
     } catch (err) {
       toast.error("Gagal", {
         description: err instanceof ApiError ? err.message : "Simpan gagal",
@@ -90,46 +141,133 @@ export function AdminManagement({
     }
   }
 
-  async function handleToggle(admin: Admin) {
+  async function runQuiet(action: () => Promise<unknown>, success: string) {
     try {
-      await api(`/admin/admins/${admin.id}`, {
-        method: "PATCH",
-        body: JSON.stringify({
-          status: admin.active ? "blocked" : "active",
-        }),
-      });
+      await action();
       await reload();
-      toast.success(admin.active ? "Admin diblokir" : "Admin diaktifkan", {
-        description: `${admin.fullName} ${admin.active ? "tidak lagi" : "kembali"} dapat login.`,
-      });
+      toast.success(success);
     } catch (err) {
       toast.error("Gagal", {
-        description: err instanceof ApiError ? err.message : "Update gagal",
+        description: err instanceof ApiError ? err.message : "Aksi gagal",
       });
     }
   }
 
-  async function handleDelete(admin: Admin) {
-    try {
-      const result = await api<{
-        deleted: boolean;
-        blocked?: boolean;
-        message?: string;
-      }>(`/admin/admins/${admin.id}`, { method: "DELETE" });
-      await reload();
-      toast.success(
-        result.deleted ? "Admin dihapus" : "Admin diblokir",
-        {
+  function handleCreateInvite(admin: Admin) {
+    setConfirm({
+      title: "Buat undangan Telegram",
+      description: `Link sekali pakai untuk ${admin.fullName}, berlaku 24 jam. Undangan lama otomatis dibatalkan.`,
+      confirmLabel: "Buat link",
+      run: async (totpCode) => {
+        const result = await api<{ botUrl: string; expiresAt: string }>(
+          `/admin/admins/${admin.id}/telegram/invite`,
+          { method: "POST", headers: totpHeaders(totpCode) },
+        );
+        await reload();
+        setInviteLink({ admin, ...result });
+      },
+    });
+  }
+
+  function handleRevokeInvite(admin: Admin) {
+    void runQuiet(
+      () =>
+        api(`/admin/admins/${admin.id}/telegram/invite`, { method: "DELETE" }),
+      "Undangan dibatalkan",
+    );
+  }
+
+  function handleApprove(admin: Admin) {
+    const who = admin.telegramInvite?.telegramUsername
+      ? `@${admin.telegramInvite.telegramUsername}`
+      : `ID ${admin.telegramInvite?.telegramUserId ?? "-"}`;
+    setConfirm({
+      title: "Setujui tautan Telegram",
+      description: `Telegram ${who} akan menerima dan memproses order sebagai ${admin.fullName}.`,
+      confirmLabel: "Setujui",
+      run: async (totpCode) => {
+        await api(`/admin/admins/${admin.id}/telegram/approve`, {
+          method: "POST",
+          headers: totpHeaders(totpCode),
+        });
+        await reload();
+        toast.success("Operator tertaut", {
+          description: `${admin.fullName} sekarang menerima order di Telegram.`,
+        });
+      },
+    });
+  }
+
+  function handleReject(admin: Admin) {
+    void runQuiet(
+      () =>
+        api(`/admin/admins/${admin.id}/telegram/reject`, { method: "POST" }),
+      "Permintaan ditolak",
+    );
+  }
+
+  function handleUnlink(admin: Admin) {
+    setConfirm({
+      title: "Putuskan Telegram",
+      description: `${admin.fullName} berhenti menerima order di Telegram sampai ditautkan lagi lewat undangan baru.`,
+      confirmLabel: "Putuskan",
+      danger: true,
+      run: async (totpCode) => {
+        await api(`/admin/admins/${admin.id}/telegram`, {
+          method: "DELETE",
+          headers: totpHeaders(totpCode),
+        });
+        await reload();
+        toast.success("Telegram diputuskan");
+      },
+    });
+  }
+
+  function handleToggle(admin: Admin) {
+    const access = isOperator(admin) ? "memproses order di Telegram" : "login";
+    setConfirm({
+      title: admin.active ? "Blokir admin" : "Aktifkan admin",
+      description: `${admin.fullName} ${admin.active ? "tidak akan bisa" : "akan kembali bisa"} ${access}.`,
+      confirmLabel: admin.active ? "Blokir" : "Aktifkan",
+      danger: admin.active,
+      run: async (totpCode) => {
+        await api(`/admin/admins/${admin.id}`, {
+          method: "PATCH",
+          headers: totpHeaders(totpCode),
+          body: JSON.stringify({
+            status: admin.active ? "blocked" : "active",
+          }),
+        });
+        await reload();
+        toast.success(admin.active ? "Admin diblokir" : "Admin diaktifkan", {
+          description: `${admin.fullName} ${admin.active ? "tidak lagi" : "kembali"} dapat login.`,
+        });
+      },
+    });
+  }
+
+  function handleDelete(admin: Admin) {
+    setConfirm({
+      title: "Hapus admin",
+      description: `${admin.fullName} akan kehilangan akses. Admin dengan riwayat order diblokir, bukan dihapus.`,
+      confirmLabel: "Hapus",
+      danger: true,
+      run: async (totpCode) => {
+        const result = await api<{
+          deleted: boolean;
+          blocked?: boolean;
+          message?: string;
+        }>(`/admin/admins/${admin.id}`, {
+          method: "DELETE",
+          headers: totpHeaders(totpCode),
+        });
+        await reload();
+        toast.success(result.deleted ? "Admin dihapus" : "Admin diblokir", {
           description:
-            result.message ??
-            `${admin.fullName} tidak lagi memiliki akses.`,
-        },
-      );
-    } catch (err) {
-      toast.error("Gagal", {
-        description: err instanceof ApiError ? err.message : "Hapus gagal",
-      });
-    }
+            result.message ?? `${admin.fullName} tidak lagi memiliki akses.`,
+        });
+      },
+    });
   }
 
   function openCreate() {
@@ -151,9 +289,9 @@ export function AdminManagement({
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
         <label className="relative flex-1">
           <span className="sr-only">Cari admin</span>
-          <Search
+          <MagnifyingGlass
             aria-hidden="true"
-            strokeWidth={1.5}
+            weight="regular"
             className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-ink-faint"
           />
           <Input
@@ -204,17 +342,18 @@ export function AdminManagement({
                         <span className="text-body text-ink-soft">
                           {admin.role === "super_admin"
                             ? "Super Admin"
-                            : "Admin"}
+                            : "Operator"}
                         </span>
                       </TD>
                       <TD>
-                        {admin.telegramHandle ? (
-                          <span className="font-medium text-ink">
-                            {admin.telegramHandle}
-                          </span>
-                        ) : (
-                          <span className="text-ink-faint">Belum ditautkan</span>
-                        )}
+                        <TelegramCell
+                          admin={admin}
+                          onInvite={() => handleCreateInvite(admin)}
+                          onRevoke={() => handleRevokeInvite(admin)}
+                          onApprove={() => handleApprove(admin)}
+                          onReject={() => handleReject(admin)}
+                          onUnlink={() => handleUnlink(admin)}
+                        />
                       </TD>
                       <TD>
                         <DataValue emphasis>{admin.handledCount}</DataValue>
@@ -241,7 +380,7 @@ export function AdminManagement({
                               setEditing({ ...admin, password: "" });
                             }}
                           >
-                            <Pencil className="size-4 text-action" />
+                            <PencilSimple className="size-4 text-action" />
                           </Button>
                           <Button
                             size="sm"
@@ -256,7 +395,7 @@ export function AdminManagement({
                             aria-label={`Hapus ${admin.fullName}`}
                             onClick={() => handleDelete(admin)}
                           >
-                            <Trash2 className="size-4 text-refused-ink" />
+                            <Trash className="size-4 text-refused-ink" />
                           </Button>
                         </div>
                       </TD>
@@ -318,7 +457,271 @@ export function AdminManagement({
           />
         ) : null}
       </Dialog>
+
+      <Dialog
+        open={Boolean(confirm)}
+        onOpenChange={(open) => {
+          if (!open) setConfirm(null);
+        }}
+      >
+        {confirm ? (
+          <TotpConfirmDialog
+            pending={confirm}
+            onDone={() => setConfirm(null)}
+          />
+        ) : null}
+      </Dialog>
+
+      <Dialog
+        open={Boolean(inviteLink)}
+        onOpenChange={(open) => {
+          if (!open) setInviteLink(null);
+        }}
+      >
+        {inviteLink ? (
+          <InviteLinkDialog
+            invite={inviteLink}
+            onDone={() => setInviteLink(null)}
+          />
+        ) : null}
+      </Dialog>
     </div>
+  );
+}
+
+function TelegramCell({
+  admin,
+  onInvite,
+  onRevoke,
+  onApprove,
+  onReject,
+  onUnlink,
+}: {
+  admin: Admin;
+  onInvite: () => void;
+  onRevoke: () => void;
+  onApprove: () => void;
+  onReject: () => void;
+  onUnlink: () => void;
+}) {
+  const invite = admin.telegramInvite;
+  const linked = admin.telegramLinked ?? Boolean(admin.telegramHandle);
+
+  if (!isOperator(admin)) {
+    return linked ? (
+      <span className="font-medium text-ink">
+        {admin.telegramHandle ?? "Tertaut"}
+      </span>
+    ) : (
+      <span className="text-ink-faint">Belum ditautkan</span>
+    );
+  }
+
+  if (linked) {
+    return (
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+        <span className="font-medium text-ink">
+          {admin.telegramHandle ?? "Tertaut"}
+        </span>
+        <Button size="sm" variant="ghost" onClick={onUnlink}>
+          Putuskan
+        </Button>
+      </div>
+    );
+  }
+
+  if (invite?.status === "claimed") {
+    const who = invite.telegramUsername
+      ? `@${invite.telegramUsername}`
+      : (invite.telegramName ?? `ID ${invite.telegramUserId ?? "-"}`);
+    return (
+      <div className="space-y-1">
+        <p className="text-body text-ink">
+          Menunggu persetujuan:{" "}
+          <span className="font-medium">{who}</span>
+        </p>
+        <div className="flex items-center gap-1">
+          <Button size="sm" variant="secondary" onClick={onApprove}>
+            Setujui
+          </Button>
+          <Button size="sm" variant="ghost" onClick={onReject}>
+            Tolak
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  if (invite?.status === "pending") {
+    return (
+      <div className="space-y-1">
+        <p className="text-body text-ink-soft">
+          Undangan aktif s/d {dateTime.format(new Date(invite.expiresAt))}
+        </p>
+        <div className="flex items-center gap-1">
+          <Button size="sm" variant="ghost" onClick={onInvite}>
+            Buat ulang
+          </Button>
+          <Button size="sm" variant="ghost" onClick={onRevoke}>
+            Batalkan
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <Button
+      size="sm"
+      variant="outline"
+      onClick={onInvite}
+      disabled={!admin.active}
+    >
+      Buat undangan
+    </Button>
+  );
+}
+
+function InviteLinkDialog({
+  invite,
+  onDone,
+}: {
+  invite: InviteLink;
+  onDone: () => void;
+}) {
+  const [copied, setCopied] = React.useState(false);
+
+  async function handleCopy() {
+    try {
+      await navigator.clipboard.writeText(invite.botUrl);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    } catch {
+      toast.error("Tidak dapat menyalin", {
+        description: "Salin link secara manual.",
+      });
+    }
+  }
+
+  return (
+    <DialogContent
+      title="Link undangan Telegram"
+      description={`Kirim link ini hanya ke ${invite.admin.fullName} lewat chat pribadi. Berlaku sampai ${dateTime.format(new Date(invite.expiresAt))} dan hanya bisa dipakai sekali.`}
+      footer={
+        <Button type="button" onClick={onDone}>
+          Selesai
+        </Button>
+      }
+    >
+      <div className="space-y-4">
+        <div className="flex items-center gap-2">
+          <Input
+            readOnly
+            value={invite.botUrl}
+            aria-label="Link undangan"
+            className="font-data text-body"
+            onFocus={(event) => event.currentTarget.select()}
+          />
+          <Button
+            type="button"
+            size="icon"
+            variant="outline"
+            aria-label={copied ? "Tersalin" : "Salin link"}
+            onClick={handleCopy}
+          >
+            {copied ? (
+              <Check className="size-4 text-cleared-ink" />
+            ) : (
+              <Copy className="size-4" />
+            )}
+          </Button>
+        </div>
+        <ol className="list-decimal space-y-1 pl-5 text-body text-ink-soft">
+          <li>Operator membuka link, lalu menekan Start di bot.</li>
+          <li>
+            Anda menerima permintaan persetujuan di Telegram, atau di kolom
+            Telegram halaman ini.
+          </li>
+          <li>Setelah disetujui, order baru langsung masuk ke Telegram operator.</li>
+        </ol>
+      </div>
+    </DialogContent>
+  );
+}
+
+function TotpConfirmDialog({
+  pending,
+  onDone,
+}: {
+  pending: PendingConfirm;
+  onDone: () => void;
+}) {
+  const [code, setCode] = React.useState("");
+  const [busy, setBusy] = React.useState(false);
+
+  async function handleSubmit(event: React.FormEvent) {
+    event.preventDefault();
+    setBusy(true);
+    try {
+      await pending.run(code);
+      onDone();
+    } catch (err) {
+      toast.error("Gagal", {
+        description: err instanceof ApiError ? err.message : "Aksi gagal",
+      });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <DialogContent
+      title={pending.title}
+      description={pending.description}
+      footer={
+        <>
+          <Button type="button" variant="ghost" onClick={onDone}>
+            Batal
+          </Button>
+          <Button
+            type="submit"
+            form="totp-confirm-form"
+            variant={pending.danger ? "danger" : "primary"}
+            loading={busy}
+            loadingLabel="Memproses"
+          >
+            {pending.confirmLabel}
+          </Button>
+        </>
+      }
+    >
+      <form id="totp-confirm-form" onSubmit={handleSubmit} noValidate>
+        <TotpField value={code} onChange={setCode} />
+      </form>
+    </DialogContent>
+  );
+}
+
+function TotpField({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <Field label="Kode Google Authenticator" htmlFor="totpCode" hint={TOTP_HINT}>
+      <Input
+        id="totpCode"
+        inputMode="numeric"
+        autoComplete="one-time-code"
+        maxLength={6}
+        placeholder="000000"
+        className="font-data tracking-widest"
+        value={value}
+        onChange={(event) => onChange(event.target.value.replace(/\D/g, ""))}
+      />
+    </Field>
   );
 }
 
@@ -340,6 +743,9 @@ function AdminFormDialog({
     username?: string;
     password?: string;
   }>({});
+  const operator = isOperator(draft);
+  const needsPassword =
+    !operator && (creating || isOperator(admin));
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -350,16 +756,9 @@ function AdminFormDialog({
     if (creating && !draft.username.trim()) {
       nextErrors.username = "Masukkan username unik.";
     }
-    if (creating && (!draft.password || draft.password.length < 8)) {
-      nextErrors.password = "Password minimal 8 karakter.";
-    }
-    if (
-      !creating &&
-      draft.password &&
-      draft.password.length > 0 &&
-      draft.password.length < 8
-    ) {
-      nextErrors.password = "Password minimal 8 karakter.";
+    if (needsPassword || (!operator && draft.password)) {
+      const policyError = passwordPolicyError(draft.password ?? "");
+      if (policyError) nextErrors.password = policyError;
     }
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length > 0) return;
@@ -380,7 +779,11 @@ function AdminFormDialog({
   return (
     <DialogContent
       title={creating ? "Tambah admin" : "Edit admin"}
-      description="Telegram ditautkan sendiri oleh admin di halaman Security setelah login."
+      description={
+        operator
+          ? "Operator tidak login ke website. Tautkan Telegram-nya lewat link undangan setelah akun dibuat."
+          : "Super Admin login ke website dan menautkan Telegram sendiri di halaman Security."
+      }
       footer={
         <>
           <Button type="button" variant="ghost" onClick={onCancel}>
@@ -441,27 +844,6 @@ function AdminFormDialog({
             }
           />
         </Field>
-        <Field
-          label={creating ? "Password" : "Password baru"}
-          htmlFor="password"
-          required={creating}
-          error={errors.password}
-          hint={creating ? undefined : "Kosongkan jika tidak diganti."}
-        >
-          <Input
-            id="password"
-            type="password"
-            autoComplete="new-password"
-            value={draft.password ?? ""}
-            invalid={Boolean(errors.password)}
-            onChange={(event) =>
-              setDraft((current) => ({
-                ...current,
-                password: event.target.value,
-              }))
-            }
-          />
-        </Field>
         <Field label="Role" htmlFor="role">
           <Select
             id="role"
@@ -473,11 +855,34 @@ function AdminFormDialog({
               }))
             }
             options={[
-              { value: "admin", label: "Admin (operator)" },
+              { value: "admin", label: "Operator (hanya bot Telegram)" },
               { value: "super_admin", label: "Super Admin" },
             ]}
           />
         </Field>
+        {!operator ? (
+          <Field
+            label={needsPassword ? "Password" : "Password baru"}
+            htmlFor="password"
+            required={needsPassword}
+            error={errors.password}
+            hint={needsPassword ? undefined : "Kosongkan jika tidak diganti."}
+          >
+            <Input
+              id="password"
+              type="password"
+              autoComplete="new-password"
+              value={draft.password ?? ""}
+              invalid={Boolean(errors.password)}
+              onChange={(event) =>
+                setDraft((current) => ({
+                  ...current,
+                  password: event.target.value,
+                }))
+              }
+            />
+          </Field>
+        ) : null}
         {!creating ? (
           <Field label="Status" htmlFor="status">
             <Select
@@ -496,6 +901,12 @@ function AdminFormDialog({
             />
           </Field>
         ) : null}
+        <TotpField
+          value={draft.totpCode ?? ""}
+          onChange={(totpCode) =>
+            setDraft((current) => ({ ...current, totpCode }))
+          }
+        />
       </form>
     </DialogContent>
   );

@@ -3,7 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Eye, EyeOff, Send } from "lucide-react";
+import { Eye, EyeSlash, PaperPlaneTilt } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Field, Input } from "@/components/ui/field";
@@ -204,9 +204,9 @@ export function LoginForm({
                 )}
               >
                 {revealed ? (
-                  <EyeOff className="size-4" aria-hidden="true" />
+                  <EyeSlash className="size-4" weight="regular" aria-hidden="true" />
                 ) : (
-                  <Eye className="size-4" aria-hidden="true" />
+                  <Eye className="size-4" weight="regular" aria-hidden="true" />
                 )}
               </button>
             </div>
@@ -252,7 +252,7 @@ export function LoginForm({
             href="https://t.me/"
             className="inline-flex items-center gap-1 font-medium text-action underline-offset-4 hover:underline"
           >
-            <Send className="size-3.5" aria-hidden="true" />
+            <PaperPlaneTilt className="size-3.5" weight="regular" aria-hidden="true" />
             Support Telegram
           </Link>
         </p>

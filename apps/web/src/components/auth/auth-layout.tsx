@@ -3,63 +3,80 @@ import { BrandLockup } from "@/components/shell/brand";
 import { cn } from "@/lib/utils";
 
 /**
- * Centered login shell on the Action Deep stage.
+ * Light paper login. The form is the counter. No inverted stage.
  */
 export function AuthLayout({
   eyebrow,
   title,
   description,
+  panel,
   children,
 }: {
   eyebrow?: string;
   title: string;
   description?: string;
+  panel?: {
+    kicker: string;
+    heading: string;
+    body: string;
+    steps: string[];
+  };
   children: React.ReactNode;
 }) {
   return (
-    <div className="relative flex min-h-dvh flex-col items-center justify-center px-5 py-10 sm:px-8">
-      <div aria-hidden="true" className="auth-stage pointer-events-none absolute inset-0" />
-      <div
-        aria-hidden="true"
-        className="auth-orb pointer-events-none absolute -right-20 -top-16 size-[28rem] rounded-full bg-action/35 blur-3xl"
-      />
-      <div
-        aria-hidden="true"
-        className="auth-orb-alt pointer-events-none absolute -bottom-24 -left-16 size-[24rem] rounded-full bg-accent-sky/25 blur-3xl"
-      />
+    <div className="relative flex min-h-dvh flex-col bg-ground">
+      <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col px-5 py-8 sm:px-8 sm:py-12 lg:flex-row lg:items-center lg:gap-16 lg:py-16">
+        <div className="w-full max-w-md lg:max-w-[26rem]">
+          <BrandLockup />
 
-      <div className="relative w-full max-w-[24rem] reveal">
-        <div className="mb-6">
-          <BrandLockup className="[&_.text-headline]:text-white [&_svg]:size-10 [&_svg]:text-accent-sky" />
+          <div className="mt-10">
+            {eyebrow ? (
+              <p className="mb-2 text-label text-action">{eyebrow}</p>
+            ) : null}
+            <h1 className="text-display text-ink">{title}</h1>
+            {description ? (
+              <p className="mt-3 max-w-[42ch] text-body text-ink-soft">
+                {description}
+              </p>
+            ) : null}
+          </div>
+
+          <div className="mt-8">{children}</div>
         </div>
 
-        <div
-          className={cn(
-            "rounded-2xl border border-white/15 bg-surface p-6 shadow-overlay sm:p-7",
-          )}
-        >
-          {eyebrow ? (
-            <p className="mb-2.5 inline-flex items-center gap-2 text-label uppercase tracking-[0.14em] text-action">
-              <span
-                aria-hidden="true"
-                className="size-1.5 rounded-full bg-action shadow-[0_0_12px_var(--color-action)]"
-              />
-              {eyebrow}
-            </p>
-          ) : null}
-          <h1 className="text-display text-ink">{title}</h1>
-          {description ? (
-            <p className="mt-2.5 text-body leading-relaxed text-ink-soft">
-              {description}
-            </p>
-          ) : null}
-          <div className={description ? "mt-7" : "mt-6"}>{children}</div>
-        </div>
-
-        <p className="mt-6 text-center text-body text-white/55">
-          © 2026 ZittoSite. Seluruh hak cipta dilindungi.
-        </p>
+        {panel ? (
+          <aside
+            className={cn(
+              "mt-14 hidden w-full max-w-md lg:mt-0 lg:block lg:max-w-sm",
+              "lg:ml-auto",
+            )}
+          >
+            <div className="card-shell p-6">
+              <p className="text-label text-ink-soft">{panel.kicker}</p>
+              <p className="mt-2 font-data tabular text-headline text-ink">
+                {panel.heading}
+              </p>
+              <p className="mt-2 max-w-[36ch] text-body text-ink-soft">
+                {panel.body}
+              </p>
+              <ol className="mt-6 space-y-3 border-t border-hairline pt-5">
+                {panel.steps.map((step, index) => (
+                  <li key={step} className="flex gap-3 text-body text-ink">
+                    <span className="font-data tabular w-5 shrink-0 text-action">
+                      {index + 1}
+                    </span>
+                    {step}
+                  </li>
+                ))}
+              </ol>
+            </div>
+          </aside>
+        ) : null}
       </div>
+
+      <p className="px-5 pb-6 text-center text-label text-ink-faint sm:px-8">
+        © 2026 ZittoSite. Seluruh hak cipta dilindungi.
+      </p>
     </div>
   );
 }

@@ -68,7 +68,7 @@ User memeriksa status berulang kali sambil menunggu, sering dari ponsel. Super A
 Ditetapkan pengguna dan bersifat mengikat:
 
 - Nama produk **ZITTOSITE**, dengan penjelas **"Digital IMEI Activation Platform"**.
-- Dunia visual sudah dipatok lewat mockup yang divalidasi dan tercatat lengkap di `frontend.md` §15: identitas biru (`#2563EB`) di atas permukaan putih, badge status berwarna per status, sidebar tetap di kiri, tabel ringan bergaris bawah saja. Ini bukan hipotesis dari repositori — ini brief yang harus dihormati apa adanya, tidak diperluas dan tidak diganti.
+- Nama produk dan bahasa antarmuka mengikat. Dunia visual tercatat di `DESIGN.md`: kertas dingin, satu biru kerja (`#1453C7`), stempel status, sidebar kiri, tabel bergaris bawah. Route, label nav, field form, dan copy bisnis tidak berubah karena pergantian tampilan.
 - Bahasa antarmuka: Bahasa Indonesia.
 
 ## Evidence on Hand

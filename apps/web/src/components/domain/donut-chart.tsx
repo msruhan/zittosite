@@ -46,7 +46,7 @@ export function DonutChart({
             <Tooltip
               contentStyle={{
                 borderRadius: 10,
-                border: "1px solid #E6EBF1",
+                border: "1px solid #D5DCE4",
                 boxShadow: "0 1px 2px rgba(84,87,118,0.12)",
                 fontSize: 13,
               }}
