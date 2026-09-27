@@ -16,16 +16,6 @@ export default function LoginPage() {
           ? "Mode demo: isi username & password apa saja untuk masuk dashboard."
           : "Silahkan login menggunakan username dan password anda"
       }
-      panel={{
-        kicker: "Yang Anda bawa pulang",
-        heading: "Satu Order ID",
-        body: "Nomor tiket tidak berubah dari pembayaran sampai hasil. Cek statusnya di sini kapan saja.",
-        steps: [
-          "Buat order dan dapatkan nomor tiket",
-          "Bayar, lalu pantau antrian admin",
-          "Hasil kembali ke tiket yang sama",
-        ],
-      }}
     >
       <LoginForm redirectTo="/app/dashboard" audience="user" />
     </AuthLayout>

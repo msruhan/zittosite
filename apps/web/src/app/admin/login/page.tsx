@@ -17,16 +17,6 @@ export default function AdminLoginPage() {
           ? "Mode demo: isi username & password apa saja untuk masuk panel."
           : undefined
       }
-      panel={{
-        kicker: "Cara kerja konter",
-        heading: "Website memantau. Telegram mengerjakan.",
-        body: "Super Admin melihat antrean dan laporan di sini. Operator mengambil order dari bot.",
-        steps: [
-          "User membayar, order masuk antrean",
-          "Admin pertama yang terima mengunci tiket",
-          "Hasil kembali ke Order ID yang sama",
-        ],
-      }}
     >
       <LoginForm redirectTo="/admin/dashboard" audience="admin" />
     </AuthLayout>
