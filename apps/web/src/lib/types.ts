@@ -96,6 +96,10 @@ export interface PaymentInvoice {
   invoiceId: string;
   orderId: string;
   amount: number;
+  /** Amount the customer must transfer (includes the gateway's unique code). */
+  amountDue?: number;
+  qrisString?: string | null;
+  checkoutUrl?: string | null;
   paymentChannel: string;
   paymentReference: string | null;
   paymentStatus: PaymentStatus;

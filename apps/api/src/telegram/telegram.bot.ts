@@ -386,7 +386,7 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
             orderCreatedHtml({
               orderId: order.orderId,
               payUrl,
-              amount: order.price,
+              amount: order.invoice?.amountDue ?? order.price,
             }),
             { reply_markup: backToMenuKeyboard() },
           );

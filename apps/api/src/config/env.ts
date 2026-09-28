@@ -64,6 +64,22 @@ export function paymentSimulationEnabled(): boolean {
   return process.env.PAYMENT_SIMULATION === "1";
 }
 
+export function sayabayarConfig() {
+  const apiKey = process.env.SAYABAYAR_API_KEY?.trim();
+  if (!apiKey) return null;
+  return {
+    apiKey,
+    baseUrl: (process.env.SAYABAYAR_API_BASE?.trim() || "https://api.sayabayar.com/v1").replace(/\/$/, ""),
+    paymentMethod: process.env.SAYABAYAR_PAYMENT_METHOD?.trim() || "qris",
+    channelPreference: process.env.SAYABAYAR_CHANNEL_PREFERENCE?.trim() || undefined,
+  };
+}
+
+/** Signing secret shown once when the webhook endpoint is added in the SayaBayar dashboard. */
+export function sayabayarWebhookSecret(): string | undefined {
+  return process.env.SAYABAYAR_WEBHOOK_SECRET?.trim() || undefined;
+}
+
 const PLACEHOLDER_SECRET = /change-me|changeme|example|placeholder/i;
 
 /**
@@ -93,6 +109,12 @@ export function validateStartupEnv(warn: (message: string) => void) {
 
   if (paymentSimulationEnabled()) {
     warn("PAYMENT_SIMULATION=1: customers can mark orders paid without a gateway");
+  }
+  if (!sayabayarConfig() && !paymentSimulationEnabled()) {
+    warn("SAYABAYAR_API_KEY is not set and PAYMENT_SIMULATION is off — customers cannot create orders");
+  }
+  if (!sayabayarWebhookSecret()) {
+    warn("SAYABAYAR_WEBHOOK_SECRET is not set — SayaBayar payment webhooks will be rejected");
   }
 
   if (!webPublicUrl().startsWith("https://")) {

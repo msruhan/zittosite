@@ -4,6 +4,7 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
+  ServiceUnavailableException,
 } from "@nestjs/common";
 import {
   Prisma,
@@ -12,11 +13,17 @@ import {
   type ResultStatus,
 } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
-import { paymentSimulationEnabled } from "../config/env";
+import { paymentSimulationEnabled, webPublicUrl } from "../config/env";
 import { AdminNotifyService } from "../telegram/admin-notify.service";
+import {
+  SayabayarClient,
+  type SayabayarInvoice,
+} from "../payments/sayabayar.client";
 import { serializeOrderListItem, serializeService } from "./orders.serializer";
 
-const INVOICE_TTL_MS = 30 * 60 * 1000;
+/** SayaBayar only accepts invoice lifetimes of 60 minutes or more. */
+const INVOICE_TTL_MINUTES = 60;
+const INVOICE_TTL_MS = INVOICE_TTL_MINUTES * 60 * 1000;
 
 const orderInclude = {
   service: true,
@@ -39,6 +46,7 @@ export class OrdersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly adminNotify: AdminNotifyService,
+    private readonly sayabayar: SayabayarClient,
   ) {}
 
   async listServices(userId: string) {
@@ -132,8 +140,24 @@ export class OrdersService {
     const price = this.effectivePrice(service, user.customPrice);
     const orderId = await this.nextOrderId();
     const invoiceId = `INV-${orderId}`;
-    const expiredAt = new Date(Date.now() + INVOICE_TTL_MS);
     const via = channel === "telegram" ? "Telegram" : "website";
+
+    let gateway: SayabayarInvoice | null = null;
+    if (this.sayabayar.enabled()) {
+      gateway = await this.sayabayar.createInvoice({
+        amount: price,
+        description: `${service.name} — ${orderId}`,
+        customerName: user.fullName,
+        expiredMinutes: INVOICE_TTL_MINUTES,
+        redirectUrl: `${webPublicUrl()}/app/order/${orderId}/status`,
+      });
+    } else if (!paymentSimulationEnabled()) {
+      throw new ServiceUnavailableException(
+        "Pembayaran belum tersedia. Hubungi admin.",
+      );
+    }
+    const expiredAt =
+      gateway?.expiredAt ?? new Date(Date.now() + INVOICE_TTL_MS);
 
     const created = await this.prisma.order.create({
       data: {
@@ -149,9 +173,18 @@ export class OrdersService {
           create: {
             invoiceId,
             amount: price,
-            paymentChannel: "qris_placeholder",
             paymentStatus: "pending",
             expiredAt,
+            ...(gateway
+              ? {
+                  paymentChannel: "sayabayar",
+                  paymentReference: gateway.id,
+                  amountDue: gateway.amountDue,
+                  qrisString: gateway.qrisString,
+                  checkoutUrl: gateway.paymentUrl,
+                  gatewayPayload: gateway.raw as Prisma.InputJsonValue,
+                }
+              : { paymentChannel: "qris_placeholder" }),
           },
         },
         activity: {
@@ -202,12 +235,12 @@ export class OrdersService {
     return serializeOrderListItem(updated);
   }
 
+  /**
+   * "Saya sudah bayar": for SayaBayar invoices this nudges the gateway to check
+   * now and pulls the invoice status; it never settles on the customer's word.
+   * Otherwise it simulates payment.
+   */
   async markPaid(userId: string, publicOrderId: string) {
-    if (!paymentSimulationEnabled()) {
-      throw new ForbiddenException(
-        "Konfirmasi pembayaran manual tidak tersedia.",
-      );
-    }
     const order = await this.findOwned(userId, publicOrderId);
     const current = await this.ensureNotExpired(order);
 
@@ -226,41 +259,102 @@ export class OrdersService {
       throw new BadRequestException("Invoice tidak dalam status pending.");
     }
 
-    const updated = await this.prisma.$transaction(async (tx) => {
-      await tx.paymentInvoice.update({
-        where: { id: current.invoice!.id },
+    const gatewayRef = this.gatewayReference(current.invoice);
+    if (gatewayRef) {
+      if (this.sayabayar.supportsConfirm()) {
+        await this.sayabayar.confirmInvoice(gatewayRef);
+      }
+      await this.syncGatewayStatus(gatewayRef);
+      return serializeOrderListItem(await this.findOwned(userId, publicOrderId));
+    }
+    if (!paymentSimulationEnabled()) {
+      throw new ForbiddenException(
+        "Konfirmasi pembayaran manual tidak tersedia.",
+      );
+    }
+
+    const updated = await this.settleInvoice(current.id, current.invoice.id, {
+      paidAt: new Date(),
+      reference: `SIM-${Date.now()}`,
+      note: "Pembayaran disimulasikan dan diverifikasi.",
+    });
+    if (!updated) {
+      return serializeOrderListItem(await this.findOwned(userId, publicOrderId));
+    }
+    return serializeOrderListItem(updated);
+  }
+
+  /**
+   * Applies a verified `invoice.paid` webhook. Matches on the gateway's invoice
+   * id (stored as paymentReference) or on our own invoice number.
+   */
+  async confirmGatewayPayment(input: {
+    gatewayInvoiceId?: string;
+    invoiceNumber?: string;
+    amount: number;
+    channel?: string;
+    paidAt: Date;
+    payload: Prisma.InputJsonValue;
+  }): Promise<"paid" | "duplicate" | "unmatched" | "amount_mismatch" | "late"> {
+    const invoice = await this.findGatewayInvoice(input);
+    if (!invoice) return "unmatched";
+    if (invoice.paymentStatus === "paid") return "duplicate";
+    if (invoice.amount !== input.amount) return "amount_mismatch";
+
+    if (invoice.paymentStatus !== "pending") {
+      await this.prisma.orderActivityLog.create({
         data: {
-          paymentStatus: "paid",
-          paidAt: new Date(),
-          paymentReference: `SIM-${Date.now()}`,
-        },
-      });
-      await tx.orderActivityLog.create({
-        data: {
-          orderId: current.id,
-          status: "paid",
-          note: "Pembayaran disimulasikan dan diverifikasi.",
+          orderId: invoice.orderId,
+          status: invoice.order.status,
+          note: `Pembayaran Rp ${input.amount} diterima gateway setelah invoice ${invoice.paymentStatus}. Perlu tindak lanjut manual (proses atau refund).`,
           actor: "Sistem",
         },
       });
-      return tx.order.update({
-        where: { id: current.id },
+      return "late";
+    }
+
+    const updated = await this.settleInvoice(invoice.orderId, invoice.id, {
+      paidAt: input.paidAt,
+      reference: input.gatewayInvoiceId,
+      channel: input.channel,
+      payload: input.payload,
+      note: `Pembayaran diterima via SayaBayar${input.channel ? ` (${input.channel})` : ""}.`,
+    });
+    return updated ? "paid" : "duplicate";
+  }
+
+  /** Applies a verified `invoice.expired` / `invoice.cancelled` webhook. */
+  async closeGatewayInvoice(
+    input: { gatewayInvoiceId?: string; invoiceNumber?: string },
+    status: "expired" | "cancelled",
+  ): Promise<"closed" | "ignored" | "unmatched"> {
+    const invoice = await this.findGatewayInvoice(input);
+    if (!invoice) return "unmatched";
+
+    return this.prisma.$transaction(async (tx) => {
+      const claimed = await tx.paymentInvoice.updateMany({
+        where: { id: invoice.id, paymentStatus: "pending" },
+        data: { paymentStatus: status },
+      });
+      if (claimed.count !== 1) return "ignored";
+      await tx.order.update({
+        where: { id: invoice.orderId },
         data: {
-          status: "waiting_action",
+          status: "cancel",
           activity: {
             create: {
-              status: "waiting_action",
-              note: "Order masuk antrean dan siap diambil admin.",
+              status: "cancel",
+              note:
+                status === "expired"
+                  ? "Invoice kedaluwarsa di payment gateway, order dibatalkan otomatis."
+                  : "Invoice dibatalkan di payment gateway, order dibatalkan.",
               actor: "Sistem",
             },
           },
         },
-        include: orderInclude,
       });
+      return "closed";
     });
-
-    void this.adminNotify.notifyNewOrder(updated.id);
-    return serializeOrderListItem(updated);
   }
 
   async acceptOrder(adminId: string, publicOrderId: string) {
@@ -516,6 +610,109 @@ export class OrdersService {
     return service.price;
   }
 
+  private gatewayReference(invoice: {
+    paymentChannel: string;
+    paymentReference: string | null;
+  }): string | null {
+    return invoice.paymentChannel === "sayabayar" && invoice.paymentReference
+      ? invoice.paymentReference
+      : null;
+  }
+
+  /**
+   * Pulls the invoice status from SayaBayar and applies it — the fallback for a
+   * missed or delayed webhook. Gateway errors leave the order untouched.
+   */
+  private async syncGatewayStatus(gatewayInvoiceId: string) {
+    let remote;
+    try {
+      remote = await this.sayabayar.getInvoice(gatewayInvoiceId);
+    } catch {
+      return;
+    }
+    if (remote.status === "paid" && remote.amount != null) {
+      await this.confirmGatewayPayment({
+        gatewayInvoiceId,
+        amount: remote.amount,
+        channel: remote.channel ?? undefined,
+        paidAt: remote.paidAt ?? new Date(),
+        payload: remote.raw as Prisma.InputJsonValue,
+      });
+    } else if (remote.status === "expired") {
+      await this.closeGatewayInvoice({ gatewayInvoiceId }, "expired");
+    }
+  }
+
+  /** Marks a pending invoice paid and queues the order; null if it was no longer pending. */
+  private async settleInvoice(
+    orderRowId: string,
+    invoiceRowId: string,
+    payment: {
+      paidAt: Date;
+      note: string;
+      reference?: string;
+      channel?: string;
+      payload?: Prisma.InputJsonValue;
+    },
+  ) {
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const claimed = await tx.paymentInvoice.updateMany({
+        where: { id: invoiceRowId, paymentStatus: "pending" },
+        data: {
+          paymentStatus: "paid",
+          paidAt: payment.paidAt,
+          ...(payment.reference ? { paymentReference: payment.reference } : {}),
+          ...(payment.channel ? { paymentChannel: payment.channel } : {}),
+          ...(payment.payload !== undefined
+            ? { gatewayPayload: payment.payload }
+            : {}),
+        },
+      });
+      if (claimed.count !== 1) return null;
+      await tx.orderActivityLog.create({
+        data: {
+          orderId: orderRowId,
+          status: "paid",
+          note: payment.note,
+          actor: "Sistem",
+        },
+      });
+      return tx.order.update({
+        where: { id: orderRowId },
+        data: {
+          status: "waiting_action",
+          activity: {
+            create: {
+              status: "waiting_action",
+              note: "Order masuk antrean dan siap diambil admin.",
+              actor: "Sistem",
+            },
+          },
+        },
+        include: orderInclude,
+      });
+    });
+
+    if (updated) void this.adminNotify.notifyNewOrder(updated.id);
+    return updated;
+  }
+
+  private async findGatewayInvoice(ref: {
+    gatewayInvoiceId?: string;
+    invoiceNumber?: string;
+  }) {
+    const match: Prisma.PaymentInvoiceWhereInput[] = [];
+    if (ref.gatewayInvoiceId) {
+      match.push({ paymentReference: ref.gatewayInvoiceId });
+    }
+    if (ref.invoiceNumber) match.push({ invoiceId: ref.invoiceNumber });
+    if (!match.length) return null;
+    return this.prisma.paymentInvoice.findFirst({
+      where: { OR: match },
+      include: { order: { select: { status: true } } },
+    });
+  }
+
   private async findOwned(userId: string, publicOrderId: string) {
     const order = await this.prisma.order.findFirst({
       where: { orderId: publicOrderId, userId },
@@ -537,6 +734,16 @@ export class OrdersService {
     }
     if (order.invoice.expiredAt.getTime() > Date.now()) {
       return order;
+    }
+
+    const gatewayRef = this.gatewayReference(order.invoice);
+    if (gatewayRef) {
+      await this.syncGatewayStatus(gatewayRef);
+      const synced = await this.prisma.order.findUniqueOrThrow({
+        where: { id: order.id },
+        include: orderInclude,
+      });
+      if (synced.invoice?.paymentStatus !== "pending") return synced as T;
     }
 
     const updated = await this.prisma.$transaction(async (tx) => {

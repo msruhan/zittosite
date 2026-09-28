@@ -292,6 +292,9 @@ model PaymentInvoice {
   invoiceId        String        @unique @map("invoice_id")
   orderId          String        @unique @map("order_id")
   amount           Int
+  amountDue        Int?          @map("amount_due")
+  qrisString       String?       @map("qris_string")
+  checkoutUrl      String?       @map("checkout_url")
   paymentChannel   String        @default("qris_placeholder") @map("payment_channel")
   paymentReference String?       @map("payment_reference")
   paymentStatus    PaymentStatus @default(pending) @map("payment_status")
@@ -302,6 +305,7 @@ model PaymentInvoice {
   updatedAt        DateTime      @updatedAt @map("updated_at")
   order            Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
+  @@index([paymentReference])
   @@map("payment_invoices")
 }
 

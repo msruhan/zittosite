@@ -47,7 +47,7 @@ export default async function CreateOrderPage() {
                 {
                   step: "01",
                   title: "Invoice QRIS terbit",
-                  body: "Anda punya 30 menit untuk menyelesaikan pembayaran.",
+                  body: "Selesaikan pembayaran sebelum hitung mundur di halaman bayar habis.",
                 },
                 {
                   step: "02",

@@ -87,9 +87,16 @@ export default async function PaymentPage({
 
         <PaymentPanel
           orderId={order.orderId}
-          amount={order.invoice.amount}
+          amount={order.invoice.amountDue ?? order.invoice.amount}
           expiresAt={order.invoice.expiredAt}
-          qrPayload={qrisPayload(order.orderId, order.invoice.amount)}
+          qrPayload={
+            order.invoice.qrisString ??
+            (order.invoice.checkoutUrl
+              ? null
+              : qrisPayload(order.orderId, order.invoice.amount))
+          }
+          checkoutUrl={order.invoice.checkoutUrl ?? null}
+          gateway={order.invoice.paymentChannel === "sayabayar"}
         />
       </Card>
     </div>

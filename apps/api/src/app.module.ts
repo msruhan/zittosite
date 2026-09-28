@@ -7,6 +7,7 @@ import { AuthModule } from "./auth/auth.module";
 import { AdminModule } from "./admin/admin.module";
 import { TelegramModule } from "./telegram/telegram.module";
 import { OrdersModule } from "./orders/orders.module";
+import { PaymentsModule } from "./payments/payments.module";
 import { HealthController } from "./health/health.controller";
 
 @Module({
@@ -18,6 +19,7 @@ import { HealthController } from "./health/health.controller";
     AdminModule,
     TelegramModule,
     OrdersModule,
+    PaymentsModule,
   ],
   controllers: [HealthController],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],

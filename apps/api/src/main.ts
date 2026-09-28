@@ -10,7 +10,9 @@ import { corsOrigins, validateStartupEnv } from "./config/env";
 async function bootstrap() {
   const startupLogger = new Logger("Startup");
   validateStartupEnv((message) => startupLogger.warn(message));
-  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
+    rawBody: true,
+  });
   app.set("trust proxy", 1);
   app.use(cookieParser());
   app.use(

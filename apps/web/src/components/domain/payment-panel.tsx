@@ -3,7 +3,12 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import QRCode from "react-qr-code";
-import { ArrowsClockwise, Warning, WarningCircle } from "@phosphor-icons/react";
+import {
+  ArrowSquareOut,
+  ArrowsClockwise,
+  Warning,
+  WarningCircle,
+} from "@phosphor-icons/react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Countdown } from "@/components/domain/countdown";
@@ -11,19 +16,26 @@ import { DataValue } from "@/components/ui/data-value";
 import { PaymentBadge } from "@/components/ui/status-badge";
 import { ApiError, api } from "@/lib/api";
 import { formatRupiah } from "@/lib/format";
+import type { OrderDetail } from "@/lib/types";
 
 const PAYMENT_SIMULATION = process.env.NEXT_PUBLIC_PAYMENT_SIMULATION === "1";
+const STATUS_POLL_MS = 5_000;
 
 export function PaymentPanel({
   orderId,
   amount,
   expiresAt,
   qrPayload,
+  checkoutUrl = null,
+  gateway = false,
 }: {
   orderId: string;
   amount: number;
   expiresAt: string;
-  qrPayload: string;
+  qrPayload: string | null;
+  checkoutUrl?: string | null;
+  /** Invoice issued by SayaBayar; the webhook settles it, so poll for the result. */
+  gateway?: boolean;
 }) {
   const router = useRouter();
   const [expired, setExpired] = React.useState(false);
@@ -31,15 +43,43 @@ export function PaymentPanel({
 
   const handleExpire = React.useCallback(() => setExpired(true), []);
 
+  const handlePaid = React.useCallback(() => {
+    toast.success("Pembayaran diterima", {
+      description: "Order Anda masuk antrean admin.",
+    });
+    router.push(`/app/order/${orderId}/status`);
+    router.refresh();
+  }, [orderId, router]);
+
+  React.useEffect(() => {
+    if (!gateway || expired) return;
+    const timer = window.setInterval(async () => {
+      if (document.hidden) return;
+      try {
+        const order = await api<OrderDetail>(`/orders/${orderId}`);
+        if (order.status === "cancel") setExpired(true);
+        else if (order.status !== "waiting_payment") handlePaid();
+      } catch {
+        // Transient network errors: the next tick retries.
+      }
+    }, STATUS_POLL_MS);
+    return () => window.clearInterval(timer);
+  }, [gateway, expired, orderId, handlePaid]);
+
   async function handleConfirm() {
     setConfirming(true);
     try {
-      await api(`/orders/${orderId}/mark-paid`, { method: "POST" });
-      toast.success("Pembayaran diterima", {
-        description: "Order Anda masuk antrean admin.",
+      const order = await api<OrderDetail>(`/orders/${orderId}/mark-paid`, {
+        method: "POST",
       });
-      router.push(`/app/order/${orderId}/status`);
-      router.refresh();
+      if (order.status === "waiting_payment") {
+        toast("Sedang memverifikasi pembayaran", {
+          description: "Halaman ini akan diperbarui otomatis begitu pembayaran terdeteksi.",
+        });
+        setConfirming(false);
+        return;
+      }
+      handlePaid();
     } catch (err) {
       const message =
         err instanceof ApiError
@@ -87,16 +127,27 @@ export function PaymentPanel({
       </div>
 
       <div className="mt-5 flex flex-col items-center gap-4 rounded-lg border border-hairline bg-mist px-4 py-6">
-        <div className="rounded-md border border-hairline bg-surface p-4 shadow-resting ring-1 ring-action/10">
-          <QRCode
-            value={qrPayload}
-            size={168}
-            bgColor="#FFFFFF"
-            fgColor="#0F172A"
-            level="M"
-            aria-hidden="true"
-          />
-        </div>
+        {qrPayload ? (
+          <div className="rounded-md border border-hairline bg-surface p-4 shadow-resting ring-1 ring-action/10">
+            <QRCode
+              value={qrPayload}
+              size={168}
+              bgColor="#FFFFFF"
+              fgColor="#0F172A"
+              level="M"
+              aria-label="QRIS pembayaran"
+            />
+          </div>
+        ) : null}
+
+        {checkoutUrl ? (
+          <Button asChild variant={qrPayload ? "secondary" : "primary"}>
+            <a href={checkoutUrl} target="_blank" rel="noopener noreferrer">
+              {qrPayload ? "Metode pembayaran lain" : "Buka halaman pembayaran"}
+              <ArrowSquareOut className="size-4" weight="regular" aria-hidden="true" />
+            </a>
+          </Button>
+        ) : null}
 
         <div className="text-center">
           <p className="text-label uppercase text-ink-soft">Sisa waktu</p>
@@ -114,14 +165,16 @@ export function PaymentPanel({
             className="mt-0.5 size-4 shrink-0"
           />
           <span>
-            {PAYMENT_SIMULATION
-              ? "Mode simulasi: gunakan konfirmasi di bawah untuk menandai pembayaran."
-              : "Order otomatis masuk antrean setelah pembayaran terverifikasi. Hubungi support bila membutuhkan bantuan."}
+            {gateway
+              ? "Bayar tepat sesuai nominal di atas. Order otomatis masuk antrean setelah pembayaran terverifikasi."
+              : PAYMENT_SIMULATION
+                ? "Mode simulasi: gunakan konfirmasi di bawah untuk menandai pembayaran."
+                : "Order otomatis masuk antrean setelah pembayaran terverifikasi. Hubungi support bila membutuhkan bantuan."}
           </span>
         </p>
       </div>
 
-      {PAYMENT_SIMULATION ? (
+      {gateway || PAYMENT_SIMULATION ? (
         <div className="mt-5 space-y-2">
           <Button
             block
@@ -133,7 +186,9 @@ export function PaymentPanel({
             Saya sudah bayar
           </Button>
           <p className="text-center text-body text-ink-soft">
-            Setelah transfer, tekan konfirmasi agar order masuk antrean.
+            {gateway
+              ? "Sudah bayar? Tekan tombol ini agar pembayaran dicek lebih cepat."
+              : "Setelah transfer, tekan konfirmasi agar order masuk antrean."}
           </p>
         </div>
       ) : null}

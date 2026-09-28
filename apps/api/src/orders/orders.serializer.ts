@@ -78,6 +78,9 @@ export function serializeInvoice(invoice: PaymentInvoice | null) {
     invoiceId: invoice.invoiceId,
     orderId: "", // filled by caller with public orderId
     amount: invoice.amount,
+    amountDue: invoice.amountDue ?? invoice.amount,
+    qrisString: invoice.qrisString,
+    checkoutUrl: invoice.checkoutUrl,
     paymentChannel: invoice.paymentChannel,
     paymentReference: invoice.paymentReference,
     paymentStatus: invoice.paymentStatus,
