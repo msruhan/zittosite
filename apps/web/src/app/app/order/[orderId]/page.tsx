@@ -17,6 +17,7 @@ import {
   Tag,
 } from "@/components/ui/status-badge";
 import { OrderStepper } from "@/components/domain/order-stepper";
+import { CancelOrderButton } from "@/components/domain/cancel-order-button";
 import { ApiError } from "@/lib/api";
 import { serverApi } from "@/lib/server-api";
 import { formatDateTime, formatRupiah, maskImei } from "@/lib/format";
@@ -105,12 +106,13 @@ export default async function OrderDetailPage({
         </CardBody>
 
         {order.status === "waiting_payment" ? (
-          <div className="border-t border-hairline px-4 py-3 sm:px-5">
+          <div className="space-y-2 border-t border-hairline px-4 py-3 sm:px-5">
             <Button asChild block>
               <Link href={`/app/order/${order.orderId}/bayar`}>
                 Selesaikan pembayaran
               </Link>
             </Button>
+            <CancelOrderButton orderId={order.orderId} />
           </div>
         ) : null}
       </Card>

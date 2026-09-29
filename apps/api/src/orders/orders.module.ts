@@ -6,6 +6,7 @@ import { SayabayarModule } from "../payments/sayabayar.module";
 import { OrdersController } from "./orders.controller";
 import { ServicesController } from "./services.controller";
 import { OrdersService } from "./orders.service";
+import { OrderExpiryService } from "./order-expiry.service";
 
 @Module({
   imports: [
@@ -15,7 +16,7 @@ import { OrdersService } from "./orders.service";
     forwardRef(() => AdminNotifyModule),
   ],
   controllers: [OrdersController, ServicesController],
-  providers: [OrdersService],
+  providers: [OrdersService, OrderExpiryService],
   exports: [OrdersService],
 })
 export class OrdersModule {}

@@ -5,6 +5,7 @@ import { ArrowLeft } from "@phosphor-icons/react/dist/ssr";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { DataValue, TicketId } from "@/components/ui/data-value";
 import { PaymentPanel } from "@/components/domain/payment-panel";
+import { CancelOrderButton } from "@/components/domain/cancel-order-button";
 import { ApiError } from "@/lib/api";
 import { serverApi } from "@/lib/server-api";
 import { formatDateTime, maskImei } from "@/lib/format";
@@ -98,6 +99,9 @@ export default async function PaymentPage({
           checkoutUrl={order.invoice.checkoutUrl ?? null}
           gateway={order.invoice.paymentChannel === "sayabayar"}
         />
+        <div className="border-t border-hairline px-4 py-3 sm:px-5">
+          <CancelOrderButton orderId={order.orderId} />
+        </div>
       </Card>
     </div>
   );

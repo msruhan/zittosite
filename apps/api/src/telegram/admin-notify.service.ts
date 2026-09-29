@@ -8,6 +8,7 @@ import {
   orderCardTakenHtml,
   orderCardRejectedHtml,
   orderCardDoneHtml,
+  orderCardCancelledHtml,
   superAdminFollowUpHtml,
 } from "./telegram-messages";
 
@@ -114,7 +115,20 @@ export class AdminNotifyService {
           text: dest.role === "super_admin" ? superAdminHtml : operatorHtml,
           parse_mode: "HTML",
           disable_web_page_preview: true,
-          reply_markup: replyMarkup,
+          reply_markup:
+            dest.role === "super_admin"
+              ? {
+                  inline_keyboard: [
+                    ...replyMarkup.inline_keyboard,
+                    [
+                      {
+                        text: "🚫 Batalkan order",
+                        callback_data: `sord:cancel:${order.orderId}`,
+                      },
+                    ],
+                  ],
+                }
+              : replyMarkup,
         });
         const messageId =
           body?.ok && body.result?.message_id
@@ -167,7 +181,7 @@ export class AdminNotifyService {
 
   async syncOrderCards(
     internalOrderId: string,
-    kind: "taken" | "rejected" | "done",
+    kind: "taken" | "rejected" | "done" | "cancelled",
     meta: { actorName: string; note?: string },
   ): Promise<void> {
     const token = process.env.TELEGRAM_BOT_TOKEN?.trim();
@@ -203,6 +217,12 @@ export class AdminNotifyService {
           },
         ],
       ];
+    } else if (kind === "cancelled") {
+      html = orderCardCancelledHtml({
+        orderId: order.orderId,
+        actorName: meta.actorName,
+        reason: meta.note ?? "—",
+      });
     } else if (kind === "rejected") {
       html = orderCardRejectedHtml({
         orderId: order.orderId,

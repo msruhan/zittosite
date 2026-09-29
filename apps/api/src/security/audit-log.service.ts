@@ -22,6 +22,7 @@ export type AuditEvent =
   | "admin.service.created"
   | "admin.service.updated"
   | "admin.order.status_override"
+  | "admin.order.cancelled"
   | "admin.telegram.invite_created"
   | "admin.telegram.invite_revoked"
   | "admin.telegram.invite_claimed"

@@ -92,11 +92,11 @@ export function OrderStepper({ order }: { order: OrderDetail }) {
       : null;
 
   const reachedIndex = failure
-    ? // A failed order still shows how far it actually got.
+    ? // A failed order shows only the steps its activity log actually recorded.
       Math.max(
         0,
-        ORDER_STATUS_FLOW.findIndex(
-          (s) => s === (order.startedAt ? "in_process" : "waiting_action"),
+        ...order.activity.map((log) =>
+          ORDER_STATUS_FLOW.indexOf(log.status as FlowStatus),
         ),
       )
     : ORDER_STATUS_FLOW.indexOf(order.status as FlowStatus);

@@ -23,7 +23,7 @@ import {
 import { StatGrid, StatTile } from "@/components/domain/stat-tile";
 import { ApiError } from "@/lib/api";
 import { serverApi } from "@/lib/server-api";
-import { formatDateTime, formatRupiah, maskImei } from "@/lib/format";
+import { formatDateTime, formatRupiah } from "@/lib/format";
 import type { OrderDetail } from "@/lib/types";
 
 export const metadata: Metadata = {
@@ -205,7 +205,7 @@ export default async function AdminDashboardPage() {
                         {order.orderId}
                       </p>
                       <p className="mt-0.5 truncate text-label text-ink-soft">
-                        {order.user?.fullName ?? "User"} · {maskImei(order.imei)}
+                        {order.user?.fullName ?? "User"} · {order.imei}
                       </p>
                     </div>
                   </div>
@@ -345,7 +345,7 @@ export default async function AdminDashboardPage() {
                       </TD>
                       <TD>{order.user?.fullName ?? "-"}</TD>
                       <TD>
-                        <DataValue>{maskImei(order.imei)}</DataValue>
+                        <DataValue>{order.imei}</DataValue>
                       </TD>
                       <TD>
                         <StatusBadge status={order.status} />

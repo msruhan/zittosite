@@ -12,7 +12,7 @@ import {
   Table,
   TableScroll,
 } from "@/components/ui/table";
-import { formatDateTime, formatRupiah, maskImei } from "@/lib/format";
+import { formatDateTime, formatRupiah } from "@/lib/format";
 import type { OrderDetail } from "@/lib/types";
 
 export const ADMIN_ORDER_COLUMNS = [
@@ -84,7 +84,7 @@ export function AdminOrderTable({
               {compact ? null : (
                 <TD className="py-2.5">
                   <DataValue className="text-ink-soft">
-                    {maskImei(order.imei)}
+                    {order.imei}
                   </DataValue>
                 </TD>
               )}

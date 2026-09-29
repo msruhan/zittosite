@@ -10,8 +10,10 @@ import {
   Prisma,
   type AdminRole,
   type OrderChannel,
+  type OrderStatus,
   type ResultStatus,
 } from "@prisma/client";
+import { escapeHtml as escapeTelegramHtml } from "../telegram/telegram-messages";
 import { PrismaService } from "../prisma/prisma.service";
 import { paymentSimulationEnabled, webPublicUrl } from "../config/env";
 import { AdminNotifyService } from "../telegram/admin-notify.service";
@@ -24,6 +26,13 @@ import { serializeOrderListItem, serializeService } from "./orders.serializer";
 /** SayaBayar only accepts invoice lifetimes of 60 minutes or more. */
 const INVOICE_TTL_MINUTES = 60;
 const INVOICE_TTL_MS = INVOICE_TTL_MINUTES * 60 * 1000;
+
+const CANCELLABLE_BY_ADMIN: OrderStatus[] = [
+  "waiting_payment",
+  "paid",
+  "waiting_action",
+  "in_process",
+];
 
 const orderInclude = {
   service: true,
@@ -92,6 +101,38 @@ export class OrdersService {
     return serializeOrderListItem(await this.ensureNotExpired(order));
   }
 
+  /** The user's unpaid order, after expiring it if its payment window has closed. */
+  async pendingOrder(userId: string) {
+    const order = await this.prisma.order.findFirst({
+      where: { userId, status: "waiting_payment" },
+      include: orderInclude,
+      orderBy: { createdAt: "desc" },
+    });
+    if (!order) return null;
+    const current = await this.ensureNotExpired(order);
+    return current.status === "waiting_payment"
+      ? serializeOrderListItem(current)
+      : null;
+  }
+
+  /** Expires every unpaid order past its deadline; run on a timer so it does not wait for a page view. */
+  async expireOverdueOrders(): Promise<number> {
+    const overdue = await this.prisma.order.findMany({
+      where: {
+        status: "waiting_payment",
+        invoice: { paymentStatus: "pending", expiredAt: { lte: new Date() } },
+      },
+      include: orderInclude,
+      take: 50,
+    });
+    let expired = 0;
+    for (const order of overdue) {
+      const current = await this.ensureNotExpired(order);
+      if (current.status === "cancel") expired++;
+    }
+    return expired;
+  }
+
   async createOrder(
     userId: string,
     input: {
@@ -119,10 +160,7 @@ export class OrdersService {
       throw new BadRequestException("IMEI harus 15 digit angka.");
     }
 
-    const existing = await this.prisma.order.findFirst({
-      where: { userId, status: "waiting_payment" },
-      select: { orderId: true },
-    });
+    const existing = await this.pendingOrder(userId);
     if (existing) {
       throw new ConflictException(
         `Selesaikan atau batalkan order ${existing.orderId} yang masih menunggu pembayaran.`,
@@ -236,6 +274,73 @@ export class OrdersService {
   }
 
   /**
+   * Super Admin cancel from the web panel or Telegram. Closes a pending invoice,
+   * updates every admin's order card, and tells the customer. An already-paid
+   * order is cancelled too but flagged for a manual refund.
+   */
+  async adminCancelOrder(adminId: string, publicOrderId: string, reason?: string) {
+    const admin = await this.prisma.admin.findUniqueOrThrow({
+      where: { id: adminId },
+    });
+    if (admin.role !== "super_admin" || admin.status !== "active") {
+      throw new ForbiddenException("Hanya Super Admin yang dapat membatalkan order.");
+    }
+    const order = await this.prisma.order.findUnique({
+      where: { orderId: publicOrderId },
+      include: orderInclude,
+    });
+    if (!order) throw new NotFoundException("Order tidak ditemukan.");
+    if (!CANCELLABLE_BY_ADMIN.includes(order.status)) {
+      throw new BadRequestException(
+        "Order yang sudah selesai, ditolak, atau dibatalkan tidak dapat dibatalkan.",
+      );
+    }
+
+    const why = String(reason ?? "").trim() || "Dibatalkan oleh Super Admin.";
+    const wasPaid = order.invoice?.paymentStatus === "paid";
+    const updated = await this.prisma.$transaction(async (tx) => {
+      if (order.invoice?.paymentStatus === "pending") {
+        await tx.paymentInvoice.update({
+          where: { id: order.invoice.id },
+          data: { paymentStatus: "cancelled" },
+        });
+      }
+      return tx.order.update({
+        where: { id: order.id },
+        data: {
+          status: "cancel",
+          activity: {
+            create: {
+              status: "cancel",
+              note: `Order dibatalkan oleh Super Admin. Alasan: ${why}${
+                wasPaid ? " Pembayaran sudah diterima — perlu refund manual." : ""
+              }`,
+              actor: admin.fullName,
+            },
+          },
+        },
+        include: orderInclude,
+      });
+    });
+
+    void this.adminNotify.syncOrderCards(order.id, "cancelled", {
+      actorName: admin.fullName,
+      note: why,
+    });
+    void this.adminNotify.notifyUserById(
+      order.userId,
+      [
+        `🚫 Order <code>${order.orderId}</code> dibatalkan oleh admin.`,
+        `Alasan: ${escapeTelegramHtml(why)}`,
+        ...(wasPaid
+          ? ["", "Pembayaran Anda sudah kami terima. Hubungi support untuk pengembalian dana."]
+          : []),
+      ].join("\n"),
+    );
+    return serializeOrderListItem(updated);
+  }
+
+  /**
    * "Saya sudah bayar": for SayaBayar invoices this nudges the gateway to check
    * now and pulls the invoice status; it never settles on the customer's word.
    * Otherwise it simulates payment.
@@ -331,12 +436,12 @@ export class OrdersService {
     const invoice = await this.findGatewayInvoice(input);
     if (!invoice) return "unmatched";
 
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       const claimed = await tx.paymentInvoice.updateMany({
         where: { id: invoice.id, paymentStatus: "pending" },
         data: { paymentStatus: status },
       });
-      if (claimed.count !== 1) return "ignored";
+      if (claimed.count !== 1) return "ignored" as const;
       await tx.order.update({
         where: { id: invoice.orderId },
         data: {
@@ -353,8 +458,16 @@ export class OrdersService {
           },
         },
       });
-      return "closed";
+      return "closed" as const;
     });
+    if (result === "closed" && status === "expired") {
+      const order = await this.prisma.order.findUnique({
+        where: { id: invoice.orderId },
+        select: { userId: true, orderId: true },
+      });
+      if (order) this.notifyExpired(order.userId, order.orderId);
+    }
+    return result;
   }
 
   async acceptOrder(adminId: string, publicOrderId: string) {
@@ -746,6 +859,7 @@ export class OrdersService {
       if (synced.invoice?.paymentStatus !== "pending") return synced as T;
     }
 
+    let expiredNow = false;
     const updated = await this.prisma.$transaction(async (tx) => {
       const claimed = await tx.paymentInvoice.updateMany({
         where: {
@@ -760,6 +874,7 @@ export class OrdersService {
           include: orderInclude,
         });
       }
+      expiredNow = true;
       return tx.order.update({
         where: { id: order.id },
         data: {
@@ -775,7 +890,20 @@ export class OrdersService {
         include: orderInclude,
       });
     });
+    if (expiredNow) this.notifyExpired(updated.userId, updated.orderId);
     return updated as T;
+  }
+
+  private notifyExpired(userId: string, publicOrderId: string) {
+    void this.adminNotify.notifyUserById(
+      userId,
+      [
+        `⌛ Order <code>${publicOrderId}</code> dibatalkan otomatis.`,
+        "Batas waktu pembayaran sudah habis.",
+        "",
+        "Ketik /order untuk membuat order baru.",
+      ].join("\n"),
+    );
   }
 
   private async nextOrderId(): Promise<string> {

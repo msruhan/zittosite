@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/status-badge";
 import { OrderStepper } from "@/components/domain/order-stepper";
 import { AdminOrderStatusOverride } from "@/components/domain/admin-order-status-override";
+import { AdminCancelOrder } from "@/components/domain/admin-cancel-order";
 import { Avatar } from "@/components/shell/user-chip";
 import { ORDER_STATUS } from "@/lib/status";
 import { ApiError } from "@/lib/api";
@@ -128,6 +129,16 @@ export default async function AdminOrderDetailPage({
                     {order.notes}
                   </p>
                 </div>
+              ) : null}
+
+              {isSuperAdmin &&
+              ["waiting_payment", "paid", "waiting_action", "in_process"].includes(
+                order.status,
+              ) ? (
+                <AdminCancelOrder
+                  orderId={order.orderId}
+                  paid={order.invoice?.paymentStatus === "paid"}
+                />
               ) : null}
 
               {isSuperAdmin ? (

@@ -20,7 +20,7 @@ import {
   TableScroll,
 } from "@/components/ui/table";
 import { ORDER_STATUS_OPTIONS } from "@/lib/status";
-import { formatDateTime, formatRupiah, maskImei } from "@/lib/format";
+import { formatDateTime, formatRupiah } from "@/lib/format";
 import type { OrderDetail, OrderStatus } from "@/lib/types";
 
 export function AdminOrderManagement({
@@ -122,7 +122,7 @@ export function AdminOrderManagement({
                       ) : null}
                       <TD>
                         <DataValue className="text-ink-soft">
-                          {maskImei(order.imei)}
+                          {order.imei}
                         </DataValue>
                       </TD>
                       <TD>

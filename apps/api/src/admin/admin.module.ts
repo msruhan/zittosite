@@ -11,9 +11,10 @@ import { AdminOrdersService } from "./admin-orders.service";
 import { AdminAdminsService } from "./admin-admins.service";
 import { AdminReportsService } from "./admin-reports.service";
 import { SuperAdminGuard } from "./super-admin.guard";
+import { OrdersModule } from "../orders/orders.module";
 
 @Module({
-  imports: [PrismaModule],
+  imports: [PrismaModule, OrdersModule],
   controllers: [AdminAuthController, AdminOpsController],
   providers: [
     AdminAuthService,

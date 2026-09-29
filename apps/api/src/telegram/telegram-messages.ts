@@ -451,6 +451,20 @@ export function orderCardRejectedHtml(input: {
   ].join("\n");
 }
 
+export function orderCardCancelledHtml(input: {
+  orderId: string;
+  actorName: string;
+  reason: string;
+}): string {
+  return [
+    "🚫 <b>DIBATALKAN</b>",
+    "",
+    row("🎫", "Order ID", input.orderId, true),
+    row("👤", "Oleh", input.actorName),
+    row("📝", "Alasan", input.reason),
+  ].join("\n");
+}
+
 export function orderCardDoneHtml(input: {
   orderId: string;
   actorName: string;
@@ -506,6 +520,36 @@ export function orderCreatedHtml(input: {
   ].join("\n");
 }
 
+export function pendingOrderHtml(input: {
+  orderId: string;
+  amount: number;
+  expiresAt: Date | null;
+}): string {
+  const until = input.expiresAt
+    ? new Intl.DateTimeFormat("id-ID", {
+        timeZone: "Asia/Jakarta",
+        hour: "2-digit",
+        minute: "2-digit",
+      }).format(input.expiresAt)
+    : null;
+  return [
+    "⏳ <b>Masih ada order menunggu pembayaran</b>",
+    "",
+    row("🎫", "Order ID", input.orderId, true),
+    row("💰", "Tagihan", formatRp(input.amount)),
+    ...(until ? [row("⏰", "Bayar sebelum", `${until} WIB`)] : []),
+    "",
+    "Selesaikan pembayarannya, atau batalkan untuk membuat order baru.",
+  ].join("\n");
+}
+
+export function cancelConfirmHtml(orderId: string): string {
+  return [
+    `Batalkan order <code>${escapeHtml(orderId)}</code>?`,
+    "QRIS untuk order ini tidak bisa dipakai lagi setelah dibatalkan.",
+  ].join("\n");
+}
+
 /** Caption for the QRIS photo; Telegram caps captions at 1024 characters. */
 export function orderQrisCaptionHtml(input: {
   orderId: string;
@@ -527,6 +571,7 @@ export function orderQrisCaptionHtml(input: {
     "Scan QRIS di atas dengan m-banking atau e-wallet.",
     `Bayar <b>tepat ${escapeHtml(formatRp(input.amount))}</b> agar terdeteksi otomatis.`,
     "Notifikasi masuk di chat ini setelah pembayaran diterima.",
+    "Lewat batas waktu, order dibatalkan otomatis.",
   ].join("\n");
 }
 

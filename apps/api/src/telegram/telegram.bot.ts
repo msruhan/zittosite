@@ -1,4 +1,10 @@
-import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from "@nestjs/common";
+import {
+  ConflictException,
+  Injectable,
+  Logger,
+  OnModuleDestroy,
+  OnModuleInit,
+} from "@nestjs/common";
 import { Bot, Context, InlineKeyboard, InputFile } from "grammy";
 import * as QRCode from "qrcode";
 import type { Admin, ResultStatus, User } from "@prisma/client";
@@ -26,6 +32,8 @@ import {
   orderCreatedHtml,
   orderHistoryHtml,
   orderQrisCaptionHtml,
+  pendingOrderHtml,
+  cancelConfirmHtml,
   saldoAdminHtml,
   saldoMemberHtml,
   startLinkedAdminHtml,
@@ -44,6 +52,7 @@ const BOT_COMMANDS = [
   { command: "order", description: "Buat order baru" },
   { command: "riwayat", description: "5 order terakhir" },
   { command: "rekap", description: "Rekap order hari ini (admin)" },
+  { command: "cancel", description: "Batalkan order: /cancel ZT… alasan (Super Admin)" },
 ] as const;
 
 function adminMenuKeyboard() {
@@ -70,6 +79,23 @@ function memberMenuKeyboard() {
 function backToMenuKeyboard() {
   return new InlineKeyboard().text("⬅️ Menu", "menu:home");
 }
+
+function unpaidOrderKeyboard(orderId: string, withQris: boolean) {
+  const keyboard = new InlineKeyboard();
+  if (withQris) keyboard.text("🔳 Tampilkan QRIS", `uord:qris:${orderId}`);
+  return keyboard
+    .text("❌ Batalkan order", `uord:cancel:${orderId}`)
+    .row()
+    .text("⬅️ Menu", "menu:home");
+}
+
+function cancelConfirmKeyboard(orderId: string) {
+  return new InlineKeyboard()
+    .text("✅ Ya, batalkan", `uord:cancelok:${orderId}`)
+    .text("↩️ Tidak", `uord:keep:${orderId}`);
+}
+
+type SerializedOrder = Awaited<ReturnType<OrdersService["getOrder"]>>;
 
 type TelegramActor =
   | {
@@ -209,7 +235,7 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
       await ctx.replyWithPhoto(new InputFile(png, `QRIS-${input.orderId}.png`), {
         caption: orderQrisCaptionHtml(input),
         parse_mode: TELEGRAM_PARSE_MODE,
-        reply_markup: backToMenuKeyboard(),
+        reply_markup: unpaidOrderKeyboard(input.orderId, false),
       });
       return true;
     } catch (err: any) {
@@ -313,6 +339,7 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
     bot.command("order", (ctx) => this.showOrderPicker(ctx));
     bot.command("riwayat", (ctx) => this.showHistory(ctx));
     bot.command("rekap", (ctx) => this.showRecap(ctx));
+    bot.command("cancel", (ctx) => this.handleSuperAdminCancelCommand(ctx));
 
     bot.on("callback_query:data", async (ctx) => {
       const data = ctx.callbackQuery.data ?? "";
@@ -328,6 +355,41 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
           await this.handleDoneStatus(ctx, data.slice("ord:rs:".length));
         } else if (data.startsWith("uord:svc:")) {
           await this.handleUserServicePick(ctx, data.slice("uord:svc:".length));
+        } else if (data.startsWith("uord:qris:")) {
+          await this.handleUserShowQris(ctx, data.slice("uord:qris:".length));
+        } else if (data.startsWith("uord:cancel:")) {
+          await ctx.answerCallbackQuery();
+          const orderId = data.slice("uord:cancel:".length);
+          await this.replyHtml(ctx, cancelConfirmHtml(orderId), {
+            reply_markup: cancelConfirmKeyboard(orderId),
+          });
+        } else if (data.startsWith("uord:cancelok:")) {
+          await this.handleUserCancel(ctx, data.slice("uord:cancelok:".length));
+        } else if (data.startsWith("sord:cancel:")) {
+          const admin = await this.requireSuperAdmin(ctx);
+          if (!admin) return;
+          await ctx.answerCallbackQuery();
+          const orderId = data.slice("sord:cancel:".length);
+          await this.replyHtml(ctx, cancelConfirmHtml(orderId), {
+            reply_markup: new InlineKeyboard()
+              .text("✅ Ya, batalkan", `sord:cancelok:${orderId}`)
+              .text("↩️ Tidak", `uord:keep:${orderId}`),
+          });
+        } else if (data.startsWith("sord:cancelok:")) {
+          const admin = await this.requireSuperAdmin(ctx);
+          if (!admin) return;
+          const orderId = data.slice("sord:cancelok:".length);
+          await this.orders.adminCancelOrder(admin.id, orderId);
+          await ctx.answerCallbackQuery({ text: "Order dibatalkan" });
+          await ctx
+            .editMessageText(
+              `🚫 Order <code>${escapeHtml(orderId)}</code> dibatalkan. User sudah diberi tahu.`,
+              { parse_mode: TELEGRAM_PARSE_MODE },
+            )
+            .catch(() => undefined);
+        } else if (data.startsWith("uord:keep:")) {
+          await ctx.answerCallbackQuery({ text: "Order tetap aktif" });
+          await ctx.deleteMessage().catch(() => undefined);
         } else if (data.startsWith("menu:")) {
           await this.handleMenuPick(ctx, data.slice("menu:".length));
         } else if (data.startsWith("inv:ok:") || data.startsWith("inv:no:")) {
@@ -426,6 +488,15 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
             { reply_markup: backToMenuKeyboard() },
           );
         } catch (err: any) {
+          if (err instanceof ConflictException) {
+            const pending = await this.orders
+              .pendingOrder(session.userId)
+              .catch(() => null);
+            if (pending) {
+              await this.replyPendingOrder(ctx, pending);
+              return;
+            }
+          }
           await this.replyHtml(
             ctx,
             `⚠️ ${escapeHtml(err?.message ?? "Gagal membuat order")}`,
@@ -539,6 +610,11 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
       return;
     }
     try {
+      const pending = await this.orders.pendingOrder(actor.user.id);
+      if (pending) {
+        await this.replyPendingOrder(ctx, pending);
+        return;
+      }
       const services = await this.orders.listServices(actor.user.id);
       if (!services.length) {
         await this.replyHtml(ctx, "Belum ada layanan aktif.", {
@@ -676,6 +752,59 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
       .catch(() => undefined);
   }
 
+  private async replyPendingOrder(ctx: Context, order: SerializedOrder) {
+    const invoice = order.invoice;
+    await this.replyHtml(
+      ctx,
+      pendingOrderHtml({
+        orderId: order.orderId,
+        amount: invoice?.amountDue ?? order.price,
+        expiresAt: invoice ? new Date(invoice.expiredAt) : null,
+      }),
+      { reply_markup: unpaidOrderKeyboard(order.orderId, Boolean(invoice?.qrisString)) },
+    );
+  }
+
+  private async handleUserShowQris(ctx: Context, orderId: string) {
+    const actor = await this.requireMember(ctx);
+    if (!actor) return;
+    const order = await this.orders.getOrder(actor.user.id, orderId);
+    const invoice = order.invoice;
+    if (order.status !== "waiting_payment" || !invoice?.qrisString) {
+      await ctx.answerCallbackQuery({
+        text: "Order ini sudah tidak menunggu pembayaran.",
+        show_alert: true,
+      });
+      return;
+    }
+    await ctx.answerCallbackQuery();
+    await this.replyQris(ctx, {
+      orderId: order.orderId,
+      qris: invoice.qrisString,
+      amount: invoice.amountDue ?? order.price,
+      expiresAt: new Date(invoice.expiredAt),
+    });
+  }
+
+  private async handleUserCancel(ctx: Context, orderId: string) {
+    const actor = await this.requireMember(ctx);
+    if (!actor) return;
+    await this.orders.cancelOrder(actor.user.id, orderId);
+    await ctx.answerCallbackQuery({ text: "Order dibatalkan" });
+    const html = [
+      `🚫 Order <code>${escapeHtml(orderId)}</code> dibatalkan.`,
+      "Ketik /order untuk membuat order baru.",
+    ].join("\n");
+    await ctx
+      .editMessageText(html, {
+        parse_mode: TELEGRAM_PARSE_MODE,
+        reply_markup: backToMenuKeyboard(),
+      })
+      .catch(() =>
+        this.replyHtml(ctx, html, { reply_markup: backToMenuKeyboard() }),
+      );
+  }
+
   private async handleUserServicePick(ctx: Context, serviceCode: string) {
     const actor = await this.requireMember(ctx);
     if (!actor) return;
@@ -729,6 +858,51 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
     });
     if (identity?.user) return { kind: "member", user: identity.user };
     return null;
+  }
+
+  private async requireSuperAdmin(ctx: Context) {
+    const actor = await this.resolveActor(String(ctx.chat?.id ?? ""));
+    if (actor?.kind === "admin" && actor.admin.role === "super_admin") {
+      return actor.admin;
+    }
+    if (ctx.callbackQuery) {
+      await ctx
+        .answerCallbackQuery({ text: "Khusus Super Admin", show_alert: true })
+        .catch(() => undefined);
+    } else {
+      await this.replyHtml(ctx, "Perintah ini khusus Super Admin.");
+    }
+    return null;
+  }
+
+  /** `/cancel ZT2609290001 alasan opsional` */
+  private async handleSuperAdminCancelCommand(ctx: Context) {
+    const admin = await this.requireSuperAdmin(ctx);
+    if (!admin) return;
+    const [orderId, ...rest] = String(ctx.match ?? "").trim().split(/\s+/);
+    if (!orderId) {
+      await this.replyHtml(
+        ctx,
+        "Format: <code>/cancel ZT2609290001 alasan</code>\nAlasan boleh dikosongkan.",
+      );
+      return;
+    }
+    try {
+      await this.orders.adminCancelOrder(
+        admin.id,
+        orderId.toUpperCase(),
+        rest.join(" ") || undefined,
+      );
+      await this.replyHtml(
+        ctx,
+        `🚫 Order <code>${escapeHtml(orderId.toUpperCase())}</code> dibatalkan. User sudah diberi tahu.`,
+      );
+    } catch (err: any) {
+      await this.replyHtml(
+        ctx,
+        `⚠️ ${escapeHtml(err?.message ?? "Gagal membatalkan order")}`,
+      );
+    }
   }
 
   private async requireMemberOrAdmin(

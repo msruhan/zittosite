@@ -17,6 +17,7 @@ import { SuperAdminGuard } from "./super-admin.guard";
 import { AdminUsersService } from "./admin-users.service";
 import { AdminServicesService } from "./admin-services.service";
 import { AdminOrdersService } from "./admin-orders.service";
+import { OrdersService } from "../orders/orders.service";
 import { AdminAdminsService } from "./admin-admins.service";
 import { AdminReportsService } from "./admin-reports.service";
 import { AdminTotpService } from "./admin-totp.service";
@@ -48,6 +49,7 @@ export class AdminOpsController {
     private readonly reports: AdminReportsService,
     private readonly totp: AdminTotpService,
     private readonly audit: AuditLogService,
+    private readonly customerOrders: OrdersService,
   ) {}
 
   @Get("dashboard/stats")
@@ -205,6 +207,25 @@ export class AdminOpsController {
       actorId: req.admin.sub,
       orderId,
       status,
+    });
+    return order;
+  }
+
+  @Post("orders/:orderId/cancel")
+  @UseGuards(SuperAdminGuard)
+  async cancelOrder(
+    @Req() req: AdminReq,
+    @Param("orderId") orderId: string,
+    @Body() body: Json,
+  ) {
+    const order = await this.customerOrders.adminCancelOrder(
+      req.admin.sub,
+      orderId,
+      optString(body.reason, "Alasan", 500),
+    );
+    this.audit.record("admin.order.cancelled", {
+      actorId: req.admin.sub,
+      orderId,
     });
     return order;
   }
