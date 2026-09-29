@@ -451,6 +451,7 @@ const FOLLOW_UP_TITLE = {
 export function superAdminFollowUpHtml(input: {
   kind: keyof typeof FOLLOW_UP_TITLE;
   orderId: string;
+  imei: string;
   customerUsername: string;
   serviceName: string;
   adminUsername: string;
@@ -461,6 +462,7 @@ export function superAdminFollowUpHtml(input: {
     FOLLOW_UP_TITLE[input.kind],
     "",
     row("🎫", "Order ID", input.orderId, true),
+    row("📱", "IMEI", input.imei, true),
     row("👤", "User", input.customerUsername, true),
     row("📦", "Layanan", input.serviceName),
     row("👷", "Admin", `${input.adminUsername} (${input.adminFullName})`),
@@ -488,6 +490,8 @@ export function orderCardTakenHtml(input: {
 
 export function orderCardRejectedHtml(input: {
   orderId: string;
+  imei: string;
+  serviceName: string;
   actorName: string;
   reason: string;
 }): string {
@@ -495,6 +499,8 @@ export function orderCardRejectedHtml(input: {
     "❌ <b>REJECTED</b>",
     "",
     row("🎫", "Order ID", input.orderId, true),
+    row("📱", "IMEI", input.imei, true),
+    row("📦", "Layanan", input.serviceName),
     row("👷", "Oleh", input.actorName),
     row("📝", "Alasan", input.reason),
   ].join("\n");
@@ -502,6 +508,8 @@ export function orderCardRejectedHtml(input: {
 
 export function orderCardCancelledHtml(input: {
   orderId: string;
+  imei: string;
+  serviceName: string;
   actorName: string;
   reason: string;
 }): string {
@@ -509,6 +517,8 @@ export function orderCardCancelledHtml(input: {
     "🚫 <b>DIBATALKAN</b>",
     "",
     row("🎫", "Order ID", input.orderId, true),
+    row("📱", "IMEI", input.imei, true),
+    row("📦", "Layanan", input.serviceName),
     row("👤", "Oleh", input.actorName),
     row("📝", "Alasan", input.reason),
   ].join("\n");
@@ -516,6 +526,8 @@ export function orderCardCancelledHtml(input: {
 
 export function orderCardDoneHtml(input: {
   orderId: string;
+  imei: string;
+  serviceName: string;
   actorName: string;
   note: string;
 }): string {
@@ -523,6 +535,8 @@ export function orderCardDoneHtml(input: {
     "✅ <b>DONE</b>",
     "",
     row("🎫", "Order ID", input.orderId, true),
+    row("📱", "IMEI", input.imei, true),
+    row("📦", "Layanan", input.serviceName),
     row("👷", "Oleh", input.actorName),
     row("📝", "Hasil", input.note),
   ].join("\n");

@@ -219,18 +219,24 @@ export class AdminNotifyService {
     } else if (kind === "cancelled") {
       html = orderCardCancelledHtml({
         orderId: order.orderId,
+        imei: order.imei,
+        serviceName: order.service.name,
         actorName: meta.actorName,
         reason: meta.note ?? "—",
       });
     } else if (kind === "rejected") {
       html = orderCardRejectedHtml({
         orderId: order.orderId,
+        imei: order.imei,
+        serviceName: order.service.name,
         actorName: meta.actorName,
         reason: meta.note ?? "—",
       });
     } else {
       html = orderCardDoneHtml({
         orderId: order.orderId,
+        imei: order.imei,
+        serviceName: order.service.name,
         actorName: meta.actorName,
         note: meta.note ?? "—",
       });
@@ -288,6 +294,7 @@ export class AdminNotifyService {
       const html = superAdminFollowUpHtml({
         kind,
         orderId: order.orderId,
+        imei: order.imei,
         customerUsername: order.user.username,
         serviceName: order.service.name,
         adminUsername: actor.username,
