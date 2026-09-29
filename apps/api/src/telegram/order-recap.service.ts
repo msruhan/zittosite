@@ -38,7 +38,7 @@ export type OperatorRecap = {
   day: Date;
   stats: AdminDayStats;
   queue: number;
-  orders: Array<{ orderId: string; serviceName: string; status: OrderStatus; imei: string }>;
+  orders: RecapOrderLine[];
 };
 
 type Counted = { assignedAdminId: string | null; _count: { _all: number } };
@@ -204,13 +204,12 @@ export class OrderRecapService {
           OR: [where.taken, where.done, where.rejected, where.inProcess],
         },
         select: {
-          orderId: true,
           status: true,
           imei: true,
-          service: { select: { name: true } },
+          startedAt: true,
+          updatedAt: true,
         },
-        orderBy: { updatedAt: "desc" },
-        take: 10,
+        orderBy: [{ startedAt: "asc" }, { updatedAt: "asc" }],
       }),
     ]);
 
@@ -219,10 +218,9 @@ export class OrderRecapService {
       stats: { taken, done, rejected, inProcess },
       queue,
       orders: orders.map((o) => ({
-        orderId: o.orderId,
-        serviceName: o.service.name,
-        status: o.status,
+        at: o.startedAt ?? o.updatedAt,
         imei: o.imei,
+        status: o.status,
       })),
     };
   }

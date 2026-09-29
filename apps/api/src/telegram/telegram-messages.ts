@@ -277,12 +277,9 @@ export function operatorRecapHtml(input: {
   day: Date;
   stats: { taken: number; done: number; rejected: number; inProcess: number };
   queue: number;
-  orders: Array<{ orderId: string; serviceName: string; status: string; imei: string }>;
+  orders: Array<{ at: Date; imei: string; status: string }>;
 }): string {
-  const orderLines = input.orders.map((o) => {
-    const meta = RECAP_STATUS[o.status] ?? { icon: "•", label: o.status };
-    return `${meta.icon} <code>${escapeHtml(o.orderId)}</code> — ${escapeHtml(o.serviceName)}\n   ${meta.label} · ${imeiHtml(o.imei)}`;
-  });
+  const orderLines = recapOrderLines(input.orders, 80);
   return [
     "📊 <b>Rekap Anda Hari Ini</b>",
     `<i>${escapeHtml(recapDay(input.day))} · per ${recapStamp()} WIB</i>`,
