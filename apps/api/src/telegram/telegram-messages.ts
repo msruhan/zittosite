@@ -180,43 +180,51 @@ export function superAdminRecapHtml(input: {
     done: number;
     rejected: number;
     inProcess: number;
+    orders: Array<{ at: Date; imei: string; status: string }>;
   }>;
 }): string {
-  const statusLines = Object.entries(RECAP_STATUS)
-    .filter(([status]) => (input.created.byStatus[status] ?? 0) > 0)
-    .map(
-      ([status, meta]) =>
-        `   ${meta.icon} ${meta.label}: <b>${input.created.byStatus[status]}</b>`,
-    );
-  const adminLines = input.perAdmin.map((a) => {
+  const count = (status: string) => input.created.byStatus[status] ?? 0;
+  const orDash = (n: number) => (n > 0 ? `<b>${n}</b>` : "-");
+  const clock = new Intl.DateTimeFormat("id-ID", {
+    timeZone: "Asia/Jakarta",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+  // Keeps a busy day under Telegram's 4096-character message limit.
+  const maxOrdersPerAdmin = 40;
+
+  const adminBlocks = input.perAdmin.map((a) => {
     const handle = a.telegramHandle
       ? ` ${escapeHtml(a.telegramHandle.startsWith("@") ? a.telegramHandle : `@${a.telegramHandle}`)}`
       : "";
-    return `• <b>${escapeHtml(a.fullName)}</b>${handle}\n   ${handledLine(a)}`;
+    const shown = a.orders.slice(0, maxOrdersPerAdmin);
+    const orderLines = shown.map((o, i) => {
+      const icon = RECAP_STATUS[o.status]?.icon ?? "•";
+      return `${i + 1}. [${clock.format(o.at).replace(".", ":")}] <code>${escapeHtml(o.imei)}</code> ${icon}`;
+    });
+    if (a.orders.length > shown.length) {
+      orderLines.push(`<i>…dan ${a.orders.length - shown.length} order lainnya</i>`);
+    }
+    return [`• <b>${escapeHtml(a.fullName)}</b>${handle}`, handledLine(a), ...orderLines].join(
+      "\n",
+    );
   });
 
   return [
     "📊 <b>Rekap Order Hari Ini</b>",
     `<i>${escapeHtml(recapDay(input.day))} · per ${recapStamp()} WIB</i>`,
     "",
-    row(
-      "🧾",
-      "Order masuk",
-      `${input.created.total} (Web ${input.created.web} · Telegram ${input.created.telegram})`,
-    ),
-    ...statusLines,
-    row(
-      "💰",
-      "Pendapatan",
-      `${formatRp(input.revenue.amount)} dari ${input.revenue.payments} pembayaran`,
-    ),
+    `🧾 Order masuk: <b>${input.created.total}</b> (Web ${input.created.web} · Telegram ${input.created.telegram})`,
+    `✅ Selesai: ${orDash(count("done"))}`,
+    `🚫 Batal: ${orDash(count("cancel"))}`,
+    `💰 Pendapatan: <b>${escapeHtml(formatRp(input.revenue.amount))}</b> dari ${input.revenue.payments} pembayaran`,
     "",
-    "🛡️ <b>Tindak lanjut admin hari ini</b>",
-    `   ${handledLine(input.handled)}`,
-    row("📥", "Antrean belum diambil", String(input.queue)),
     "",
     "👥 <b>Per admin</b>",
-    ...(adminLines.length ? adminLines : ["<i>Belum ada aktivitas admin hari ini.</i>"]),
+    adminBlocks.length
+      ? adminBlocks.join("\n\n")
+      : "<i>Belum ada aktivitas admin hari ini.</i>",
   ].join("\n");
 }
 

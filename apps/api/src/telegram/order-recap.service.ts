@@ -22,8 +22,12 @@ export type SuperAdminRecap = {
   revenue: { amount: number; payments: number };
   handled: AdminDayStats;
   queue: number;
-  perAdmin: Array<{ fullName: string; telegramHandle: string | null } & AdminDayStats>;
+  perAdmin: Array<
+    { fullName: string; telegramHandle: string | null; orders: RecapOrderLine[] } & AdminDayStats
+  >;
 };
+
+export type RecapOrderLine = { at: Date; imei: string; status: OrderStatus };
 
 export type OperatorRecap = {
   day: Date;
@@ -73,7 +77,7 @@ export class OrderRecapService {
         _count: { _all: true },
       });
 
-    const [byStatus, byChannel, paid, taken, done, rejected, inProcess, queue] =
+    const [byStatus, byChannel, paid, taken, done, rejected, inProcess, queue, handledOrders] =
       await Promise.all([
         this.prisma.order.groupBy({
           by: ["status"],
@@ -95,14 +99,41 @@ export class OrderRecapService {
         groupByAdmin(where.rejected),
         groupByAdmin(where.inProcess),
         this.prisma.order.count({ where: { status: "waiting_action" } }),
+        this.prisma.order.findMany({
+          where: {
+            assignedAdminId: { not: null },
+            OR: [where.taken, where.done, where.rejected, where.inProcess],
+          },
+          select: {
+            assignedAdminId: true,
+            imei: true,
+            status: true,
+            startedAt: true,
+            updatedAt: true,
+          },
+          orderBy: [{ startedAt: "asc" }, { updatedAt: "asc" }],
+        }),
       ]);
+
+    const ordersByAdmin = new Map<string, RecapOrderLine[]>();
+    for (const o of handledOrders) {
+      const list = ordersByAdmin.get(o.assignedAdminId!) ?? [];
+      list.push({ at: o.startedAt ?? o.updatedAt, imei: o.imei, status: o.status });
+      ordersByAdmin.set(o.assignedAdminId!, list);
+    }
 
     const t = tally(taken);
     const d = tally(done);
     const r = tally(rejected);
     const p = tally(inProcess);
     const adminIds = [
-      ...new Set([...t.map.keys(), ...d.map.keys(), ...r.map.keys(), ...p.map.keys()]),
+      ...new Set([
+        ...t.map.keys(),
+        ...d.map.keys(),
+        ...r.map.keys(),
+        ...p.map.keys(),
+        ...ordersByAdmin.keys(),
+      ]),
     ];
     const admins = adminIds.length
       ? await this.prisma.admin.findMany({
@@ -119,6 +150,7 @@ export class OrderRecapService {
         done: d.map.get(admin.id) ?? 0,
         rejected: r.map.get(admin.id) ?? 0,
         inProcess: p.map.get(admin.id) ?? 0,
+        orders: ordersByAdmin.get(admin.id) ?? [],
       }))
       .sort((a, b) => b.done + b.taken - (a.done + a.taken));
 
