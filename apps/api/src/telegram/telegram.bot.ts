@@ -45,17 +45,37 @@ import {
   unlinkedHtml,
 } from "./telegram-messages";
 
-const BOT_COMMANDS = [
+type BotCommandDef = { command: string; description: string };
+
+/** Default menu for every chat: customers and not-yet-linked chats. */
+const MEMBER_COMMANDS: BotCommandDef[] = [
   { command: "start", description: "Mulai / status tautan" },
   { command: "menu", description: "Menu utama" },
   { command: "status", description: "Info akun tertaut" },
   { command: "saldo", description: "Cek saldo kredit" },
   { command: "order", description: "Buat order baru" },
   { command: "riwayat", description: "5 order terakhir" },
-  { command: "rekap", description: "Rekap order hari ini (admin)" },
-  { command: "rekaporder", description: "Kirim rekap order ke tiap admin (Super Admin)" },
-  { command: "cancel", description: "Batalkan order: /cancel ZT… alasan (Super Admin)" },
-] as const;
+];
+
+const OPERATOR_COMMANDS: BotCommandDef[] = [
+  { command: "start", description: "Mulai / status tautan" },
+  { command: "menu", description: "Menu utama" },
+  { command: "status", description: "Info akun tertaut" },
+  { command: "riwayat", description: "Antrean & order Anda" },
+  { command: "rekap", description: "Rekap order Anda hari ini" },
+];
+
+const SUPER_ADMIN_COMMANDS: BotCommandDef[] = [
+  { command: "start", description: "Mulai / status tautan" },
+  { command: "menu", description: "Menu utama" },
+  { command: "status", description: "Info akun tertaut" },
+  { command: "riwayat", description: "Antrean order terbaru" },
+  { command: "rekap", description: "Rekap order hari ini" },
+  { command: "rekaporder", description: "Kirim rekap order ke tiap admin" },
+  { command: "cancel", description: "Batalkan order: /cancel ZT… alasan" },
+];
+
+type CommandMenu = "member" | "operator" | "super_admin";
 
 function adminMenuKeyboard() {
   return new InlineKeyboard()
@@ -175,12 +195,13 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
     }
 
     try {
-      await this.bot.api.setMyCommands([...BOT_COMMANDS]);
+      await this.bot.api.setMyCommands(MEMBER_COMMANDS);
     } catch (err) {
       this.logger.warn(
         `setMyCommands failed: ${err instanceof Error ? err.message : String(err)}`,
       );
     }
+    void this.syncAdminCommandMenus();
 
     const mode = (process.env.TELEGRAM_MODE ?? "polling").toLowerCase();
     if (mode === "polling") {
@@ -936,8 +957,15 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
         fullName: true,
       },
     });
-    if (admin) return { kind: "admin", admin };
+    if (admin) {
+      this.ensureCommandMenu(
+        chatId,
+        admin.role === "super_admin" ? "super_admin" : "operator",
+      );
+      return { kind: "admin", admin };
+    }
 
+    this.ensureCommandMenu(chatId, "member");
     const identity = await this.prisma.userIdentity.findFirst({
       where: {
         provider: "telegram",
@@ -948,6 +976,54 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
     });
     if (identity?.user) return { kind: "member", user: identity.user };
     return null;
+  }
+
+  /** Per-chat "/" menus so each role only sees the commands it can use. */
+  private readonly commandMenus = new Map<string, CommandMenu>();
+
+  private ensureCommandMenu(chatId: string, menu: CommandMenu) {
+    if (!chatId || this.commandMenus.get(chatId) === menu) return;
+    this.commandMenus.set(chatId, menu);
+    void this.applyCommandMenu(chatId, menu);
+  }
+
+  private async applyCommandMenu(chatId: string, menu: CommandMenu) {
+    if (!this.bot) return;
+    const scope = { type: "chat" as const, chat_id: Number(chatId) };
+    try {
+      if (menu === "member") {
+        await this.bot.api.deleteMyCommands({ scope });
+      } else {
+        await this.bot.api.setMyCommands(
+          menu === "super_admin" ? SUPER_ADMIN_COMMANDS : OPERATOR_COMMANDS,
+          { scope },
+        );
+      }
+    } catch (err) {
+      this.commandMenus.delete(chatId);
+      this.logger.warn(
+        `command menu sync failed chat=${chatId}: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+  }
+
+  private async syncAdminCommandMenus() {
+    try {
+      const admins = await this.prisma.admin.findMany({
+        where: { status: "active", telegramChatId: { not: null } },
+        select: { role: true, telegramChatId: true },
+      });
+      for (const admin of admins) {
+        this.ensureCommandMenu(
+          admin.telegramChatId!,
+          admin.role === "super_admin" ? "super_admin" : "operator",
+        );
+      }
+    } catch (err) {
+      this.logger.warn(
+        `admin command menu sync failed: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
   }
 
   private async requireSuperAdmin(ctx: Context) {
