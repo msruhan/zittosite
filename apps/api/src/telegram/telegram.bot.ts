@@ -1,5 +1,6 @@
 import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from "@nestjs/common";
-import { Bot, Context, InlineKeyboard } from "grammy";
+import { Bot, Context, InlineKeyboard, InputFile } from "grammy";
+import * as QRCode from "qrcode";
 import type { Admin, ResultStatus, User } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
 import { webPublicUrl } from "../config/env";
@@ -24,6 +25,7 @@ import {
   operatorRecapHtml,
   orderCreatedHtml,
   orderHistoryHtml,
+  orderQrisCaptionHtml,
   saldoAdminHtml,
   saldoMemberHtml,
   startLinkedAdminHtml,
@@ -190,6 +192,32 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
     extra: Record<string, unknown> = {},
   ) {
     return ctx.reply(html, { parse_mode: TELEGRAM_PARSE_MODE, ...extra });
+  }
+
+  /** Sends the QRIS as a photo; returns false so the caller can fall back to the portal link. */
+  private async replyQris(
+    ctx: Context,
+    input: { orderId: string; qris: string; amount: number; expiresAt: Date },
+  ): Promise<boolean> {
+    try {
+      const png = await QRCode.toBuffer(input.qris, {
+        type: "png",
+        width: 720,
+        margin: 3,
+        errorCorrectionLevel: "M",
+      });
+      await ctx.replyWithPhoto(new InputFile(png, `QRIS-${input.orderId}.png`), {
+        caption: orderQrisCaptionHtml(input),
+        parse_mode: TELEGRAM_PARSE_MODE,
+        reply_markup: backToMenuKeyboard(),
+      });
+      return true;
+    } catch (err: any) {
+      this.logger.warn(
+        `QRIS photo failed order=${input.orderId}: ${err?.message ?? err}`,
+      );
+      return false;
+    }
   }
 
   private registerHandlers(bot: Bot) {
@@ -380,14 +408,21 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
             imei,
             channel: "telegram",
           });
+          const amount = order.invoice?.amountDue ?? order.price;
+          const invoice = order.invoice;
+          if (invoice?.qrisString) {
+            const sent = await this.replyQris(ctx, {
+              orderId: order.orderId,
+              qris: invoice.qrisString,
+              amount,
+              expiresAt: new Date(invoice.expiredAt),
+            });
+            if (sent) return;
+          }
           const payUrl = `${webPublicUrl()}/app/order/${order.orderId}/bayar`;
           await this.replyHtml(
             ctx,
-            orderCreatedHtml({
-              orderId: order.orderId,
-              payUrl,
-              amount: order.invoice?.amountDue ?? order.price,
-            }),
+            orderCreatedHtml({ orderId: order.orderId, payUrl, amount }),
             { reply_markup: backToMenuKeyboard() },
           );
         } catch (err: any) {

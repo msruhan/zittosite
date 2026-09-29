@@ -506,3 +506,27 @@ export function orderCreatedHtml(input: {
   ].join("\n");
 }
 
+/** Caption for the QRIS photo; Telegram caps captions at 1024 characters. */
+export function orderQrisCaptionHtml(input: {
+  orderId: string;
+  amount: number;
+  expiresAt: Date;
+}): string {
+  const until = new Intl.DateTimeFormat("id-ID", {
+    timeZone: "Asia/Jakarta",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(input.expiresAt);
+  return [
+    "✅ <b>Order dibuat</b>",
+    "",
+    row("🎫", "Order ID", input.orderId, true),
+    row("💰", "Tagihan", formatRp(input.amount)),
+    row("⏰", "Bayar sebelum", `${until} WIB`),
+    "",
+    "Scan QRIS di atas dengan m-banking atau e-wallet.",
+    `Bayar <b>tepat ${escapeHtml(formatRp(input.amount))}</b> agar terdeteksi otomatis.`,
+    "Notifikasi masuk di chat ini setelah pembayaran diterima.",
+  ].join("\n");
+}
+
