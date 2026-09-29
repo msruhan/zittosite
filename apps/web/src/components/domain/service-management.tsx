@@ -11,6 +11,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { Field, Input, Textarea } from "@/components/ui/field";
 import { Select } from "@/components/ui/select";
 import { Tag } from "@/components/ui/status-badge";
+import { Switch } from "@/components/ui/switch";
 import {
   TBody,
   TD,
@@ -44,6 +45,7 @@ export function ServiceManagement({
   const [query, setQuery] = React.useState("");
   const [editing, setEditing] = React.useState<ServiceDraft | null>(null);
   const [creating, setCreating] = React.useState(false);
+  const [togglingId, setTogglingId] = React.useState<string | null>(null);
 
   const [syncedServices, setSyncedServices] = React.useState(initialServices);
   if (initialServices !== syncedServices) {
@@ -106,20 +108,33 @@ export function ServiceManagement({
   }
 
   async function handleToggle(service: Service) {
+    const next = !service.active;
+    setTogglingId(service.id);
+    setServices((current) =>
+      current.map((s) => (s.id === service.id ? { ...s, active: next } : s)),
+    );
     try {
       await api(`/admin/services/${service.id}`, {
         method: "PATCH",
-        body: JSON.stringify({ active: !service.active }),
+        body: JSON.stringify({ active: next }),
       });
       await reload();
-      toast.success(
-        service.active ? "Layanan dinonaktifkan" : "Layanan diaktifkan",
-        { description: service.name },
-      );
+      toast.success(next ? "Layanan online" : "Layanan offline", {
+        description: next
+          ? `${service.name} bisa dipesan user lagi.`
+          : `${service.name} disembunyikan dari menu order web & bot.`,
+      });
     } catch (err) {
+      setServices((current) =>
+        current.map((s) =>
+          s.id === service.id ? { ...s, active: service.active } : s,
+        ),
+      );
       toast.error("Gagal", {
         description: err instanceof ApiError ? err.message : "Update gagal",
       });
+    } finally {
+      setTogglingId(null);
     }
   }
 
@@ -200,15 +215,23 @@ export function ServiceManagement({
                         <AssigneeList assignees={service.assignedAdmins ?? []} />
                       </TD>
                       <TD>
-                        {service.active ? (
-                          <Tag className="border-cleared-edge bg-cleared-wash text-cleared-ink">
-                            Aktif
-                          </Tag>
-                        ) : (
-                          <Tag className="border-void-edge bg-void-wash text-void-ink">
-                            Nonaktif
-                          </Tag>
-                        )}
+                        <div className="flex items-center gap-2.5">
+                          <Switch
+                            checked={service.active}
+                            disabled={togglingId === service.id}
+                            onCheckedChange={() => void handleToggle(service)}
+                            ariaLabel={`${service.name}: ${service.active ? "online" : "offline"}`}
+                          />
+                          <span
+                            className={
+                              service.active
+                                ? "text-body font-medium text-cleared-ink"
+                                : "text-body font-medium text-ink-soft"
+                            }
+                          >
+                            {service.active ? "Online" : "Offline"}
+                          </span>
+                        </div>
                       </TD>
                       <TD>
                         <div className="flex items-center gap-1">
@@ -222,13 +245,6 @@ export function ServiceManagement({
                             }}
                           >
                             <PencilSimple className="size-4 text-action" />
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => handleToggle(service)}
-                          >
-                            {service.active ? "Nonaktifkan" : "Aktifkan"}
                           </Button>
                         </div>
                       </TD>
@@ -560,8 +576,8 @@ function ServiceFormDialog({
               }))
             }
             options={[
-              { value: "active", label: "Aktif" },
-              { value: "inactive", label: "Nonaktif" },
+              { value: "active", label: "Online — bisa dipesan" },
+              { value: "inactive", label: "Offline — disembunyikan dari menu order" },
             ]}
           />
         </Field>
