@@ -17,6 +17,7 @@ import { userOrderNoticeHtml } from "../telegram/telegram-messages";
 import { PrismaService } from "../prisma/prisma.service";
 import { paymentSimulationEnabled, webPublicUrl } from "../config/env";
 import { AdminNotifyService } from "../telegram/admin-notify.service";
+import { AuditLogService } from "../security/audit-log.service";
 import {
   SayabayarClient,
   type SayabayarInvoice,
@@ -56,6 +57,7 @@ export class OrdersService {
     private readonly prisma: PrismaService,
     private readonly adminNotify: AdminNotifyService,
     private readonly sayabayar: SayabayarClient,
+    private readonly audit: AuditLogService,
   ) {}
 
   async listServices(userId: string) {
@@ -237,6 +239,14 @@ export class OrdersService {
       include: orderInclude,
     });
 
+    this.audit.record("order.created", {
+      actorUserId: userId,
+      orderId,
+      serviceName: service.name,
+      imei,
+      price,
+      channel,
+    });
     return serializeOrderListItem(created);
   }
 
@@ -270,6 +280,11 @@ export class OrdersService {
         },
         include: orderInclude,
       });
+    });
+    this.audit.record("order.cancelled_by_user", {
+      actorUserId: userId,
+      orderId: current.orderId,
+      imei: current.imei,
     });
     return serializeOrderListItem(updated);
   }
@@ -324,6 +339,14 @@ export class OrdersService {
       });
     });
 
+    this.audit.record("admin.order.cancelled", {
+      actorId: adminId,
+      userId: order.userId,
+      orderId: order.orderId,
+      imei: order.imei,
+      reason: why,
+      wasPaid,
+    });
     void this.adminNotify.syncOrderCards(order.id, "cancelled", {
       actorName: admin.fullName,
       note: why,
@@ -415,6 +438,16 @@ export class OrdersService {
           actor: "Sistem",
         },
       });
+      const lateOrder = await this.prisma.order.findUnique({
+        where: { id: invoice.orderId },
+        select: { orderId: true, userId: true },
+      });
+      this.audit.record("payment.late", {
+        userId: lateOrder?.userId,
+        orderId: lateOrder?.orderId,
+        amount: input.amount,
+        invoiceStatus: invoice.paymentStatus,
+      });
       return "late";
     }
 
@@ -465,7 +498,14 @@ export class OrdersService {
         where: { id: invoice.orderId },
         select: { userId: true, orderId: true },
       });
-      if (order) this.notifyExpired(order.userId, order.orderId);
+      if (order) {
+        this.notifyExpired(order.userId, order.orderId);
+        this.audit.record("order.expired", {
+          userId: order.userId,
+          orderId: order.orderId,
+          source: "gateway",
+        });
+      }
     }
     return result;
   }
@@ -510,6 +550,13 @@ export class OrdersService {
       });
     });
 
+    this.audit.record("order.taken", {
+      actorId: adminId,
+      userId: claimed.userId,
+      orderId: claimed.orderId,
+      serviceName: claimed.service.name,
+      imei: claimed.imei,
+    });
     await this.adminNotify.syncOrderCards(claimed.id, "taken", {
       actorName: admin.fullName,
     });
@@ -570,6 +617,14 @@ export class OrdersService {
       });
     });
 
+    this.audit.record("order.rejected", {
+      actorId: adminId,
+      userId: updated.userId,
+      orderId: updated.orderId,
+      serviceName: updated.service.name,
+      imei: updated.imei,
+      reason: note,
+    });
     await this.adminNotify.syncOrderCards(updated.id, "rejected", {
       actorName: admin.fullName,
       note,
@@ -645,6 +700,13 @@ export class OrdersService {
       });
     });
 
+    this.audit.record("order.done", {
+      actorId: adminId,
+      userId: updated.userId,
+      orderId: updated.orderId,
+      serviceName: updated.service.name,
+      imei: updated.imei,
+    });
     await this.adminNotify.syncOrderCards(updated.id, "done", {
       actorName: admin.fullName,
       note: resultNote,
@@ -799,7 +861,15 @@ export class OrdersService {
       });
     });
 
-    if (updated) void this.adminNotify.notifyNewOrder(updated.id);
+    if (updated) {
+      this.audit.record("payment.paid", {
+        userId: updated.userId,
+        orderId: updated.orderId,
+        amount: updated.invoice?.amount ?? updated.price,
+        method: payment.channel ?? updated.invoice?.paymentChannel ?? undefined,
+      });
+      void this.adminNotify.notifyNewOrder(updated.id);
+    }
     return updated;
   }
 
@@ -883,7 +953,14 @@ export class OrdersService {
         include: orderInclude,
       });
     });
-    if (expiredNow) this.notifyExpired(updated.userId, updated.orderId);
+    if (expiredNow) {
+      this.notifyExpired(updated.userId, updated.orderId);
+      this.audit.record("order.expired", {
+        userId: updated.userId,
+        orderId: updated.orderId,
+        source: "timeout",
+      });
+    }
     return updated as T;
   }
 

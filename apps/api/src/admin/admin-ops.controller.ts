@@ -38,6 +38,24 @@ type AdminReq = { admin: { sub: string } };
 type Json = Record<string, unknown>;
 
 const TOTP_HEADER = "x-totp-code";
+const WIB_OFFSET_MS = 7 * 60 * 60 * 1000;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+function activityRangeStart(range?: string): Date | undefined {
+  const now = Date.now();
+  switch (range) {
+    case "today": {
+      const wibMidnight = Math.floor((now + WIB_OFFSET_MS) / DAY_MS) * DAY_MS;
+      return new Date(wibMidnight - WIB_OFFSET_MS);
+    }
+    case "7d":
+      return new Date(now - 7 * DAY_MS);
+    case "30d":
+      return new Date(now - 30 * DAY_MS);
+    default:
+      return undefined;
+  }
+}
 
 @Controller("admin")
 @UseGuards(AdminAuthGuard)
@@ -61,6 +79,24 @@ export class AdminOpsController {
   @Get("reports/summary")
   reportsSummary() {
     return this.reports.summary();
+  }
+
+  @Get("activity")
+  @UseGuards(SuperAdminGuard)
+  listActivity(
+    @Query("category") category?: string,
+    @Query("q") q?: string,
+    @Query("range") range?: string,
+    @Query("page") page?: string,
+    @Query("pageSize") pageSize?: string,
+  ) {
+    return this.audit.list({
+      category: category && category !== "all" ? category.slice(0, 20) : undefined,
+      q: q?.slice(0, 100),
+      from: activityRangeStart(range),
+      page: Number(page) || 1,
+      pageSize: Number(pageSize) || 50,
+    });
   }
 
   @Get("users")
@@ -145,6 +181,7 @@ export class AdminOpsController {
     this.audit.record("admin.service.created", {
       actorId: req.admin.sub,
       serviceId: service.id,
+      serviceName: service.name,
       assignedAdmins: service.assignedAdmins.map((a) => a.id).join(","),
     });
     return service;
@@ -169,6 +206,7 @@ export class AdminOpsController {
     this.audit.record("admin.service.updated", {
       actorId: req.admin.sub,
       serviceId: id,
+      serviceName: service.name,
       price: input.price,
       active: input.active,
       assignedAdmins: input.assignedAdminIds?.join(","),
@@ -219,16 +257,11 @@ export class AdminOpsController {
     @Param("orderId") orderId: string,
     @Body() body: Json,
   ) {
-    const order = await this.customerOrders.adminCancelOrder(
+    return this.customerOrders.adminCancelOrder(
       req.admin.sub,
       orderId,
       optString(body.reason, "Alasan", 500),
     );
-    this.audit.record("admin.order.cancelled", {
-      actorId: req.admin.sub,
-      orderId,
-    });
-    return order;
   }
 
   @Get("admins")

@@ -146,13 +146,14 @@ export class AdminAuthService {
     };
   }
 
-  async logout(adminId: string, sessionId?: string) {
+  async logout(adminId: string, sessionId?: string, meta: ClientMeta = {}) {
     if (sessionId) {
       await this.prisma.adminSession.updateMany({
         where: { id: sessionId, adminId, revokedAt: null },
         data: { revokedAt: new Date() },
       });
     }
+    this.audit.record("auth.admin.logout", { adminId, ip: meta.ip });
     return { ok: true };
   }
 

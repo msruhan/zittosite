@@ -89,6 +89,29 @@ model User {
   @@map("users")
 }
 
+/// Append-only activity trail shown to Super Admin; names are snapshots at event time.
+model ActivityLog {
+  id          String   @id @default(cuid())
+  event       String
+  category    String
+  actorType   String   @map("actor_type")
+  actorId     String?  @map("actor_id")
+  actorName   String?  @map("actor_name")
+  actorRole   String?  @map("actor_role")
+  targetLabel String?  @map("target_label")
+  orderId     String?  @map("order_id")
+  summary     String
+  ip          String?
+  meta        Json?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([createdAt])
+  @@index([category, createdAt])
+  @@index([event, createdAt])
+  @@index([orderId])
+  @@map("activity_logs")
+}
+
 /// Per-user price override; services without a row use Service.price.
 model UserServicePrice {
   userId    String   @map("user_id")

@@ -70,13 +70,14 @@ export class UserAuthService {
     };
   }
 
-  async logout(userId: string, sessionId?: string) {
+  async logout(userId: string, sessionId?: string, meta: ClientMeta = {}) {
     if (sessionId) {
       await this.prisma.userSession.updateMany({
         where: { id: sessionId, userId, revokedAt: null },
         data: { revokedAt: new Date() },
       });
     }
+    this.audit.record("auth.user.logout", { userId, ip: meta.ip });
     return { ok: true };
   }
 

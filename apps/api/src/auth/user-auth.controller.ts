@@ -46,7 +46,11 @@ export class UserAuthController {
       const token = extractAuthToken(req, USER_AUTH_COOKIE);
       if (token) {
         const session = await this.auth.verifyToken(token);
-        await this.auth.logout(session.userId, session.sessionId);
+        await this.auth.logout(
+          session.userId,
+          session.sessionId,
+          clientMetaFromReq(req),
+        );
       }
     } catch {
       /* already invalid — still clear cookie */

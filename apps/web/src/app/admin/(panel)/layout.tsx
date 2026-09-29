@@ -35,6 +35,7 @@ export default async function AdminPanelLayout({
               "/admin/services",
               "/admin/admins",
               "/admin/settings",
+              "/admin/activity",
             ]
       }
       topbarRight={

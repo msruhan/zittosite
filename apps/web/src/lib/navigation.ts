@@ -4,6 +4,7 @@ import {
   FileText,
   Gauge,
   Gear,
+  ListChecks,
   Package,
   PaperPlaneTilt,
   Shield,
@@ -38,6 +39,7 @@ export const adminNav: NavItem[] = [
   { href: "/admin/admins", label: "Admins", icon: ShieldCheck },
   { href: "/admin/services", label: "Services", icon: Package },
   { href: "/admin/reports", label: "Reports", icon: FileText },
+  { href: "/admin/activity", label: "Log Aktivitas", icon: ListChecks },
   { href: "/admin/security", label: "Security", icon: Shield },
   { href: "/admin/settings", label: "Settings", icon: Gear },
 ];
