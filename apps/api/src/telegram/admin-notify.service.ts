@@ -119,7 +119,6 @@ export class AdminNotifyService {
             dest.role === "super_admin"
               ? {
                   inline_keyboard: [
-                    ...replyMarkup.inline_keyboard,
                     [
                       {
                         text: "🚫 Batalkan order",

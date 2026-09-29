@@ -665,7 +665,7 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
   }
 
   private async handleAccept(ctx: Context, orderId: string) {
-    const actor = await this.requireAdmin(ctx);
+    const actor = await this.requireOperator(ctx);
     if (!actor) return;
     await this.orders.acceptOrder(actor.admin.id, orderId);
     await ctx.answerCallbackQuery({ text: "Order diambil" });
@@ -676,7 +676,7 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
   }
 
   private async handleRejectStart(ctx: Context, orderId: string) {
-    const actor = await this.requireAdmin(ctx);
+    const actor = await this.requireOperator(ctx);
     if (!actor) return;
     const chatId = String(ctx.chat?.id ?? "");
     this.sessions.set(chatId, {
@@ -937,6 +937,24 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
     if (actor.kind !== "admin") {
       await ctx
         .answerCallbackQuery({ text: "Khusus admin", show_alert: true })
+        .catch(() => undefined);
+      return null;
+    }
+    return actor;
+  }
+
+  /** Accepting and rejecting orders is operator work; Super Admin only monitors and cancels. */
+  private async requireOperator(
+    ctx: Context,
+  ): Promise<Extract<TelegramActor, { kind: "admin" }> | null> {
+    const actor = await this.requireAdmin(ctx);
+    if (!actor) return null;
+    if (actor.admin.role === "super_admin") {
+      await ctx
+        .answerCallbackQuery({
+          text: "Order diproses oleh admin/operator. Super Admin hanya bisa membatalkan.",
+          show_alert: true,
+        })
         .catch(() => undefined);
       return null;
     }
