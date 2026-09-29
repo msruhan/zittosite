@@ -29,6 +29,7 @@ import {
   linkFailedHtml,
   linkSuccessHtml,
   operatorRecapHtml,
+  adminOrderRecapHtml,
   orderCreatedHtml,
   orderHistoryHtml,
   orderQrisCaptionHtml,
@@ -52,6 +53,7 @@ const BOT_COMMANDS = [
   { command: "order", description: "Buat order baru" },
   { command: "riwayat", description: "5 order terakhir" },
   { command: "rekap", description: "Rekap order hari ini (admin)" },
+  { command: "rekaporder", description: "Kirim rekap order ke tiap admin (Super Admin)" },
   { command: "cancel", description: "Batalkan order: /cancel ZT… alasan (Super Admin)" },
 ] as const;
 
@@ -339,6 +341,7 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
     bot.command("order", (ctx) => this.showOrderPicker(ctx));
     bot.command("riwayat", (ctx) => this.showHistory(ctx));
     bot.command("rekap", (ctx) => this.showRecap(ctx));
+    bot.command("rekaporder", (ctx) => this.sendAdminRecaps(ctx));
     bot.command("cancel", (ctx) => this.handleSuperAdminCancelCommand(ctx));
 
     bot.on("callback_query:data", async (ctx) => {
@@ -551,6 +554,67 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
         ? superAdminRecapHtml(await this.recap.superAdmin())
         : operatorRecapHtml(await this.recap.operator(actor.admin.id));
     await this.replyHtml(ctx, html, { reply_markup: recapKeyboard() });
+  }
+
+  /** Super Admin: send every admin who handled orders today their own recap. */
+  private async sendAdminRecaps(ctx: Context) {
+    const superAdmin = await this.requireSuperAdmin(ctx);
+    if (!superAdmin || !this.bot) return;
+
+    const recap = await this.recap.superAdmin();
+    const withOrders = recap.perAdmin.filter((a) => a.orders.length > 0);
+    if (!withOrders.length) {
+      await this.replyHtml(ctx, "📭 Belum ada order yang ditangani admin hari ini.");
+      return;
+    }
+
+    const chats = new Map(
+      (
+        await this.prisma.admin.findMany({
+          where: {
+            id: { in: withOrders.map((a) => a.adminId) },
+            status: "active",
+            telegramChatId: { not: null },
+            telegramLinkedAt: { not: null },
+          },
+          select: { id: true, telegramChatId: true },
+        })
+      ).map((a) => [a.id, a.telegramChatId!]),
+    );
+
+    const report: string[] = [];
+    let sent = 0;
+    for (const admin of withOrders) {
+      const label = `<b>${escapeHtml(admin.fullName)}</b> (${admin.orders.length} order)`;
+      const chatId = chats.get(admin.adminId);
+      if (!chatId) {
+        report.push(`⚠️ ${label} — Telegram belum tertaut`);
+        continue;
+      }
+      try {
+        await this.bot.api.sendMessage(
+          chatId,
+          adminOrderRecapHtml({ day: recap.day, ...admin }),
+          { parse_mode: TELEGRAM_PARSE_MODE, link_preview_options: { is_disabled: true } },
+        );
+        sent += 1;
+        report.push(`✅ ${label}`);
+      } catch (err) {
+        this.logger.warn(
+          `rekaporder send failed admin=${admin.adminId}: ${err instanceof Error ? err.message : String(err)}`,
+        );
+        report.push(`❌ ${label} — gagal terkirim`);
+      }
+    }
+
+    await this.replyHtml(
+      ctx,
+      [
+        `📤 <b>Rekap order dikirim ke ${sent} dari ${withOrders.length} admin</b>`,
+        "",
+        ...report,
+      ].join("\n"),
+    );
   }
 
   private async showStatus(ctx: Context) {

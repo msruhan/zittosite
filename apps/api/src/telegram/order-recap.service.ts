@@ -23,7 +23,12 @@ export type SuperAdminRecap = {
   handled: AdminDayStats;
   queue: number;
   perAdmin: Array<
-    { fullName: string; telegramHandle: string | null; orders: RecapOrderLine[] } & AdminDayStats
+    {
+      adminId: string;
+      fullName: string;
+      telegramHandle: string | null;
+      orders: RecapOrderLine[];
+    } & AdminDayStats
   >;
 };
 
@@ -144,6 +149,7 @@ export class OrderRecapService {
 
     const perAdmin = admins
       .map((admin) => ({
+        adminId: admin.id,
         fullName: admin.fullName,
         telegramHandle: admin.telegramUsername,
         taken: t.map.get(admin.id) ?? 0,

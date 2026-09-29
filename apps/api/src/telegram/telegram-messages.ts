@@ -162,6 +162,68 @@ function handledLine(s: {
   return `ambil ${s.taken} · selesai ${s.done} · tolak ${s.rejected} · proses ${s.inProcess}`;
 }
 
+function handleSuffix(handle: string | null): string {
+  if (!handle) return "";
+  return ` ${escapeHtml(handle.startsWith("@") ? handle : `@${handle}`)}`;
+}
+
+const recapClock = new Intl.DateTimeFormat("id-ID", {
+  timeZone: "Asia/Jakarta",
+  hour: "2-digit",
+  minute: "2-digit",
+  hour12: false,
+});
+
+/** `1. [15:02] 359760544287879 ✅`, capped so a busy day stays under Telegram's 4096-char limit. */
+function recapOrderLines(
+  orders: Array<{ at: Date; imei: string; status: string }>,
+  max: number,
+): string[] {
+  const shown = orders.slice(0, max);
+  const lines = shown.map((o, i) => {
+    const icon = RECAP_STATUS[o.status]?.icon ?? "•";
+    return `${i + 1}. [${recapClock.format(o.at).replace(".", ":")}] <code>${escapeHtml(o.imei)}</code> ${icon}`;
+  });
+  if (orders.length > shown.length) {
+    lines.push(`<i>…dan ${orders.length - shown.length} order lainnya</i>`);
+  }
+  return lines;
+}
+
+function shortDay(day: Date): string {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Jakarta",
+    day: "numeric",
+    month: "numeric",
+    year: "numeric",
+  }).formatToParts(day);
+  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "";
+  return `${get("day")}-${get("month")}-${get("year")}`;
+}
+
+/** Sent to each admin's own chat when a Super Admin runs /rekaporder. */
+export function adminOrderRecapHtml(input: {
+  day: Date;
+  fullName: string;
+  taken: number;
+  done: number;
+  rejected: number;
+  inProcess: number;
+  orders: Array<{ at: Date; imei: string; status: string }>;
+}): string {
+  return [
+    "📋 <b>Rekap Order Anda</b>",
+    `Halo <b>${escapeHtml(input.fullName)}</b>, berikut rekap dari Super Admin.`,
+    "",
+    `🗓️ Total registrasi hari ini ${escapeHtml(shortDay(input.day))}: <b>${input.orders.length}</b>`,
+    handledLine(input),
+    "",
+    ...recapOrderLines(input.orders, 80),
+    "",
+    `<i>✅ selesai · 🛠️ dikerjakan · ❌ ditolak · 🚫 batal · per ${recapStamp()} WIB</i>`,
+  ].join("\n");
+}
+
 export function superAdminRecapHtml(input: {
   day: Date;
   created: {
@@ -185,31 +247,14 @@ export function superAdminRecapHtml(input: {
 }): string {
   const count = (status: string) => input.created.byStatus[status] ?? 0;
   const orDash = (n: number) => (n > 0 ? `<b>${n}</b>` : "-");
-  const clock = new Intl.DateTimeFormat("id-ID", {
-    timeZone: "Asia/Jakarta",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  });
-  // Keeps a busy day under Telegram's 4096-character message limit.
-  const maxOrdersPerAdmin = 40;
 
-  const adminBlocks = input.perAdmin.map((a) => {
-    const handle = a.telegramHandle
-      ? ` ${escapeHtml(a.telegramHandle.startsWith("@") ? a.telegramHandle : `@${a.telegramHandle}`)}`
-      : "";
-    const shown = a.orders.slice(0, maxOrdersPerAdmin);
-    const orderLines = shown.map((o, i) => {
-      const icon = RECAP_STATUS[o.status]?.icon ?? "•";
-      return `${i + 1}. [${clock.format(o.at).replace(".", ":")}] <code>${escapeHtml(o.imei)}</code> ${icon}`;
-    });
-    if (a.orders.length > shown.length) {
-      orderLines.push(`<i>…dan ${a.orders.length - shown.length} order lainnya</i>`);
-    }
-    return [`• <b>${escapeHtml(a.fullName)}</b>${handle}`, handledLine(a), ...orderLines].join(
-      "\n",
-    );
-  });
+  const adminBlocks = input.perAdmin.map((a) =>
+    [
+      `• <b>${escapeHtml(a.fullName)}</b>${handleSuffix(a.telegramHandle)}`,
+      handledLine(a),
+      ...recapOrderLines(a.orders, 40),
+    ].join("\n"),
+  );
 
   return [
     "📊 <b>Rekap Order Hari Ini</b>",
