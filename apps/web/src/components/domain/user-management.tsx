@@ -83,7 +83,16 @@ export function UserManagement({ initialUsers }: { initialUsers: User[] }) {
       await reload();
       setEditing(null);
       setCreating(false);
-      toast.success(creating ? "User ditambahkan" : "Perubahan disimpan");
+      toast.success(
+        creating
+          ? "User ditambahkan"
+          : next.password
+            ? "Password user diganti"
+            : "Perubahan disimpan",
+        !creating && next.password
+          ? { description: "Sesi login user lama sudah dikeluarkan." }
+          : undefined,
+      );
     } catch (err) {
       toast.error("Gagal", {
         description: err instanceof ApiError ? err.message : "Simpan gagal",
@@ -392,9 +401,13 @@ function UserFormDialog({
           />
         </Field>
         <Field
-          label="Password"
+          label={creating ? "Password" : "Password baru"}
           htmlFor="password"
-          hint={creating ? "Password awal untuk login user." : "Kosongkan jika tidak diubah."}
+          hint={
+            creating
+              ? "Password awal untuk login user."
+              : "Isi untuk mengganti password user. User akan keluar dari semua perangkat dan login dengan password baru. Kosongkan jika tidak diganti."
+          }
           error={errors.password}
           required={creating}
         >
@@ -402,7 +415,7 @@ function UserFormDialog({
             id="password"
             type="password"
             autoComplete="new-password"
-            placeholder={creating ? "Masukkan password" : "••••••••"}
+            placeholder={creating ? "Masukkan password" : "Ketik password baru"}
             value={password}
             invalid={Boolean(errors.password)}
             onChange={(event) => setPassword(event.target.value)}
