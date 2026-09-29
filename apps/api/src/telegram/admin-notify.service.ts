@@ -2,14 +2,13 @@ import { Injectable, Logger } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service";
 import { AdminTelegramLinkService } from "./admin-telegram-link.service";
 import {
-  escapeHtml,
-  maskImeiHtml,
   newOrderAdminHtml,
   orderCardTakenHtml,
   orderCardRejectedHtml,
   orderCardDoneHtml,
   orderCardCancelledHtml,
   superAdminFollowUpHtml,
+  userOrderNoticeHtml,
 } from "./telegram-messages";
 
 @Injectable()
@@ -48,7 +47,7 @@ export class AdminNotifyService {
         select: { chatId: true, chatVerifiedAt: true },
       });
       if (!identity?.chatId || !identity.chatVerifiedAt) return;
-      await this.sendMessage(token, identity.chatId, text, false);
+      await this.sendMessage(token, identity.chatId, text);
     } catch (err) {
       this.logger.warn(
         `User notify error: ${err instanceof Error ? err.message : String(err)}`,
@@ -170,11 +169,12 @@ export class AdminNotifyService {
 
     await this.notifyUserById(
       order.userId,
-      [
-        "✅ Pembayaran diterima",
-        `Order <b>${escapeHtml(order.orderId)}</b> masuk antrean admin.`,
-        `IMEI: ${maskImeiHtml(order.imei)}`,
-      ].join("\n"),
+      userOrderNoticeHtml({
+        kind: "paid",
+        orderId: order.orderId,
+        imei: order.imei,
+        serviceName: order.service.name,
+      }),
     );
   }
 

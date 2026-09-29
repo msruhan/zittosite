@@ -551,6 +551,79 @@ export function cancelConfirmHtml(orderId: string): string {
 }
 
 /** Caption for the QRIS photo; Telegram caps captions at 1024 characters. */
+const RESULT_LABEL: Record<string, string> = {
+  success: "✅ Berhasil",
+  partial: "⚠️ Sebagian berhasil",
+  failed: "❌ Gagal",
+};
+
+type UserOrderNotice =
+  | { kind: "paid"; orderId: string; imei: string; serviceName: string }
+  | { kind: "taken"; orderId: string }
+  | { kind: "rejected"; orderId: string; reason: string }
+  | { kind: "done"; orderId: string; resultStatus: string; note: string }
+  | { kind: "cancelled"; orderId: string; reason: string; wasPaid: boolean }
+  | { kind: "expired"; orderId: string };
+
+/** Status updates sent to the customer's own chat. */
+export function userOrderNoticeHtml(notice: UserOrderNotice): string {
+  const id = row("🎫", "Order ID", notice.orderId, true);
+  switch (notice.kind) {
+    case "paid":
+      return [
+        "✅ <b>Pembayaran diterima</b>",
+        "",
+        id,
+        row("📦", "Layanan", notice.serviceName),
+        row("📱", "IMEI", notice.imei, true),
+        "",
+        "Order Anda masuk antrean admin. Kami kabari lagi saat mulai dikerjakan.",
+      ].join("\n");
+    case "taken":
+      return [
+        "🛠️ <b>Order sedang dikerjakan</b>",
+        "",
+        id,
+        "",
+        "Admin sudah mengambil order Anda. Hasilnya dikirim ke chat ini.",
+      ].join("\n");
+    case "rejected":
+      return [
+        "❌ <b>Order ditolak</b>",
+        "",
+        id,
+        row("📝", "Alasan", notice.reason),
+      ].join("\n");
+    case "done":
+      return [
+        "🎉 <b>Order selesai</b>",
+        "",
+        id,
+        row("📊", "Hasil", RESULT_LABEL[notice.resultStatus] ?? notice.resultStatus),
+        ...(notice.note ? [row("📝", "Catatan", notice.note)] : []),
+      ].join("\n");
+    case "cancelled":
+      return [
+        "🚫 <b>Order dibatalkan admin</b>",
+        "",
+        id,
+        row("📝", "Alasan", notice.reason),
+        ...(notice.wasPaid
+          ? ["", "Pembayaran Anda sudah kami terima. Hubungi support untuk pengembalian dana."]
+          : []),
+      ].join("\n");
+    case "expired":
+      return [
+        "⌛ <b>Order dibatalkan otomatis</b>",
+        "",
+        id,
+        "",
+        "Batas waktu pembayaran sudah habis.",
+        "Ketik /order untuk membuat order baru.",
+      ].join("\n");
+  }
+}
+
 export function orderQrisCaptionHtml(input: {
   orderId: string;
   amount: number;

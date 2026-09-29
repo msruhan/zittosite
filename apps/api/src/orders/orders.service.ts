@@ -13,7 +13,7 @@ import {
   type OrderStatus,
   type ResultStatus,
 } from "@prisma/client";
-import { escapeHtml as escapeTelegramHtml } from "../telegram/telegram-messages";
+import { userOrderNoticeHtml } from "../telegram/telegram-messages";
 import { PrismaService } from "../prisma/prisma.service";
 import { paymentSimulationEnabled, webPublicUrl } from "../config/env";
 import { AdminNotifyService } from "../telegram/admin-notify.service";
@@ -329,13 +329,12 @@ export class OrdersService {
     });
     void this.adminNotify.notifyUserById(
       order.userId,
-      [
-        `🚫 Order <code>${order.orderId}</code> dibatalkan oleh admin.`,
-        `Alasan: ${escapeTelegramHtml(why)}`,
-        ...(wasPaid
-          ? ["", "Pembayaran Anda sudah kami terima. Hubungi support untuk pengembalian dana."]
-          : []),
-      ].join("\n"),
+      userOrderNoticeHtml({
+        kind: "cancelled",
+        orderId: order.orderId,
+        reason: why,
+        wasPaid,
+      }),
     );
     return serializeOrderListItem(updated);
   }
@@ -516,7 +515,7 @@ export class OrdersService {
     void this.adminNotify.notifySuperAdminsFollowUp(claimed.id, "taken", admin);
     void this.adminNotify.notifyUserById(
       claimed.userId,
-      `🛠️ Order <b>${claimed.orderId}</b> sedang dikerjakan admin.`,
+      userOrderNoticeHtml({ kind: "taken", orderId: claimed.orderId }),
     );
     return serializeOrderListItem(claimed);
   }
@@ -582,7 +581,11 @@ export class OrdersService {
     );
     void this.adminNotify.notifyUserById(
       updated.userId,
-      `❌ Order <b>${updated.orderId}</b> ditolak.\nAlasan: ${note}`,
+      userOrderNoticeHtml({
+        kind: "rejected",
+        orderId: updated.orderId,
+        reason: note,
+      }),
     );
     return serializeOrderListItem(updated);
   }
@@ -655,11 +658,12 @@ export class OrdersService {
     );
     void this.adminNotify.notifyUserById(
       updated.userId,
-      [
-        `✅ Order <b>${updated.orderId}</b> selesai.`,
-        `Hasil: ${input.resultStatus}`,
-        resultNote,
-      ].join("\n"),
+      userOrderNoticeHtml({
+        kind: "done",
+        orderId: updated.orderId,
+        resultStatus: input.resultStatus,
+        note: resultNote,
+      }),
     );
     return serializeOrderListItem(updated);
   }
@@ -897,12 +901,7 @@ export class OrdersService {
   private notifyExpired(userId: string, publicOrderId: string) {
     void this.adminNotify.notifyUserById(
       userId,
-      [
-        `⌛ Order <code>${publicOrderId}</code> dibatalkan otomatis.`,
-        "Batas waktu pembayaran sudah habis.",
-        "",
-        "Ketik /order untuk membuat order baru.",
-      ].join("\n"),
+      userOrderNoticeHtml({ kind: "expired", orderId: publicOrderId }),
     );
   }
 
