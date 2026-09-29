@@ -2,7 +2,9 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { Eye, MagnifyingGlass } from "@phosphor-icons/react";
+import { useRouter } from "next/navigation";
+import { Eye, MagnifyingGlass, PencilSimple, X } from "@phosphor-icons/react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { DataValue } from "@/components/ui/data-value";
@@ -19,21 +21,72 @@ import {
   Table,
   TableScroll,
 } from "@/components/ui/table";
+import { ApiError, api } from "@/lib/api";
 import { ORDER_STATUS_OPTIONS } from "@/lib/status";
 import { formatDateTime, formatRupiah } from "@/lib/format";
 import type { OrderDetail, OrderStatus } from "@/lib/types";
+
+const STATUS_CHOICES = ORDER_STATUS_OPTIONS.filter(
+  (o): o is { value: OrderStatus; label: string } => o.value !== "all",
+);
+
+/** Cancelling these goes through the cancel flow so the invoice closes and everyone is notified. */
+const CANCEL_FLOW_FROM: OrderStatus[] = [
+  "waiting_payment",
+  "paid",
+  "waiting_action",
+  "in_process",
+];
 
 export function AdminOrderManagement({
   orders,
   initialQuery = "",
   showCustomerIdentity = true,
+  canEditStatus = false,
 }: {
   orders: OrderDetail[];
   initialQuery?: string;
   showCustomerIdentity?: boolean;
+  canEditStatus?: boolean;
 }) {
+  const router = useRouter();
   const [query, setQuery] = React.useState(initialQuery);
   const [status, setStatus] = React.useState<OrderStatus | "all">("all");
+  const [editingId, setEditingId] = React.useState<string | null>(null);
+  const [savingId, setSavingId] = React.useState<string | null>(null);
+
+  async function changeStatus(order: OrderDetail, next: OrderStatus) {
+    if (next === order.status) {
+      setEditingId(null);
+      return;
+    }
+    setSavingId(order.orderId);
+    try {
+      if (next === "cancel" && CANCEL_FLOW_FROM.includes(order.status)) {
+        await api(`/admin/orders/${order.orderId}/cancel`, {
+          method: "POST",
+          body: JSON.stringify({}),
+        });
+        toast.success(`Order ${order.orderId} dibatalkan`, {
+          description: "User sudah diberi tahu lewat Telegram.",
+        });
+      } else {
+        await api(`/admin/orders/${order.orderId}/status`, {
+          method: "PATCH",
+          body: JSON.stringify({ status: next }),
+        });
+        toast.success(`Status ${order.orderId} diperbarui`);
+      }
+      setEditingId(null);
+      router.refresh();
+    } catch (err) {
+      toast.error("Gagal mengubah status", {
+        description: err instanceof ApiError ? err.message : "Coba lagi.",
+      });
+    } finally {
+      setSavingId(null);
+    }
+  }
 
   const filtered = React.useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -93,9 +146,10 @@ export function AdminOrderManagement({
                     {showCustomerIdentity ? <TH>User</TH> : null}
                     <TH>IMEI</TH>
                     <TH>Harga</TH>
+                    <TH>Admin</TH>
                     <TH>Status</TH>
                     <TH>Dibuat</TH>
-                    <TH className="w-16">Aksi</TH>
+                    <TH className={canEditStatus ? "w-24" : "w-16"}>Aksi</TH>
                   </TR>
                 </THead>
                 <TBody>
@@ -128,8 +182,37 @@ export function AdminOrderManagement({
                       <TD>
                         <DataValue>{formatRupiah(order.price)}</DataValue>
                       </TD>
+                      <TD className="whitespace-nowrap">
+                        {order.assignedAdmin ? (
+                          <span className="font-medium text-ink">
+                            {order.assignedAdmin.fullName}
+                          </span>
+                        ) : (
+                          <span className="text-ink-faint">—</span>
+                        )}
+                      </TD>
                       <TD>
-                        <StatusBadge status={order.status} />
+                        {editingId === order.orderId ? (
+                          <div
+                            className={
+                              savingId === order.orderId
+                                ? "pointer-events-none opacity-60"
+                                : undefined
+                            }
+                          >
+                            <Select
+                              ariaLabel={`Ubah status ${order.orderId}`}
+                              value={order.status}
+                              onValueChange={(value) =>
+                                void changeStatus(order, value as OrderStatus)
+                              }
+                              options={STATUS_CHOICES}
+                              className="h-8 w-40"
+                            />
+                          </div>
+                        ) : (
+                          <StatusBadge status={order.status} />
+                        )}
                       </TD>
                       <TD>
                         <time
@@ -140,16 +223,41 @@ export function AdminOrderManagement({
                         </time>
                       </TD>
                       <TD>
-                        <Button
-                          asChild
-                          size="icon"
-                          variant="ghost"
-                          aria-label={`Detail order ${order.orderId}`}
-                        >
-                          <Link href={`/admin/orders/${order.orderId}`}>
-                            <Eye className="size-4 text-action" />
-                          </Link>
-                        </Button>
+                        <div className="flex items-center gap-1">
+                          <Button
+                            asChild
+                            size="icon"
+                            variant="ghost"
+                            aria-label={`Detail order ${order.orderId}`}
+                          >
+                            <Link href={`/admin/orders/${order.orderId}`}>
+                              <Eye className="size-4 text-action" />
+                            </Link>
+                          </Button>
+                          {canEditStatus ? (
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              aria-label={
+                                editingId === order.orderId
+                                  ? `Batal ubah status ${order.orderId}`
+                                  : `Ubah status ${order.orderId}`
+                              }
+                              disabled={savingId === order.orderId}
+                              onClick={() =>
+                                setEditingId((current) =>
+                                  current === order.orderId ? null : order.orderId,
+                                )
+                              }
+                            >
+                              {editingId === order.orderId ? (
+                                <X className="size-4 text-ink-soft" />
+                              ) : (
+                                <PencilSimple className="size-4 text-action" />
+                              )}
+                            </Button>
+                          ) : null}
+                        </div>
                       </TD>
                     </TR>
                   ))}

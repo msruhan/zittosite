@@ -41,6 +41,7 @@ export default async function AdminOrdersPage({
         orders={orders}
         initialQuery={q ?? ""}
         showCustomerIdentity={showCustomerIdentity}
+        canEditStatus={me.role === "super_admin"}
       />
     </>
   );
