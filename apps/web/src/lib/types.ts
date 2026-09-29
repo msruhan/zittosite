@@ -55,6 +55,8 @@ export interface User {
   username: string;
   fullName: string;
   telegramHandle: string | null;
+  /** Admin Users page only: the Telegram account actually linked via login/bot. */
+  telegramLinked?: { label: string; chatReady: boolean } | null;
   /** Admin Users page only: per-service overrides; missing services use the service price. */
   customPrices?: UserServicePrice[];
   creditBalance?: number;

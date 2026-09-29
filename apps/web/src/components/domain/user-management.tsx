@@ -50,7 +50,8 @@ export function UserManagement({
       (user) =>
         user.fullName.toLowerCase().includes(needle) ||
         user.username.toLowerCase().includes(needle) ||
-        (user.telegramHandle ?? "").toLowerCase().includes(needle),
+        (user.telegramHandle ?? "").toLowerCase().includes(needle) ||
+        (user.telegramLinked?.label ?? "").toLowerCase().includes(needle),
     );
   }, [users, query]);
 
@@ -198,11 +199,33 @@ export function UserManagement({
                           </p>
                         </div>
                       </TD>
-                      <TD>
-                        {user.telegramHandle ? (
-                          <span className="font-medium text-ink">
-                            {user.telegramHandle}
-                          </span>
+                      <TD className="whitespace-nowrap">
+                        {user.telegramLinked ? (
+                          <div>
+                            <p className="font-medium text-ink">
+                              {user.telegramLinked.label}
+                            </p>
+                            <p
+                              className={
+                                user.telegramLinked.chatReady
+                                  ? "text-label text-cleared-ink"
+                                  : "text-label text-hold-ink"
+                              }
+                            >
+                              {user.telegramLinked.chatReady
+                                ? "Tertaut"
+                                : "Tertaut, bot belum di-start"}
+                            </p>
+                          </div>
+                        ) : user.telegramHandle ? (
+                          <div>
+                            <p className="font-medium text-ink">
+                              {user.telegramHandle}
+                            </p>
+                            <p className="text-label text-ink-faint">
+                              Belum tertaut
+                            </p>
+                          </div>
                         ) : (
                           <span className="text-ink-soft">—</span>
                         )}

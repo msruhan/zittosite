@@ -4,18 +4,38 @@ import {
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
-import type { Prisma, User, UserServicePrice } from "@prisma/client";
+import type {
+  Prisma,
+  User,
+  UserIdentity,
+  UserServicePrice,
+} from "@prisma/client";
 import * as bcrypt from "bcryptjs";
 import { PrismaService } from "../prisma/prisma.service";
 import { serializeUser } from "../orders/orders.serializer";
 import { passwordPolicyError } from "../security/password";
 import type { ServicePriceInput } from "../security/input";
 
+const managedUserInclude = {
+  servicePrices: true,
+  identities: { where: { provider: "telegram" } },
+} satisfies Prisma.UserInclude;
+
 function serializeManagedUser(
-  user: User & { servicePrices: UserServicePrice[] },
+  user: User & {
+    servicePrices: UserServicePrice[];
+    identities: UserIdentity[];
+  },
 ) {
+  const telegram = user.identities[0];
   return {
     ...serializeUser(user),
+    telegramLinked: telegram
+      ? {
+          label: telegram.label ?? `ID ${telegram.externalId}`,
+          chatReady: Boolean(telegram.chatId),
+        }
+      : null,
     customPrices: user.servicePrices.map(({ serviceId, price }) => ({
       serviceId,
       price,
@@ -36,11 +56,19 @@ export class AdminUsersService {
               { username: { contains: needle, mode: "insensitive" } },
               { fullName: { contains: needle, mode: "insensitive" } },
               { telegramHandle: { contains: needle, mode: "insensitive" } },
+              {
+                identities: {
+                  some: {
+                    provider: "telegram",
+                    label: { contains: needle, mode: "insensitive" },
+                  },
+                },
+              },
             ],
           }
         : undefined,
       orderBy: { createdAt: "desc" },
-      include: { servicePrices: true },
+      include: managedUserInclude,
     });
     return users.map(serializeManagedUser);
   }
@@ -81,7 +109,7 @@ export class AdminUsersService {
       await this.replacePrices(tx, created.id, input.customPrices);
       return tx.user.findUniqueOrThrow({
         where: { id: created.id },
-        include: { servicePrices: true },
+        include: managedUserInclude,
       });
     });
     return serializeManagedUser(user);
@@ -127,7 +155,7 @@ export class AdminUsersService {
       await this.replacePrices(tx, id, input.customPrices);
       return tx.user.findUniqueOrThrow({
         where: { id },
-        include: { servicePrices: true },
+        include: managedUserInclude,
       });
     });
 
