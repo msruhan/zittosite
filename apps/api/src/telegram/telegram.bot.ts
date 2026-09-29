@@ -696,29 +696,18 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
   private async handleDoneStart(ctx: Context, orderId: string) {
     const actor = await this.requireOperator(ctx);
     if (!actor) return;
-    this.sessions.set(String(ctx.chat?.id ?? ""), {
-      kind: "done_note",
-      orderId,
-      adminId: actor.admin.id,
+    await this.orders.completeOrder(actor.admin.id, orderId, {
       resultStatus: "success",
+      resultNote: "",
     });
-    await ctx.answerCallbackQuery();
+    await ctx.answerCallbackQuery({ text: "Order selesai" });
     await this.replyHtml(
       ctx,
-      [
-        `✅ Selesaikan order <code>${escapeHtml(orderId)}</code>`,
-        "",
-        "Kirim <b>catatan untuk user</b> (opsional), atau tekan <b>Lewati</b>.",
-      ].join("\n"),
-      {
-        reply_markup: new InlineKeyboard().text(
-          "⏭️ Lewati, tandai selesai",
-          `ord:dskip:${orderId}`,
-        ),
-      },
+      `✅ Order <code>${escapeHtml(orderId)}</code> selesai. User sudah diberi tahu.`,
     );
   }
 
+  /** Older "Lewati" buttons from the previous note prompt. */
   private async handleDoneSkip(ctx: Context, orderId: string) {
     const actor = await this.requireOperator(ctx);
     if (!actor) return;
