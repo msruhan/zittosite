@@ -351,6 +351,8 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
           await this.handleRejectStart(ctx, data.slice("ord:reject:".length));
         } else if (data.startsWith("ord:done:")) {
           await this.handleDoneStart(ctx, data.slice("ord:done:".length));
+        } else if (data.startsWith("ord:dskip:")) {
+          await this.handleDoneSkip(ctx, data.slice("ord:dskip:".length));
         } else if (data.startsWith("ord:rs:")) {
           await this.handleDoneStatus(ctx, data.slice("ord:rs:".length));
         } else if (data.startsWith("uord:svc:")) {
@@ -692,18 +694,50 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
   }
 
   private async handleDoneStart(ctx: Context, orderId: string) {
-    const actor = await this.requireAdmin(ctx);
+    const actor = await this.requireOperator(ctx);
     if (!actor) return;
-    const keyboard = new InlineKeyboard()
-      .text("success", `ord:rs:${orderId}:success`)
-      .text("partial", `ord:rs:${orderId}:partial`)
-      .text("failed", `ord:rs:${orderId}:failed`);
+    this.sessions.set(String(ctx.chat?.id ?? ""), {
+      kind: "done_note",
+      orderId,
+      adminId: actor.admin.id,
+      resultStatus: "success",
+    });
     await ctx.answerCallbackQuery();
     await this.replyHtml(
       ctx,
-      `Pilih <b>status hasil</b> untuk <code>${escapeHtml(orderId)}</code>:`,
-      { reply_markup: keyboard },
+      [
+        `✅ Selesaikan order <code>${escapeHtml(orderId)}</code>`,
+        "",
+        "Kirim <b>catatan untuk user</b> (opsional), atau tekan <b>Lewati</b>.",
+      ].join("\n"),
+      {
+        reply_markup: new InlineKeyboard().text(
+          "⏭️ Lewati, tandai selesai",
+          `ord:dskip:${orderId}`,
+        ),
+      },
     );
+  }
+
+  private async handleDoneSkip(ctx: Context, orderId: string) {
+    const actor = await this.requireOperator(ctx);
+    if (!actor) return;
+    const chatId = String(ctx.chat?.id ?? "");
+    const session = this.sessions.get(chatId);
+    if (session?.kind === "done_note" && session.orderId === orderId) {
+      this.sessions.delete(chatId);
+    }
+    await this.orders.completeOrder(actor.admin.id, orderId, {
+      resultStatus: "success",
+      resultNote: "",
+    });
+    await ctx.answerCallbackQuery({ text: "Order selesai" });
+    await ctx
+      .editMessageText(
+        `✅ Order <code>${escapeHtml(orderId)}</code> selesai.`,
+        { parse_mode: TELEGRAM_PARSE_MODE },
+      )
+      .catch(() => undefined);
   }
 
   private async handleDoneStatus(ctx: Context, payload: string) {

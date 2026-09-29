@@ -595,10 +595,8 @@ export class OrdersService {
     publicOrderId: string,
     input: { resultStatus: ResultStatus; resultNote: string },
   ) {
-    const resultNote = String(input.resultNote ?? "").trim();
-    if (!resultNote) {
-      throw new BadRequestException("Catatan hasil wajib diisi.");
-    }
+    const typedNote = String(input.resultNote ?? "").trim();
+    const resultNote = typedNote || "Order selesai diproses.";
     if (!["success", "partial", "failed"].includes(input.resultStatus)) {
       throw new BadRequestException("Status hasil tidak valid.");
     }
@@ -662,7 +660,7 @@ export class OrdersService {
         kind: "done",
         orderId: updated.orderId,
         resultStatus: input.resultStatus,
-        note: resultNote,
+        note: typedNote,
       }),
     );
     return serializeOrderListItem(updated);
