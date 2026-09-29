@@ -11,7 +11,7 @@ import {
   Table,
   TableScroll,
 } from "@/components/ui/table";
-import { formatDateTime, maskImei } from "@/lib/format";
+import { formatDateTime } from "@/lib/format";
 import type { OrderDetail } from "@/lib/types";
 
 export const USER_ORDER_COLUMNS = [
@@ -53,7 +53,7 @@ export function UserOrderTable({ orders }: { orders: OrderDetail[] }) {
               <TD className="whitespace-nowrap">{order.service.name}</TD>
               <TD>
                 <DataValue className="text-ink-soft">
-                  {maskImei(order.imei)}
+                  {order.imei}
                 </DataValue>
               </TD>
               <TD>

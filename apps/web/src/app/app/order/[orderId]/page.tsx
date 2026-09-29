@@ -20,7 +20,7 @@ import { OrderStepper } from "@/components/domain/order-stepper";
 import { CancelOrderButton } from "@/components/domain/cancel-order-button";
 import { ApiError } from "@/lib/api";
 import { serverApi } from "@/lib/server-api";
-import { formatDateTime, formatRupiah, maskImei } from "@/lib/format";
+import { formatDateTime, formatRupiah } from "@/lib/format";
 import type { OrderDetail } from "@/lib/types";
 
 export const metadata: Metadata = {
@@ -65,7 +65,7 @@ export default async function OrderDetailPage({
           <dl className="divide-y divide-hairline">
             <DetailRow label="Layanan">{order.service.name}</DetailRow>
             <DetailRow label="IMEI">
-              <DataValue>{maskImei(order.imei)}</DataValue>
+              <DataValue>{order.imei}</DataValue>
             </DetailRow>
             <DetailRow label="Harga">
               <DataValue emphasis>{formatRupiah(order.price)}</DataValue>

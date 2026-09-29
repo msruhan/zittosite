@@ -16,7 +16,7 @@ import { UserOrderTable } from "@/components/domain/user-order-table";
 import { ORDER_STATUS } from "@/lib/status";
 import { ApiError } from "@/lib/api";
 import { serverApi } from "@/lib/server-api";
-import { formatDateTime, formatRupiah, maskImei } from "@/lib/format";
+import { formatDateTime, formatRupiah } from "@/lib/format";
 import type { OrderDetail, User } from "@/lib/types";
 
 export const metadata: Metadata = {
@@ -193,7 +193,7 @@ export default async function UserDashboardPage({
                     <div className="flex items-baseline justify-between gap-4 py-2.5">
                       <dt className="text-body text-ink-soft">IMEI</dt>
                       <dd>
-                        <DataValue>{maskImei(latest.imei)}</DataValue>
+                        <DataValue>{latest.imei}</DataValue>
                       </dd>
                     </div>
                     <div className="flex items-baseline justify-between gap-4 py-2.5">

@@ -228,7 +228,7 @@ export function operatorRecapHtml(input: {
 }): string {
   const orderLines = input.orders.map((o) => {
     const meta = RECAP_STATUS[o.status] ?? { icon: "•", label: o.status };
-    return `${meta.icon} <code>${escapeHtml(o.orderId)}</code> — ${escapeHtml(o.serviceName)}\n   ${meta.label} · ${maskImeiHtml(o.imei)}`;
+    return `${meta.icon} <code>${escapeHtml(o.orderId)}</code> — ${escapeHtml(o.serviceName)}\n   ${meta.label} · ${imeiHtml(o.imei)}`;
   });
   return [
     "📊 <b>Rekap Anda Hari Ini</b>",
@@ -360,9 +360,8 @@ export function botDisabledHtml(telegramUrl: string): string {
   ].join("\n");
 }
 
-export function maskImeiHtml(imei: string): string {
-  if (imei.length <= 3) return escapeHtml(imei);
-  return `<code>${escapeHtml(imei.slice(0, 3) + "X".repeat(imei.length - 3))}</code>`;
+export function imeiHtml(imei: string): string {
+  return `<code>${escapeHtml(imei)}</code>`;
 }
 
 export function formatRp(n: number): string {
@@ -386,7 +385,7 @@ export function newOrderAdminHtml(input: {
           row("📡", "Via", input.customer.channel),
         ]
       : []),
-    row("📱", "IMEI", input.imei.slice(0, 3) + "X".repeat(Math.max(0, input.imei.length - 3)), true),
+    row("📱", "IMEI", input.imei, true),
     row("📦", "Layanan", input.serviceName),
     row("💰", "Harga", formatRp(input.price)),
     row("🟢", "Status", "waiting_action"),
@@ -431,7 +430,7 @@ export function orderCardTakenHtml(input: {
     "🛠️ <b>IN PROCESS</b>",
     "",
     row("🎫", "Order ID", input.orderId, true),
-    row("📱", "IMEI", input.imei.slice(0, 3) + "X".repeat(Math.max(0, input.imei.length - 3)), true),
+    row("📱", "IMEI", input.imei, true),
     row("📦", "Layanan", input.serviceName),
     row("👷", "Diambil oleh", input.actorName),
   ].join("\n");
@@ -499,7 +498,7 @@ export function orderHistoryHtml(
     "",
     ...lines.map(
       (o, i) =>
-        `${i + 1}. <code>${escapeHtml(o.orderId)}</code> — ${escapeHtml(o.serviceName)}\n   ${escapeHtml(o.status)} · ${maskImeiHtml(o.imei)}`,
+        `${i + 1}. <code>${escapeHtml(o.orderId)}</code> — ${escapeHtml(o.serviceName)}\n   ${escapeHtml(o.status)} · ${imeiHtml(o.imei)}`,
     ),
   ].join("\n");
 }

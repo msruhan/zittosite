@@ -28,15 +28,6 @@ export function formatRelative(iso: string): string {
   });
 }
 
-/**
- * IMEI is a device identifier, so lists show only enough to recognise the
- * row. Length is preserved so the column never changes width.
- */
-export function maskImei(imei: string): string {
-  if (imei.length <= 3) return imei;
-  return imei.slice(0, 3) + "X".repeat(imei.length - 3);
-}
-
 export function formatCountdown(totalSeconds: number): string {
   const safe = Math.max(0, totalSeconds);
   const minutes = Math.floor(safe / 60);

@@ -12,7 +12,6 @@ import { OrderStepper } from "@/components/domain/order-stepper";
 import { ORDER_STATUS } from "@/lib/status";
 import { ApiError } from "@/lib/api";
 import { serverApi } from "@/lib/server-api";
-import { maskImei } from "@/lib/format";
 import type { OrderDetail } from "@/lib/types";
 
 export const metadata: Metadata = {
@@ -69,7 +68,7 @@ export default async function OrderStatusPage({
               <div>
                 <dt className="text-label uppercase text-ink-soft">IMEI</dt>
                 <dd className="mt-0.5">
-                  <DataValue>{maskImei(order.imei)}</DataValue>
+                  <DataValue>{order.imei}</DataValue>
                 </dd>
               </div>
               {order.assignedAdmin ? (

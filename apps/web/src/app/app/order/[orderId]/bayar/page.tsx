@@ -8,7 +8,7 @@ import { PaymentPanel } from "@/components/domain/payment-panel";
 import { CancelOrderButton } from "@/components/domain/cancel-order-button";
 import { ApiError } from "@/lib/api";
 import { serverApi } from "@/lib/server-api";
-import { formatDateTime, maskImei } from "@/lib/format";
+import { formatDateTime } from "@/lib/format";
 import type { OrderDetail } from "@/lib/types";
 
 export const metadata: Metadata = {
@@ -65,7 +65,7 @@ export default async function PaymentPage({
           <div className="flex items-baseline justify-between gap-4 py-2.5">
             <dt className="text-body text-ink-soft">IMEI</dt>
             <dd>
-              <DataValue>{maskImei(order.imei)}</DataValue>
+              <DataValue>{order.imei}</DataValue>
             </dd>
           </div>
           <div className="flex items-baseline justify-between gap-4 py-2.5">
