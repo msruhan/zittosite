@@ -75,7 +75,6 @@ model User {
   passwordHash   String          @map("password_hash")
   fullName       String          @map("full_name")
   telegramHandle String?         @map("telegram_handle")
-  customPrice    Int?            @map("custom_price")
   creditBalance  Int             @default(0) @map("credit_balance")
   status         UserStatus      @default(active)
   botAccess      Boolean         @default(true) @map("bot_access")
@@ -85,8 +84,24 @@ model User {
   identities     UserIdentity[]
   linkTokens     TelegramLinkToken[]
   orders         Order[]
+  servicePrices  UserServicePrice[]
 
   @@map("users")
+}
+
+/// Per-user price override; services without a row use Service.price.
+model UserServicePrice {
+  userId    String   @map("user_id")
+  serviceId String   @map("service_id")
+  price     Int
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  service   Service  @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+
+  @@id([userId, serviceId])
+  @@index([serviceId])
+  @@map("user_service_prices")
 }
 
 model UserSession {
@@ -225,6 +240,7 @@ model Service {
   updatedAt   DateTime @updatedAt @map("updated_at")
   orders      Order[]
   assignments ServiceAssignment[]
+  userPrices  UserServicePrice[]
 
   @@map("services")
 }

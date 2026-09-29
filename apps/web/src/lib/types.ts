@@ -38,6 +38,11 @@ export interface Service {
   assignedAdmins?: ServiceAssignee[];
 }
 
+export interface UserServicePrice {
+  serviceId: string;
+  price: number;
+}
+
 export interface ServiceAssignee {
   id: string;
   username: string;
@@ -50,7 +55,8 @@ export interface User {
   username: string;
   fullName: string;
   telegramHandle: string | null;
-  customPrice: number | null;
+  /** Admin Users page only: per-service overrides; missing services use the service price. */
+  customPrices?: UserServicePrice[];
   creditBalance?: number;
   status: UserStatus;
   botAccess: boolean;

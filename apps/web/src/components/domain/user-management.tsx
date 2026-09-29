@@ -23,9 +23,15 @@ import {
 import { formatDate, formatRupiah } from "@/lib/format";
 import { ApiError, api } from "@/lib/api";
 import { passwordPolicyError } from "@/lib/password";
-import type { User } from "@/lib/types";
+import type { Service, User } from "@/lib/types";
 
-export function UserManagement({ initialUsers }: { initialUsers: User[] }) {
+export function UserManagement({
+  initialUsers,
+  services,
+}: {
+  initialUsers: User[];
+  services: Service[];
+}) {
   const [users, setUsers] = React.useState(initialUsers);
   const [query, setQuery] = React.useState("");
   const [editing, setEditing] = React.useState<User | null>(null);
@@ -63,7 +69,7 @@ export function UserManagement({ initialUsers }: { initialUsers: User[] }) {
             fullName: next.fullName,
             password: next.password,
             telegramHandle: next.telegramHandle,
-            customPrice: next.customPrice,
+            customPrices: next.customPrices ?? [],
             botAccess: next.botAccess,
           }),
         });
@@ -73,7 +79,7 @@ export function UserManagement({ initialUsers }: { initialUsers: User[] }) {
           body: JSON.stringify({
             fullName: next.fullName,
             telegramHandle: next.telegramHandle,
-            customPrice: next.customPrice,
+            customPrices: next.customPrices ?? [],
             status: next.status,
             botAccess: next.botAccess,
             ...(next.password ? { password: next.password } : {}),
@@ -147,7 +153,7 @@ export function UserManagement({ initialUsers }: { initialUsers: User[] }) {
               username: "",
               fullName: "",
               telegramHandle: null,
-              customPrice: null,
+              customPrices: [],
               status: "active",
               botAccess: true,
               createdAt: new Date().toISOString(),
@@ -169,7 +175,7 @@ export function UserManagement({ initialUsers }: { initialUsers: User[] }) {
                     <TH>No</TH>
                     <TH>User</TH>
                     <TH>Telegram</TH>
-                    <TH>Harga IMEI</TH>
+                    <TH>Harga khusus</TH>
                     <TH>Status</TH>
                     <TH>Bot</TH>
                     <TH>Bergabung</TH>
@@ -202,11 +208,7 @@ export function UserManagement({ initialUsers }: { initialUsers: User[] }) {
                         )}
                       </TD>
                       <TD>
-                        <DataValue>
-                          {user.customPrice !== null
-                            ? formatRupiah(user.customPrice)
-                            : "Default"}
-                        </DataValue>
+                        <CustomPriceSummary user={user} services={services} />
                       </TD>
                       <TD>
                         {user.status === "active" ? (
@@ -290,6 +292,7 @@ export function UserManagement({ initialUsers }: { initialUsers: User[] }) {
         {editing ? (
           <UserFormDialog
             user={editing}
+            services={services}
             creating={creating}
             onCancel={() => {
               setEditing(null);
@@ -303,19 +306,54 @@ export function UserManagement({ initialUsers }: { initialUsers: User[] }) {
   );
 }
 
+function CustomPriceSummary({
+  user,
+  services,
+}: {
+  user: User;
+  services: Service[];
+}) {
+  const overrides = (user.customPrices ?? [])
+    .map((p) => ({
+      ...p,
+      service: services.find((s) => s.id === p.serviceId),
+    }))
+    .filter((p) => p.service);
+  if (overrides.length === 0) {
+    return <span className="text-ink-soft">Default</span>;
+  }
+  return (
+    <ul className="space-y-0.5">
+      {overrides.map((p) => (
+        <li key={p.serviceId} className="whitespace-nowrap text-body">
+          <span className="text-ink-soft">{p.service!.name}: </span>
+          <DataValue>{formatRupiah(p.price)}</DataValue>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 function UserFormDialog({
   user,
+  services,
   creating,
   onCancel,
   onSave,
 }: {
   user: User;
+  services: Service[];
   creating: boolean;
   onCancel: () => void;
   onSave: (user: User & { password?: string }) => void | Promise<void>;
 }) {
   const [draft, setDraft] = React.useState(user);
   const [password, setPassword] = React.useState("");
+  const [prices, setPrices] = React.useState<Record<string, string>>(() =>
+    Object.fromEntries(
+      (user.customPrices ?? []).map((p) => [p.serviceId, String(p.price)]),
+    ),
+  );
   const [saving, setSaving] = React.useState(false);
   const [errors, setErrors] = React.useState<{
     fullName?: string;
@@ -345,6 +383,9 @@ function UserFormDialog({
         fullName: draft.fullName.trim(),
         username: draft.username.trim(),
         telegramHandle: draft.telegramHandle?.trim() || null,
+        customPrices: Object.entries(prices)
+          .filter(([, value]) => value !== "")
+          .map(([serviceId, value]) => ({ serviceId, price: Number(value) })),
         ...(password ? { password } : {}),
       });
     } finally {
@@ -434,28 +475,36 @@ function UserFormDialog({
             }
           />
         </Field>
-        {creating ? null : (
-          <Field
-            label="Harga khusus Aktivasi IMEI"
-            htmlFor="price"
-            hint="Kosongkan untuk mengikuti harga layanan default."
-          >
-            <Input
-              id="price"
-              inputMode="numeric"
-              className="font-data tabular"
-              value={draft.customPrice ?? ""}
-              placeholder="Contoh 140000"
-              onChange={(event) => {
-                const raw = event.target.value.replace(/\D/g, "");
-                setDraft((current) => ({
-                  ...current,
-                  customPrice: raw ? Number(raw) : null,
-                }));
-              }}
-            />
-          </Field>
-        )}
+        {services.length > 0 ? (
+          <fieldset className="space-y-3 rounded-md border border-hairline p-3.5">
+            <legend className="px-1 text-body font-medium text-ink">
+              Harga khusus per layanan
+            </legend>
+            <p className="text-body text-ink-soft">
+              Kosongkan untuk mengikuti harga default di menu Services.
+            </p>
+            {services.map((service) => (
+              <Field
+                key={service.id}
+                label={service.name}
+                htmlFor={`price-${service.id}`}
+                hint={`Default ${formatRupiah(service.price)}${service.active ? "" : " · layanan nonaktif"}`}
+              >
+                <Input
+                  id={`price-${service.id}`}
+                  inputMode="numeric"
+                  className="font-data tabular"
+                  value={prices[service.id] ?? ""}
+                  placeholder={String(service.price)}
+                  onChange={(event) => {
+                    const raw = event.target.value.replace(/\D/g, "");
+                    setPrices((current) => ({ ...current, [service.id]: raw }));
+                  }}
+                />
+              </Field>
+            ))}
+          </fieldset>
+        ) : null}
         <Field label="Status" htmlFor="status">
           <Select
             id="status"

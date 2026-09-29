@@ -82,7 +82,7 @@ export const users: User[] = [
     username: "fajri",
     fullName: "Muhammad Al Fajri",
     telegramHandle: "@alfajri",
-    customPrice: null,
+    customPrices: [],
     status: "active",
     botAccess: true,
     createdAt: at(96, 9, 12),
@@ -92,7 +92,7 @@ export const users: User[] = [
     username: "siti.aminah",
     fullName: "Siti Aminah",
     telegramHandle: "@sitiaminah",
-    customPrice: 170_000,
+    customPrices: [{ serviceId: "svc-activation", price: 170_000 }],
     status: "active",
     botAccess: true,
     createdAt: at(88, 14, 3),
@@ -102,7 +102,7 @@ export const users: User[] = [
     username: "agus123",
     fullName: "Agus Setiawan",
     telegramHandle: "@agussetiawan",
-    customPrice: null,
+    customPrices: [],
     status: "active",
     botAccess: true,
     createdAt: at(74, 10, 45),
@@ -112,7 +112,7 @@ export const users: User[] = [
     username: "budi99",
     fullName: "Budi Hartono",
     telegramHandle: null,
-    customPrice: null,
+    customPrices: [],
     status: "suspended",
     botAccess: false,
     createdAt: at(70, 16, 20),
@@ -122,7 +122,7 @@ export const users: User[] = [
     username: "rahmat",
     fullName: "Rahmat Hidayat",
     telegramHandle: "@rahmath",
-    customPrice: 140_000,
+    customPrices: [{ serviceId: "svc-activation", price: 140_000 }],
     status: "active",
     botAccess: true,
     createdAt: at(61, 8, 30),
@@ -132,7 +132,7 @@ export const users: User[] = [
     username: "dewi.lestari",
     fullName: "Dewi Lestari",
     telegramHandle: "@dewilestari",
-    customPrice: null,
+    customPrices: [],
     status: "active",
     botAccess: true,
     createdAt: at(52, 11, 5),
@@ -142,7 +142,7 @@ export const users: User[] = [
     username: "hendra.p",
     fullName: "Hendra Pratama",
     telegramHandle: "@hendrap",
-    customPrice: null,
+    customPrices: [],
     status: "active",
     botAccess: true,
     createdAt: at(41, 13, 40),
@@ -152,7 +152,7 @@ export const users: User[] = [
     username: "nurul.aini",
     fullName: "Nurul Aini",
     telegramHandle: null,
-    customPrice: null,
+    customPrices: [],
     status: "active",
     botAccess: false,
     createdAt: at(33, 9, 55),
@@ -162,7 +162,7 @@ export const users: User[] = [
     username: "yusuf.maulana",
     fullName: "Yusuf Maulana",
     telegramHandle: "@yusufm",
-    customPrice: 160_000,
+    customPrices: [{ serviceId: "svc-activation", price: 160_000 }],
     status: "active",
     botAccess: true,
     createdAt: at(24, 15, 15),
@@ -172,7 +172,7 @@ export const users: User[] = [
     username: "intan.p",
     fullName: "Intan Permatasari",
     telegramHandle: "@intanp",
-    customPrice: null,
+    customPrices: [],
     status: "active",
     botAccess: true,
     createdAt: at(17, 10, 25),
@@ -182,7 +182,7 @@ export const users: User[] = [
     username: "galih.w",
     fullName: "Galih Wicaksono",
     telegramHandle: "@galihw",
-    customPrice: null,
+    customPrices: [],
     status: "active",
     botAccess: true,
     createdAt: at(9, 12, 0),
@@ -192,7 +192,7 @@ export const users: User[] = [
     username: "sari.mulyani",
     fullName: "Sari Mulyani",
     telegramHandle: null,
-    customPrice: null,
+    customPrices: [],
     status: "suspended",
     botAccess: false,
     createdAt: at(4, 17, 45),
@@ -298,11 +298,10 @@ function buildOrderId(dayOffset: number, seq: number): string {
 function priceFor(userId: string, serviceId: string): number {
   const service = services.find((s) => s.id === serviceId)!;
   const user = users.find((u) => u.id === userId)!;
-  // A per-user negotiated price only overrides the flagship activation service.
-  if (user.customPrice !== null && serviceId === "svc-activation") {
-    return user.customPrice;
-  }
-  return service.price;
+  return (
+    user.customPrices?.find((p) => p.serviceId === serviceId)?.price ??
+    service.price
+  );
 }
 
 export const orders: Order[] = orderSeeds.map((seed) => {

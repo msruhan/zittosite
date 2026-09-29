@@ -30,6 +30,7 @@ import {
   optNonNegativeInt,
   optNullableNonNegativeInt,
   optNullableString,
+  optServicePrices,
   optString,
 } from "../security/input";
 
@@ -76,7 +77,7 @@ export class AdminOpsController {
       fullName: optString(body.fullName, "Nama lengkap", 120),
       password: optString(body.password, "Password", 200),
       telegramHandle: optNullableString(body.telegramHandle, "Telegram", 64),
-      customPrice: optNullableNonNegativeInt(body.customPrice, "Harga khusus"),
+      customPrices: optServicePrices(body.customPrices, "Harga khusus"),
       botAccess: optBoolean(body.botAccess, "Akses bot"),
     });
     this.audit.record("admin.user.created", {
@@ -96,7 +97,7 @@ export class AdminOpsController {
     const input = {
       fullName: optString(body.fullName, "Nama lengkap", 120),
       telegramHandle: optNullableString(body.telegramHandle, "Telegram", 64),
-      customPrice: optNullableNonNegativeInt(body.customPrice, "Harga khusus"),
+      customPrices: optServicePrices(body.customPrices, "Harga khusus"),
       status: optEnum(body.status, ["active", "suspended"] as const, "Status"),
       botAccess: optBoolean(body.botAccess, "Akses bot"),
       password: optString(body.password, "Password", 200),

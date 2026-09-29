@@ -4,10 +4,24 @@ import {
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
+import type { Prisma, User, UserServicePrice } from "@prisma/client";
 import * as bcrypt from "bcryptjs";
 import { PrismaService } from "../prisma/prisma.service";
 import { serializeUser } from "../orders/orders.serializer";
 import { passwordPolicyError } from "../security/password";
+import type { ServicePriceInput } from "../security/input";
+
+function serializeManagedUser(
+  user: User & { servicePrices: UserServicePrice[] },
+) {
+  return {
+    ...serializeUser(user),
+    customPrices: user.servicePrices.map(({ serviceId, price }) => ({
+      serviceId,
+      price,
+    })),
+  };
+}
 
 @Injectable()
 export class AdminUsersService {
@@ -26,8 +40,9 @@ export class AdminUsersService {
           }
         : undefined,
       orderBy: { createdAt: "desc" },
+      include: { servicePrices: true },
     });
-    return users.map(serializeUser);
+    return users.map(serializeManagedUser);
   }
 
   async create(input: {
@@ -35,7 +50,7 @@ export class AdminUsersService {
     fullName?: string;
     password?: string;
     telegramHandle?: string | null;
-    customPrice?: number | null;
+    customPrices?: ServicePriceInput[];
     botAccess?: boolean;
   }) {
     const username = String(input.username ?? "")
@@ -50,22 +65,26 @@ export class AdminUsersService {
     if (policyError) throw new BadRequestException(policyError);
     const exists = await this.prisma.user.findUnique({ where: { username } });
     if (exists) throw new ConflictException("Username sudah dipakai.");
+    await this.assertServicesExist(input.customPrices);
 
-    const user = await this.prisma.user.create({
-      data: {
-        username,
-        fullName,
-        passwordHash: await bcrypt.hash(password, 10),
-        telegramHandle: input.telegramHandle?.trim() || null,
-        customPrice:
-          input.customPrice != null && Number.isFinite(input.customPrice)
-            ? Number(input.customPrice)
-            : null,
-        botAccess: input.botAccess !== false,
-        status: "active",
-      },
+    const user = await this.prisma.$transaction(async (tx) => {
+      const created = await tx.user.create({
+        data: {
+          username,
+          fullName,
+          passwordHash: await bcrypt.hash(password, 10),
+          telegramHandle: input.telegramHandle?.trim() || null,
+          botAccess: input.botAccess !== false,
+          status: "active",
+        },
+      });
+      await this.replacePrices(tx, created.id, input.customPrices);
+      return tx.user.findUniqueOrThrow({
+        where: { id: created.id },
+        include: { servicePrices: true },
+      });
     });
-    return serializeUser(user);
+    return serializeManagedUser(user);
   }
 
   async update(
@@ -73,7 +92,7 @@ export class AdminUsersService {
     input: {
       fullName?: string;
       telegramHandle?: string | null;
-      customPrice?: number | null;
+      customPrices?: ServicePriceInput[];
       status?: "active" | "suspended";
       botAccess?: boolean;
       password?: string;
@@ -85,30 +104,31 @@ export class AdminUsersService {
     const password = input.password ? String(input.password) : "";
     const policyError = password ? passwordPolicyError(password) : null;
     if (policyError) throw new BadRequestException(policyError);
+    await this.assertServicesExist(input.customPrices);
+    const passwordHash = password ? await bcrypt.hash(password, 10) : null;
 
-    const user = await this.prisma.user.update({
-      where: { id },
-      data: {
-        ...(input.fullName != null
-          ? { fullName: String(input.fullName).trim() }
-          : {}),
-        ...(input.telegramHandle !== undefined
-          ? { telegramHandle: input.telegramHandle?.trim() || null }
-          : {}),
-        ...(input.customPrice !== undefined
-          ? {
-              customPrice:
-                input.customPrice != null && Number.isFinite(input.customPrice)
-                  ? Number(input.customPrice)
-                  : null,
-            }
-          : {}),
-        ...(input.status ? { status: input.status } : {}),
-        ...(typeof input.botAccess === "boolean"
-          ? { botAccess: input.botAccess }
-          : {}),
-        ...(password ? { passwordHash: await bcrypt.hash(password, 10) } : {}),
-      },
+    const user = await this.prisma.$transaction(async (tx) => {
+      await tx.user.update({
+        where: { id },
+        data: {
+          ...(input.fullName != null
+            ? { fullName: String(input.fullName).trim() }
+            : {}),
+          ...(input.telegramHandle !== undefined
+            ? { telegramHandle: input.telegramHandle?.trim() || null }
+            : {}),
+          ...(input.status ? { status: input.status } : {}),
+          ...(typeof input.botAccess === "boolean"
+            ? { botAccess: input.botAccess }
+            : {}),
+          ...(passwordHash ? { passwordHash } : {}),
+        },
+      });
+      await this.replacePrices(tx, id, input.customPrices);
+      return tx.user.findUniqueOrThrow({
+        where: { id },
+        include: { servicePrices: true },
+      });
     });
 
     if (input.status === "suspended" || password) {
@@ -118,7 +138,7 @@ export class AdminUsersService {
       });
     }
 
-    return serializeUser(user);
+    return serializeManagedUser(user);
   }
 
   async remove(id: string) {
@@ -146,5 +166,34 @@ export class AdminUsersService {
     }
     await this.prisma.user.delete({ where: { id } });
     return { deleted: true, suspended: false };
+  }
+
+  private async assertServicesExist(prices?: ServicePriceInput[]) {
+    if (!prices?.length) return;
+    const found = await this.prisma.service.count({
+      where: { id: { in: prices.map((p) => p.serviceId) } },
+    });
+    if (found !== prices.length) {
+      throw new BadRequestException("Layanan pada harga khusus tidak ditemukan.");
+    }
+  }
+
+  /** `undefined` leaves prices untouched; an array replaces the whole set. */
+  private async replacePrices(
+    tx: Prisma.TransactionClient,
+    userId: string,
+    prices?: ServicePriceInput[],
+  ) {
+    if (prices === undefined) return;
+    await tx.userServicePrice.deleteMany({ where: { userId } });
+    if (prices.length) {
+      await tx.userServicePrice.createMany({
+        data: prices.map(({ serviceId, price }) => ({
+          userId,
+          serviceId,
+          price,
+        })),
+      });
+    }
   }
 }

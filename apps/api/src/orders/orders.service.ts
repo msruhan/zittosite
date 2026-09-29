@@ -59,16 +59,13 @@ export class OrdersService {
   ) {}
 
   async listServices(userId: string) {
-    const user = await this.prisma.user.findUniqueOrThrow({
-      where: { id: userId },
-      select: { customPrice: true },
-    });
     const services = await this.prisma.service.findMany({
       where: { active: true },
       orderBy: { name: "asc" },
+      include: { userPrices: { where: { userId }, select: { price: true } } },
     });
-    return services.map((service) =>
-      serializeService(service, this.effectivePrice(service, user.customPrice)),
+    return services.map(({ userPrices, ...service }) =>
+      serializeService(service, userPrices[0]?.price ?? service.price),
     );
   }
 
@@ -167,15 +164,19 @@ export class OrdersService {
       );
     }
 
-    const [user, service] = await Promise.all([
+    const [user, service, override] = await Promise.all([
       this.prisma.user.findUniqueOrThrow({ where: { id: userId } }),
       this.prisma.service.findUnique({ where: { id: serviceId } }),
+      this.prisma.userServicePrice.findUnique({
+        where: { userId_serviceId: { userId, serviceId } },
+        select: { price: true },
+      }),
     ]);
     if (!service || !service.active) {
       throw new BadRequestException("Layanan tidak tersedia.");
     }
 
-    const price = this.effectivePrice(service, user.customPrice);
+    const price = override?.price ?? service.price;
     const orderId = await this.nextOrderId();
     const invoiceId = `INV-${orderId}`;
     const via = channel === "telegram" ? "Telegram" : "website";
@@ -713,16 +714,6 @@ export class OrdersService {
     if (!assignment) {
       throw new ForbiddenException("Layanan ini tidak di-assign ke Anda.");
     }
-  }
-
-  private effectivePrice(
-    service: { code: string; price: number },
-    customPrice: number | null,
-  ) {
-    if (service.code === "activation" && customPrice != null) {
-      return customPrice;
-    }
-    return service.price;
   }
 
   private gatewayReference(invoice: {

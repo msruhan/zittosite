@@ -88,7 +88,6 @@ export class UserAuthService {
         username: true,
         fullName: true,
         telegramHandle: true,
-        customPrice: true,
         creditBalance: true,
         status: true,
         botAccess: true,

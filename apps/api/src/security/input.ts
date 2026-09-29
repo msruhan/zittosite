@@ -69,6 +69,34 @@ export function optIdList(
   return [...new Set(value as string[])];
 }
 
+export type ServicePriceInput = { serviceId: string; price: number };
+
+/** `[{ serviceId, price }]`: the complete set of per-service price overrides. */
+export function optServicePrices(
+  value: unknown,
+  field: string,
+  maxItems = 100,
+): ServicePriceInput[] | undefined {
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value) || value.length > maxItems) {
+    throw new BadRequestException(`${field} tidak valid.`);
+  }
+  const byService = new Map<string, number>();
+  for (const item of value) {
+    const serviceId = (item as { serviceId?: unknown })?.serviceId;
+    const price = (item as { price?: unknown })?.price;
+    if (typeof serviceId !== "string" || !serviceId || serviceId.length > 64) {
+      throw new BadRequestException(`${field} tidak valid.`);
+    }
+    const parsed = optNonNegativeInt(price, field);
+    if (parsed === undefined) {
+      throw new BadRequestException(`${field} tidak valid.`);
+    }
+    byService.set(serviceId, parsed);
+  }
+  return [...byService].map(([serviceId, price]) => ({ serviceId, price }));
+}
+
 export function optEnum<T extends string>(
   value: unknown,
   allowed: readonly T[],

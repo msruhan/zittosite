@@ -4,7 +4,7 @@ import { PageHeader } from "@/components/shell/app-shell";
 import { UserManagement } from "@/components/domain/user-management";
 import { ApiError } from "@/lib/api";
 import { serverApi } from "@/lib/server-api";
-import type { User } from "@/lib/types";
+import type { Service, User } from "@/lib/types";
 
 export const metadata: Metadata = {
   title: "Users",
@@ -23,8 +23,12 @@ export default async function AdminUsersPage() {
   }
 
   let users: User[] = [];
+  let services: Service[] = [];
   try {
-    users = await serverApi<User[]>("/admin/users");
+    [users, services] = await Promise.all([
+      serverApi<User[]>("/admin/users"),
+      serverApi<Service[]>("/admin/services"),
+    ]);
   } catch (err) {
     if (err instanceof ApiError && err.status === 401) redirect("/admin/login");
     if (err instanceof ApiError && err.status === 403) redirect("/admin/orders");
@@ -37,7 +41,7 @@ export default async function AdminUsersPage() {
         title="Users"
         description="Kelola akun user portal: buat, edit, suspend, dan akses bot."
       />
-      <UserManagement initialUsers={users} />
+      <UserManagement initialUsers={users} services={services} />
     </>
   );
 }

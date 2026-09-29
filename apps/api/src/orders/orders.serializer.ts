@@ -46,7 +46,6 @@ export function serializeUser(user: User) {
     username: user.username,
     fullName: user.fullName,
     telegramHandle: user.telegramHandle,
-    customPrice: user.customPrice,
     creditBalance: user.creditBalance,
     status: user.status,
     botAccess: user.botAccess,
