@@ -164,7 +164,9 @@ export function CreateOrderForm({
           >
             infoceir.com
           </a>
-          .
+          . Apabila IMEI yang di-submit tidak berstatus{" "}
+          <span className="font-semibold">UNKNOWN</span>, maka{" "}
+          <span className="font-semibold">tidak ada refund</span>.
         </p>
       </div>
 

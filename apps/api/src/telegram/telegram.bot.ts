@@ -865,6 +865,9 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
         `Layanan: <b>${escapeHtml(service.name)}</b> (${formatRp(service.price)})`,
         "",
         "Kirim <b>IMEI 15 digit</b> sekarang.",
+        "",
+        "⚠️ IMEI wajib berstatus <b>UNKNOWN</b>. Cek CEIR di infoceir.com.",
+        "Apabila IMEI tidak berstatus <b>UNKNOWN</b>, maka <b>tidak ada refund</b>.",
       ].join("\n"),
     );
   }
