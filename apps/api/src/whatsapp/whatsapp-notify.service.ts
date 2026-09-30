@@ -41,16 +41,13 @@ export class WhatsappNotifyService {
           select: {
             imei: true,
             service: { select: { name: true } },
-            user: { select: { username: true } },
           },
         },
       },
     });
-    const first = invoice?.orders[0];
-    if (!invoice || !first) return null;
+    if (!invoice?.orders.length) return null;
 
     const text = paidInvoiceGroupText({
-      username: first.user.username,
       paidAt: invoice.paidAt ?? new Date(),
       orders: invoice.orders.map((o) => ({ imei: o.imei, serviceName: o.service.name })),
     });

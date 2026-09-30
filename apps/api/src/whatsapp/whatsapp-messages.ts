@@ -1,5 +1,4 @@
 export type PaidInvoiceInput = {
-  username: string;
   paidAt: Date;
   orders: Array<{ imei: string; serviceName: string }>;
 };
@@ -25,7 +24,7 @@ export function formatWib(date: Date): string {
 }
 
 /**
- * Group message for one paid invoice: user, payment time, and IMEIs grouped
+ * Group message for one paid invoice: payment time and IMEIs grouped
  * per service in first-seen order with continuous numbering.
  */
 export function paidInvoiceGroupText(input: PaidInvoiceInput): string {
@@ -39,7 +38,6 @@ export function paidInvoiceGroupText(input: PaidInvoiceInput): string {
   const lines = [
     "✅ *PEMBAYARAN DITERIMA*",
     "",
-    `👤 User: *${stripWaMarkdown(input.username)}*`,
     `🕒 Dibayar: ${formatWib(input.paidAt)}`,
   ];
   let n = 0;
