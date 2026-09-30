@@ -25,7 +25,7 @@ export default async function RiwayatPage() {
         title="Riwayat order"
         description="Semua order Anda, dari yang baru dibuat sampai yang sudah selesai."
       />
-      <OrderHistory orders={orders} />
+      <OrderHistory orders={orders} fetchedAt={new Date().toISOString()} />
     </>
   );
 }

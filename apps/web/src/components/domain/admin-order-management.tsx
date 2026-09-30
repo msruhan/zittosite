@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/table";
 import { ApiError, api } from "@/lib/api";
 import { ORDER_STATUS_OPTIONS } from "@/lib/status";
+import { AutoRefreshStatus, useAutoRefresh } from "@/components/domain/auto-refresh";
 import { formatDateTime, formatRupiah } from "@/lib/format";
 import type { OrderDetail, OrderStatus } from "@/lib/types";
 
@@ -40,11 +41,13 @@ const CANCEL_FLOW_FROM: OrderStatus[] = [
 
 export function AdminOrderManagement({
   orders,
+  fetchedAt,
   initialQuery = "",
   showCustomerIdentity = true,
   canEditStatus = false,
 }: {
   orders: OrderDetail[];
+  fetchedAt: string;
   initialQuery?: string;
   showCustomerIdentity?: boolean;
   canEditStatus?: boolean;
@@ -54,6 +57,9 @@ export function AdminOrderManagement({
   const [status, setStatus] = React.useState<OrderStatus | "all">("all");
   const [editingId, setEditingId] = React.useState<string | null>(null);
   const [savingId, setSavingId] = React.useState<string | null>(null);
+  const { refreshing } = useAutoRefresh({
+    paused: editingId !== null || savingId !== null,
+  });
 
   async function changeStatus(order: OrderDetail, next: OrderStatus) {
     if (next === order.status) {
@@ -264,9 +270,12 @@ export function AdminOrderManagement({
                 </TBody>
               </Table>
             </TableScroll>
-            <p className="border-t border-hairline px-4 py-3 font-data tabular text-body text-ink-soft">
-              Menampilkan {filtered.length} dari {orders.length} order
-            </p>
+            <div className="flex flex-wrap items-center justify-between gap-2 border-t border-hairline px-4 py-3 font-data tabular text-body text-ink-soft">
+              <p>
+                Menampilkan {filtered.length} dari {orders.length} order
+              </p>
+              <AutoRefreshStatus fetchedAt={fetchedAt} refreshing={refreshing} />
+            </div>
           </>
         ) : (
           <EmptyState

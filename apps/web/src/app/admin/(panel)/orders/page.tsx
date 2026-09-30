@@ -39,6 +39,7 @@ export default async function AdminOrdersPage({
       />
       <AdminOrderManagement
         orders={orders}
+        fetchedAt={new Date().toISOString()}
         initialQuery={q ?? ""}
         showCustomerIdentity={showCustomerIdentity}
         canEditStatus={me.role === "super_admin"}

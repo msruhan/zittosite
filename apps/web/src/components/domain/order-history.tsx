@@ -8,13 +8,21 @@ import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/field";
 import { Select } from "@/components/ui/select";
+import { AutoRefreshStatus, useAutoRefresh } from "@/components/domain/auto-refresh";
 import { UserOrderTable } from "@/components/domain/user-order-table";
 import { ORDER_STATUS_OPTIONS } from "@/lib/status";
 import type { OrderDetail, OrderStatus } from "@/lib/types";
 
-export function OrderHistory({ orders }: { orders: OrderDetail[] }) {
+export function OrderHistory({
+  orders,
+  fetchedAt,
+}: {
+  orders: OrderDetail[];
+  fetchedAt: string;
+}) {
   const [query, setQuery] = React.useState("");
   const [status, setStatus] = React.useState<OrderStatus | "all">("all");
+  const { refreshing } = useAutoRefresh();
 
   const filtered = React.useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -59,9 +67,12 @@ export function OrderHistory({ orders }: { orders: OrderDetail[] }) {
         {filtered.length > 0 ? (
           <>
             <UserOrderTable orders={filtered} />
-            <p className="border-t border-hairline px-4 py-3 font-data tabular text-body text-ink-soft">
-              Menampilkan {filtered.length} dari {orders.length} order
-            </p>
+            <div className="flex flex-wrap items-center justify-between gap-2 border-t border-hairline px-4 py-3 font-data tabular text-body text-ink-soft">
+              <p>
+                Menampilkan {filtered.length} dari {orders.length} order
+              </p>
+              <AutoRefreshStatus fetchedAt={fetchedAt} refreshing={refreshing} />
+            </div>
           </>
         ) : orders.length === 0 ? (
           <EmptyState
