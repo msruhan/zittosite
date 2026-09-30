@@ -94,6 +94,11 @@ const CATEGORIES: { value: string; label: string; tone: string }[] = [
     label: "Telegram",
     tone: "bg-queued-wash text-queued-ink border-queued-edge",
   },
+  {
+    value: "notification",
+    label: "Notifikasi",
+    tone: "bg-refused-wash/50 text-refused-ink border-refused-edge",
+  },
 ];
 
 const RANGE_OPTIONS = [

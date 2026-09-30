@@ -32,6 +32,7 @@ services:
       DIRECT_URL: postgresql://${POSTGRES_USER:-zittosite}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-zittosite}
       PORT: "4000"
       PAYMENT_SIMULATION: ${PAYMENT_SIMULATION:-1}
+      WAHA_BASE_URL: ${WAHA_BASE_URL:-http://waha:3000}
     # PUBLIC_BIND_ADDR=127.0.0.1 (set by deploy.sh in TLS mode) keeps it behind Caddy.
     ports:
       - "${PUBLIC_BIND_ADDR:-0.0.0.0}:4000:4000"
@@ -79,7 +80,30 @@ services:
     networks:
       - internal
 
+  # WhatsApp gateway for group notifications; only started with the "waha" profile
+  # (deploy.sh enables it when WAHA_API_KEY is set). Env comes from .env by
+  # interpolation, never env_file, so WAHA does not see DB/JWT secrets.
+  # Dashboard is localhost-only: ssh -L 3001:127.0.0.1:3001 <vps>
+  waha:
+    image: ${WAHA_IMAGE:-devlikeapro/waha:gows-2026.9.1}
+    profiles: ["waha"]
+    restart: unless-stopped
+    environment:
+      WHATSAPP_DEFAULT_ENGINE: GOWS
+      WAHA_API_KEY: ${WAHA_API_KEY:-}
+      WAHA_DASHBOARD_USERNAME: ${WAHA_DASHBOARD_USERNAME:-admin}
+      WAHA_DASHBOARD_PASSWORD: ${WAHA_DASHBOARD_PASSWORD:-}
+      WHATSAPP_SWAGGER_USERNAME: ${WAHA_DASHBOARD_USERNAME:-admin}
+      WHATSAPP_SWAGGER_PASSWORD: ${WAHA_DASHBOARD_PASSWORD:-}
+    ports:
+      - "127.0.0.1:3001:3000"
+    volumes:
+      - waha_sessions:/app/.sessions
+    networks:
+      - internal
+
 volumes:
+  waha_sessions:
   pgdata:
   caddy_config:
   caddy_data:

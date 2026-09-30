@@ -6,6 +6,7 @@ export type ActivityCategory =
   | "admin"
   | "service"
   | "telegram"
+  | "notification"
   | "security";
 
 type Fields = Record<string, string | number | boolean | null | undefined>;
@@ -152,6 +153,14 @@ export const ACTIVITY_EVENTS = {
     label: "Pembayaran terlambat",
     summary: ({ fields }) =>
       `Pembayaran ${rp(fields.amount)} untuk order ${fields.orderId} masuk setelah invoice ${fields.invoiceStatus} — perlu tindak lanjut manual`,
+  },
+  "notify.whatsapp_failed": {
+    category: "notification",
+    label: "Notifikasi WhatsApp gagal",
+    summary: ({ fields }) =>
+      `Notifikasi grup WhatsApp untuk ${fields.invoiceId ?? `order ${fields.orderId}`} gagal terkirim setelah ${fields.attempts} percobaan${
+        fields.error ? ` — ${String(fields.error)}` : ""
+      }`,
   },
   "admin.order.cancelled": {
     category: "order",

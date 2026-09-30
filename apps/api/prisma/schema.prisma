@@ -63,6 +63,13 @@ enum PaymentStatus {
   cancelled
 }
 
+enum WhatsappNotificationStatus {
+  pending
+  sending
+  sent
+  failed
+}
+
 enum ResultStatus {
   success
   partial
@@ -345,9 +352,31 @@ model PaymentInvoice {
   createdAt        DateTime      @default(now()) @map("created_at")
   updatedAt        DateTime      @updatedAt @map("updated_at")
   orders           Order[]
+  whatsappNotification WhatsappNotification?
 
   @@index([paymentReference])
   @@map("payment_invoices")
+}
+
+/// Queued WhatsApp group message, one per paid invoice; retried until sent or attempts run out.
+model WhatsappNotification {
+  id            String                     @id @default(cuid())
+  invoiceId     String                     @unique @map("invoice_row_id")
+  kind          String
+  chatId        String                     @map("chat_id")
+  text          String
+  status        WhatsappNotificationStatus @default(pending)
+  attempts      Int                        @default(0)
+  nextAttemptAt DateTime                   @default(now()) @map("next_attempt_at")
+  sentAt        DateTime?                  @map("sent_at")
+  wahaMessageId String?                    @map("waha_message_id")
+  lastError     String?                    @map("last_error")
+  createdAt     DateTime                   @default(now()) @map("created_at")
+  updatedAt     DateTime                   @updatedAt @map("updated_at")
+  invoice       PaymentInvoice             @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@index([status, nextAttemptAt])
+  @@map("whatsapp_notifications")
 }
 
 model OrderActivityLog {

@@ -18,6 +18,7 @@ import { PrismaService } from "../prisma/prisma.service";
 import { paymentSimulationEnabled, webPublicUrl } from "../config/env";
 import { AdminNotifyService } from "../telegram/admin-notify.service";
 import { AuditLogService } from "../security/audit-log.service";
+import { WhatsappNotifyService } from "../whatsapp/whatsapp-notify.service";
 import {
   SayabayarClient,
   type SayabayarInvoice,
@@ -66,6 +67,7 @@ export class OrdersService {
     private readonly adminNotify: AdminNotifyService,
     private readonly sayabayar: SayabayarClient,
     private readonly audit: AuditLogService,
+    private readonly whatsappNotify: WhatsappNotifyService,
   ) {}
 
   async listServices(userId: string) {
@@ -840,7 +842,7 @@ export class OrdersService {
       payload?: Prisma.InputJsonValue;
     },
   ) {
-    const updated = await this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       const claimed = await tx.paymentInvoice.updateMany({
         where: { id: invoiceRowId, paymentStatus: "pending" },
         data: {
@@ -882,21 +884,24 @@ export class OrdersService {
           },
         });
       }
-      return orders;
+      const whatsappId = orders.length
+        ? await this.whatsappNotify.enqueuePaidInvoice(tx, invoiceRowId)
+        : null;
+      return { orders, whatsappId };
     });
 
-    if (updated) {
-      for (const order of updated) {
-        this.audit.record("payment.paid", {
-          userId: order.userId,
-          orderId: order.orderId,
-          amount: order.price,
-          method: payment.channel,
-        });
-        void this.adminNotify.notifyNewOrder(order.id);
-      }
+    if (!result) return null;
+    for (const order of result.orders) {
+      this.audit.record("payment.paid", {
+        userId: order.userId,
+        orderId: order.orderId,
+        amount: order.price,
+        method: payment.channel,
+      });
+      void this.adminNotify.notifyNewOrder(order.id);
     }
-    return updated;
+    if (result.whatsappId) void this.whatsappNotify.deliver(result.whatsappId);
+    return result.orders;
   }
 
   /**

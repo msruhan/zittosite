@@ -80,6 +80,23 @@ export function sayabayarWebhookSecret(): string | undefined {
   return process.env.SAYABAYAR_WEBHOOK_SECRET?.trim() || undefined;
 }
 
+export function wahaMockEnabled(): boolean {
+  return process.env.WAHA_MOCK === "1" || process.env.WAHA_MOCK === "true";
+}
+
+/** WhatsApp group notifications via WAHA; null (feature off) until fully configured. */
+export function whatsappConfig() {
+  const baseUrl = process.env.WAHA_BASE_URL?.trim().replace(/\/$/, "") || "";
+  const apiKey = process.env.WAHA_API_KEY?.trim() || "";
+  const groupChatId = process.env.WA_GROUP_CHAT_ID?.trim() || "";
+  const session = process.env.WAHA_SESSION?.trim() || "default";
+  if (wahaMockEnabled()) {
+    return { mock: true, baseUrl, apiKey, session, groupChatId: groupChatId || "mock@g.us" };
+  }
+  if (!baseUrl || !apiKey || !groupChatId) return null;
+  return { mock: false, baseUrl, apiKey, session, groupChatId };
+}
+
 const PLACEHOLDER_SECRET = /change-me|changeme|example|placeholder/i;
 
 /**
@@ -96,6 +113,9 @@ export function validateStartupEnv(warn: (message: string) => void) {
     throw new Error("DATABASE_URL must be set");
   }
   if (!isProduction()) return;
+  if (wahaMockEnabled()) {
+    throw new Error("WAHA_MOCK must not be enabled in production");
+  }
 
   const problems: string[] = [];
   for (const [name, value] of Object.entries(secrets)) {
@@ -115,6 +135,9 @@ export function validateStartupEnv(warn: (message: string) => void) {
   }
   if (!sayabayarWebhookSecret()) {
     warn("SAYABAYAR_WEBHOOK_SECRET is not set — SayaBayar payment webhooks will be rejected");
+  }
+  if (!whatsappConfig()) {
+    warn("WAHA_API_KEY / WA_GROUP_CHAT_ID not set — WhatsApp group notifications are off");
   }
 
   if (!webPublicUrl().startsWith("https://")) {

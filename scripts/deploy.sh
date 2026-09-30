@@ -28,12 +28,24 @@ if [[ -n "$WEB_DOMAIN_VALUE" ]]; then
       exit 1
     fi
   done
-  export COMPOSE_PROFILES=tls
+  PROFILES=tls
   export PUBLIC_BIND_ADDR=127.0.0.1
   echo "==> Mode: HTTPS via Caddy ($WEB_DOMAIN_VALUE)"
 else
+  PROFILES=""
   echo "==> Mode: plain HTTP on ports 3000/4000 (set WEB_DOMAIN in .env to enable HTTPS)"
 fi
+
+# WhatsApp gateway (WAHA) runs only once its API key is configured.
+if [[ -n "$(env_value WAHA_API_KEY)" ]]; then
+  if [[ -z "$(env_value WAHA_DASHBOARD_PASSWORD)" ]]; then
+    echo "ERROR: WAHA_API_KEY is set but WAHA_DASHBOARD_PASSWORD is missing in .env"
+    exit 1
+  fi
+  PROFILES="${PROFILES:+$PROFILES,}waha"
+  echo "==> WhatsApp gateway (WAHA) enabled"
+fi
+export COMPOSE_PROFILES="$PROFILES"
 
 echo "==> Pulling base images / building..."
 docker compose -f "$COMPOSE_FILE" build --pull
