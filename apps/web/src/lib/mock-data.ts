@@ -386,10 +386,6 @@ const resultNotes: Record<string, { note: string; status: OrderResult["resultSta
     status: "success",
     note: "IMEI berhasil terdaftar dan sudah aktif pada jaringan. Silakan restart perangkat, lalu pasang kembali kartu SIM.",
   },
-  partial: {
-    status: "partial",
-    note: "Slot IMEI pertama berhasil didaftarkan. Slot kedua memerlukan dokumen tambahan, silakan ajukan ulang untuk slot tersisa.",
-  },
   rejected: {
     status: "failed",
     note: "IMEI pada dokumen tidak sesuai dengan yang dikirim. Order ditolak, silakan buat order baru dengan data yang benar.",
@@ -402,9 +398,7 @@ export const orderResults: OrderResult[] = orders
     const preset =
       order.status === "rejected"
         ? resultNotes.rejected
-        : index % 9 === 4
-          ? resultNotes.partial
-          : resultNotes.default;
+        : resultNotes.default;
 
     return {
       id: `res-${order.orderId}`,

@@ -34,6 +34,13 @@ const orderLine = (f: Fields) =>
     .filter(Boolean)
     .join(" ");
 
+const REFUND_REASON: Record<string, string> = {
+  order_rejected: "order ditolak",
+  order_cancelled: "order dibatalkan",
+  order_failed: "hasil gagal",
+  late_payment: "pembayaran terlambat",
+};
+
 export const ACTIVITY_EVENTS = {
   "auth.user.login_success": {
     category: "auth",
@@ -152,7 +159,36 @@ export const ACTIVITY_EVENTS = {
     category: "payment",
     label: "Pembayaran terlambat",
     summary: ({ fields }) =>
-      `Pembayaran ${rp(fields.amount)} untuk order ${fields.orderId} masuk setelah invoice ${fields.invoiceStatus} — perlu tindak lanjut manual`,
+      `Pembayaran ${rp(fields.amount)} untuk order ${fields.orderId} masuk setelah invoice ${fields.invoiceStatus} — dimasukkan ke saldo user`,
+  },
+  "balance.refunded": {
+    category: "payment",
+    label: "Refund ke saldo",
+    summary: ({ fields, target }) =>
+      `${rp(fields.amount)} dari order ${fields.orderId} dikembalikan ke saldo${
+        target ? ` ${target}` : ""
+      } (${REFUND_REASON[String(fields.reason)] ?? fields.reason})`,
+  },
+  "balance.refund_reversed": {
+    category: "payment",
+    label: "Refund ditarik",
+    summary: ({ fields, target }) =>
+      `Refund ${rp(fields.amount)} order ${fields.orderId} ditarik dari saldo${
+        target ? ` ${target}` : ""
+      } karena status diubah menjadi ${fields.status}`,
+  },
+  "admin.user.balance_adjusted": {
+    category: "user",
+    label: "Saldo diubah manual",
+    summary: ({ fields, target }) => {
+      const amount = typeof fields.amount === "number" ? fields.amount : 0;
+      return withReason(
+        `${amount >= 0 ? "Menambah" : "Mengurangi"} saldo ${target ?? "user"} sebesar ${rp(
+          Math.abs(amount),
+        )}`,
+        fields.note,
+      );
+    },
   },
   "notify.whatsapp_failed": {
     category: "notification",

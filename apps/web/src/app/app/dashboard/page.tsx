@@ -158,7 +158,7 @@ export default async function UserDashboardPage({
           tone="sky"
           label="Saldo"
           value={formatRupiah(stats.balance)}
-          hint="Saldo kredit akun — tidak berubah oleh filter bulan."
+          hint="Saldo akun, otomatis dipakai saat order — tidak berubah oleh filter bulan."
           caption={stats.balance === 0 ? "Tidak ada saldo" : "Siap dipakai"}
           href="/app/profil"
         />

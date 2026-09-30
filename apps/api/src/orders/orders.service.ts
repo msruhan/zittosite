@@ -25,6 +25,12 @@ import {
 } from "../payments/sayabayar.client";
 import { serializeOrderListItem, serializeService } from "./orders.serializer";
 import { parseImeiList } from "./imei-list";
+import {
+  applyBalance,
+  refundNote,
+  refundOrderToBalance,
+  type BalanceReason,
+} from "./balance";
 
 /** SayaBayar only accepts invoice lifetimes of 60 minutes or more. */
 const INVOICE_TTL_MINUTES = 60;
@@ -202,11 +208,23 @@ export class OrdersService {
     const via = channel === "telegram" ? "Telegram" : "website";
     const bulkNote =
       imeis.length > 1 ? ` Bulk ${imeis.length} IMEI, 1 QRIS.` : "";
+    const balanceUsed = Math.min(Math.max(user.creditBalance, 0), total);
+    const charge = total - balanceUsed;
+    const paidByBalance = charge === 0;
+    const createdNote = paidByBalance
+      ? `Order dibuat lewat ${via}. Dibayar penuh dengan saldo akun (Rp${total.toLocaleString("id-ID")}).`
+      : `Order dibuat lewat ${via}. Invoice QRIS diterbitkan.${bulkNote}${
+          balanceUsed > 0
+            ? ` Saldo akun terpakai Rp${balanceUsed.toLocaleString("id-ID")}, sisa Rp${charge.toLocaleString("id-ID")} via QRIS.`
+            : ""
+        }`;
 
     let gateway: SayabayarInvoice | null = null;
-    if (this.sayabayar.enabled()) {
+    if (paidByBalance) {
+      // Nothing left for the gateway to collect.
+    } else if (this.sayabayar.enabled()) {
       gateway = await this.sayabayar.createInvoice({
-        amount: total,
+        amount: charge,
         description:
           imeis.length > 1
             ? `${service.name} × ${imeis.length} — ${orderIds[0]}`
@@ -228,6 +246,7 @@ export class OrdersService {
         data: {
           invoiceId,
           amount: total,
+          balanceUsed,
           paymentStatus: "pending",
           expiredAt,
           ...(gateway
@@ -239,9 +258,25 @@ export class OrdersService {
                 checkoutUrl: gateway.paymentUrl,
                 gatewayPayload: gateway.raw as Prisma.InputJsonValue,
               }
-            : { paymentChannel: "qris_placeholder" }),
+            : {
+                paymentChannel: paidByBalance ? "balance" : "qris_placeholder",
+              }),
         },
       });
+      if (balanceUsed > 0) {
+        await applyBalance(tx, {
+          userId,
+          amount: -balanceUsed,
+          reason: "order_payment",
+          refKey: `invoice-pay:${invoice.id}`,
+          note: `Pembayaran invoice ${invoiceId}.`,
+        }).catch((err) => {
+          if (err instanceof ConflictException) {
+            throw new ConflictException("Saldo berubah. Silakan buat order lagi.");
+          }
+          throw err;
+        });
+      }
       for (const [i, imei] of imeis.entries()) {
         await tx.order.create({
           data: {
@@ -257,7 +292,7 @@ export class OrdersService {
             activity: {
               create: {
                 status: "waiting_payment",
-                note: `Order dibuat lewat ${via}. Invoice QRIS diterbitkan.${bulkNote}`,
+                note: createdNote,
                 actor: user.fullName,
               },
             },
@@ -279,6 +314,19 @@ export class OrdersService {
         price,
         channel,
       });
+    }
+    if (paidByBalance && created.invoice) {
+      await this.settleInvoice(created.invoice.id, {
+        paidAt: new Date(),
+        channel: "balance",
+        note: "Pembayaran lunas dengan saldo akun.",
+      });
+      return serializeOrderListItem(
+        await this.prisma.order.findUniqueOrThrow({
+          where: { id: created.id },
+          include: orderInclude,
+        }),
+      );
     }
     return serializeOrderListItem(created);
   }
@@ -313,7 +361,7 @@ export class OrdersService {
   /**
    * Super Admin cancel from the web panel or Telegram. Closes a pending invoice,
    * updates every admin's order card, and tells the customer. An already-paid
-   * order is cancelled too but flagged for a manual refund.
+   * order is refunded to the customer's balance.
    */
   async adminCancelOrder(adminId: string, publicOrderId: string, reason?: string) {
     const admin = await this.prisma.admin.findUniqueOrThrow({
@@ -372,23 +420,29 @@ export class OrdersService {
       );
     }
 
-    const updated = await this.prisma.$transaction(async (tx) => {
-      return tx.order.update({
+    const { updated, refunded } = await this.prisma.$transaction(async (tx) => {
+      const moved = await tx.order.updateMany({
+        where: { id: order.id, status: { in: CANCELLABLE_BY_ADMIN } },
+        data: { status: "cancel" },
+      });
+      if (moved.count !== 1) {
+        throw new ConflictException("Status order berubah.");
+      }
+      const refunded = await refundOrderToBalance(tx, order, "order_cancelled");
+      const updated = await tx.order.update({
         where: { id: order.id },
         data: {
-          status: "cancel",
           activity: {
             create: {
               status: "cancel",
-              note: `Order dibatalkan oleh Super Admin. Alasan: ${why}${
-                wasPaid ? " Pembayaran sudah diterima — perlu refund manual." : ""
-              }`,
+              note: `Order dibatalkan oleh Super Admin. Alasan: ${why}${refundNote(refunded)}`,
               actor: admin.fullName,
             },
           },
         },
         include: orderInclude,
       });
+      return { updated, refunded };
     });
 
     this.audit.record("admin.order.cancelled", {
@@ -399,6 +453,7 @@ export class OrdersService {
       reason: why,
       wasPaid,
     });
+    this.recordRefund(order, refunded, "order_cancelled");
     void this.adminNotify.syncOrderCards(order.id, "cancelled", {
       actorName: admin.fullName,
       note: why,
@@ -410,6 +465,7 @@ export class OrdersService {
         orderId: order.orderId,
         reason: why,
         wasPaid,
+        refund: refunded,
       }),
     );
     return serializeOrderListItem(updated);
@@ -476,25 +532,54 @@ export class OrdersService {
     const invoice = await this.findGatewayInvoice(input);
     if (!invoice) return "unmatched";
     if (invoice.paymentStatus === "paid") return "duplicate";
-    if (invoice.amount !== input.amount) return "amount_mismatch";
+    if (invoice.amount - invoice.balanceUsed !== input.amount) {
+      return "amount_mismatch";
+    }
 
     if (invoice.paymentStatus !== "pending") {
-      await this.prisma.orderActivityLog.createMany({
-        data: invoice.orders.map((order) => ({
-          orderId: order.id,
-          status: order.status,
-          note: `Pembayaran Rp ${input.amount} diterima gateway setelah invoice ${invoice.paymentStatus}. Perlu tindak lanjut manual (proses atau refund).`,
-          actor: "Sistem",
-        })),
-      });
-      for (const order of invoice.orders) {
-        this.audit.record("payment.late", {
-          userId: order.userId,
-          orderId: order.orderId,
+      const userId = invoice.orders[0]?.userId;
+      if (!userId) return "late";
+      const credited = await this.prisma.$transaction(async (tx) => {
+        const credited = await applyBalance(tx, {
+          userId,
           amount: input.amount,
-          invoiceStatus: invoice.paymentStatus,
+          reason: "late_payment",
+          refKey: `invoice-late:${invoice.id}`,
+          note: `Pembayaran terlambat invoice ${invoice.invoiceId}.`,
         });
-      }
+        if (!credited) return false;
+        await tx.orderActivityLog.createMany({
+          data: invoice.orders.map((order) => ({
+            orderId: order.id,
+            status: order.status,
+            note: `Pembayaran Rp${input.amount.toLocaleString("id-ID")} diterima gateway setelah invoice ${invoice.paymentStatus}. Dana dimasukkan ke saldo akun.`,
+            actor: "Sistem",
+          })),
+        });
+        return true;
+      });
+      if (!credited) return "duplicate";
+      const orderIds = invoice.orders.map((order) => order.orderId).join(", ");
+      this.audit.record("payment.late", {
+        userId,
+        orderId: orderIds,
+        amount: input.amount,
+        invoiceStatus: invoice.paymentStatus,
+      });
+      this.audit.record("balance.refunded", {
+        userId,
+        orderId: orderIds,
+        amount: input.amount,
+        reason: "late_payment",
+      });
+      void this.adminNotify.notifyUserById(
+        userId,
+        userOrderNoticeHtml({
+          kind: "late_payment",
+          orderId: orderIds,
+          refund: input.amount,
+        }),
+      );
       return "late";
     }
 
@@ -594,7 +679,7 @@ export class OrdersService {
       where: { id: adminId },
     });
 
-    const updated = await this.prisma.$transaction(async (tx) => {
+    const { updated, refunded } = await this.prisma.$transaction(async (tx) => {
       const order = await tx.order.findUnique({
         where: { orderId: publicOrderId },
       });
@@ -615,26 +700,31 @@ export class OrdersService {
             "Hanya admin yang mengambil order yang dapat menolak.",
           );
         }
-        await tx.order.update({
-          where: { id: order.id },
+        const result = await tx.order.updateMany({
+          where: { id: order.id, status: "in_process" },
           data: { status: "rejected" },
         });
+        if (result.count !== 1) {
+          throw new ConflictException("Status order berubah.");
+        }
       } else {
         throw new BadRequestException("Order tidak dapat ditolak.");
       }
 
+      const refunded = await refundOrderToBalance(tx, order, "order_rejected");
       await tx.orderActivityLog.create({
         data: {
           orderId: order.id,
           status: "rejected",
-          note: `Ditolak: ${note}`,
+          note: `Ditolak: ${note}${refundNote(refunded)}`,
           actor: admin.fullName,
         },
       });
-      return tx.order.findUniqueOrThrow({
+      const updated = await tx.order.findUniqueOrThrow({
         where: { id: order.id },
         include: orderInclude,
       });
+      return { updated, refunded };
     });
 
     this.audit.record("order.rejected", {
@@ -645,6 +735,7 @@ export class OrdersService {
       imei: updated.imei,
       reason: note,
     });
+    this.recordRefund(updated, refunded, "order_rejected");
     await this.adminNotify.syncOrderCards(updated.id, "rejected", {
       actorName: admin.fullName,
       note,
@@ -661,6 +752,7 @@ export class OrdersService {
         kind: "rejected",
         orderId: updated.orderId,
         reason: note,
+        refund: refunded,
       }),
     );
     return serializeOrderListItem(updated);
@@ -673,14 +765,14 @@ export class OrdersService {
   ) {
     const typedNote = String(input.resultNote ?? "").trim();
     const resultNote = typedNote || "Order selesai diproses.";
-    if (!["success", "partial", "failed"].includes(input.resultStatus)) {
+    if (!["success", "failed"].includes(input.resultStatus)) {
       throw new BadRequestException("Status hasil tidak valid.");
     }
     const admin = await this.prisma.admin.findUniqueOrThrow({
       where: { id: adminId },
     });
 
-    const updated = await this.prisma.$transaction(async (tx) => {
+    const { updated, refunded } = await this.prisma.$transaction(async (tx) => {
       const order = await tx.order.findUnique({
         where: { orderId: publicOrderId },
       });
@@ -706,18 +798,23 @@ export class OrdersService {
           completedAt: new Date(),
         },
       });
+      const refunded =
+        input.resultStatus === "failed"
+          ? await refundOrderToBalance(tx, order, "order_failed")
+          : 0;
       await tx.orderActivityLog.create({
         data: {
           orderId: order.id,
           status: "done",
-          note: `Hasil dikirim (${input.resultStatus}).`,
+          note: `Hasil dikirim (${input.resultStatus}).${refundNote(refunded)}`,
           actor: admin.fullName,
         },
       });
-      return tx.order.findUniqueOrThrow({
+      const updated = await tx.order.findUniqueOrThrow({
         where: { id: order.id },
         include: orderInclude,
       });
+      return { updated, refunded };
     });
 
     this.audit.record("order.done", {
@@ -727,6 +824,7 @@ export class OrdersService {
       serviceName: updated.service.name,
       imei: updated.imei,
     });
+    this.recordRefund(updated, refunded, "order_failed");
     await this.adminNotify.syncOrderCards(updated.id, "done", {
       actorName: admin.fullName,
       note: resultNote,
@@ -744,6 +842,7 @@ export class OrdersService {
         orderId: updated.orderId,
         resultStatus: input.resultStatus,
         note: typedNote,
+        refund: refunded,
       }),
     );
     return serializeOrderListItem(updated);
@@ -802,23 +901,31 @@ export class OrdersService {
           },
         });
       }
+      const order = await tx.order.findUniqueOrThrow({
+        where: { id: internalOrderId },
+      });
+      const refunded =
+        update.kind === "rejected"
+          ? await refundOrderToBalance(tx, order, "order_rejected")
+          : 0;
       await tx.orderActivityLog.create({
         data: {
           orderId: internalOrderId,
           status: next,
           note:
             update.kind === "rejected"
-              ? `Ditolak: ${note}`
+              ? `Ditolak: ${note}${refundNote(refunded)}`
               : update.kind === "done"
                 ? "Hasil dikirim (success)."
                 : note,
           actor: actorLabel,
         },
       });
-      return tx.order.findUniqueOrThrow({
+      const updated = await tx.order.findUniqueOrThrow({
         where: { id: internalOrderId },
         include: orderInclude,
       });
+      return { ...updated, refunded };
     });
     if (!updated) return "noop";
 
@@ -858,12 +965,14 @@ export class OrdersService {
       );
     } else {
       this.audit.record("order.rejected", { ...base, reason: note });
+      this.recordRefund(updated, updated.refunded, "order_rejected");
       void this.adminNotify.notifyUserById(
         updated.userId,
         userOrderNoticeHtml({
           kind: "rejected",
           orderId: updated.orderId,
           reason: note,
+          refund: updated.refunded,
         }),
       );
     }
@@ -902,6 +1011,20 @@ export class OrdersService {
       take,
     });
     return rows.map((row) => serializeOrderListItem(row));
+  }
+
+  private recordRefund(
+    order: { userId: string; orderId: string },
+    amount: number,
+    reason: BalanceReason,
+  ) {
+    if (amount <= 0) return;
+    this.audit.record("balance.refunded", {
+      userId: order.userId,
+      orderId: order.orderId,
+      amount,
+      reason,
+    });
   }
 
   private async assertAssignedToService(
@@ -1032,8 +1155,9 @@ export class OrdersService {
   }
 
   /**
-   * Closes a pending invoice and cancels every unpaid order on it. Returns the
-   * cancelled orders, or null if the invoice was no longer pending.
+   * Closes a pending invoice, cancels every unpaid order on it, and returns any
+   * balance used at checkout. Returns the cancelled orders, or null if the
+   * invoice was no longer pending.
    */
   private async closePendingInvoice(
     tx: Prisma.TransactionClient,
@@ -1046,17 +1170,31 @@ export class OrdersService {
       data: { paymentStatus: status },
     });
     if (claimed.count !== 1) return null;
+    const invoice = await tx.paymentInvoice.findUniqueOrThrow({
+      where: { id: invoiceRowId },
+      select: { invoiceId: true, balanceUsed: true },
+    });
     const orders = await tx.order.findMany({
       where: { invoiceId: invoiceRowId, status: "waiting_payment" },
       select: { id: true, orderId: true, imei: true, userId: true },
       orderBy: { orderId: "asc" },
     });
+    const released =
+      invoice.balanceUsed > 0 && orders.length > 0 &&
+      (await applyBalance(tx, {
+        userId: orders[0].userId,
+        amount: invoice.balanceUsed,
+        reason: "payment_release",
+        refKey: `invoice-release:${invoiceRowId}`,
+        note: `Saldo dari invoice ${invoice.invoiceId} dikembalikan.`,
+      }));
+    const note = log.note + (released ? refundNote(invoice.balanceUsed) : "");
     for (const order of orders) {
       await tx.order.update({
         where: { id: order.id },
         data: {
           status: "cancel",
-          activity: { create: { status: "cancel", ...log } },
+          activity: { create: { status: "cancel", actor: log.actor, note } },
         },
       });
     }

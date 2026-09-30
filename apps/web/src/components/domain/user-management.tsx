@@ -1,7 +1,13 @@
 "use client";
 
 import * as React from "react";
-import { MagnifyingGlass, PencilSimple, Plus, Trash } from "@phosphor-icons/react";
+import {
+  MagnifyingGlass,
+  PencilSimple,
+  Plus,
+  Trash,
+  Wallet,
+} from "@phosphor-icons/react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -36,6 +42,7 @@ export function UserManagement({
   const [query, setQuery] = React.useState("");
   const [editing, setEditing] = React.useState<User | null>(null);
   const [creating, setCreating] = React.useState(false);
+  const [adjusting, setAdjusting] = React.useState<User | null>(null);
 
   const [syncedUsers, setSyncedUsers] = React.useState(initialUsers);
   if (initialUsers !== syncedUsers) {
@@ -177,6 +184,7 @@ export function UserManagement({
                     <TH>User</TH>
                     <TH>Telegram</TH>
                     <TH>Harga khusus</TH>
+                    <TH>Saldo</TH>
                     <TH>Status</TH>
                     <TH>Bot</TH>
                     <TH>Bergabung</TH>
@@ -232,6 +240,27 @@ export function UserManagement({
                       </TD>
                       <TD>
                         <CustomPriceSummary user={user} services={services} />
+                      </TD>
+                      <TD className="whitespace-nowrap">
+                        <div className="flex items-center gap-1">
+                          <DataValue
+                            className={
+                              (user.creditBalance ?? 0) < 0
+                                ? "text-refused-ink"
+                                : undefined
+                            }
+                          >
+                            {formatRupiah(user.creditBalance ?? 0)}
+                          </DataValue>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            aria-label={`Atur saldo ${user.fullName}`}
+                            onClick={() => setAdjusting(user)}
+                          >
+                            <Wallet className="size-4 text-action" />
+                          </Button>
+                        </div>
                       </TD>
                       <TD>
                         {user.status === "active" ? (
@@ -325,7 +354,141 @@ export function UserManagement({
           />
         ) : null}
       </Dialog>
+
+      <Dialog
+        open={Boolean(adjusting)}
+        onOpenChange={(open) => {
+          if (!open) setAdjusting(null);
+        }}
+      >
+        {adjusting ? (
+          <BalanceDialog
+            user={adjusting}
+            onCancel={() => setAdjusting(null)}
+            onDone={async () => {
+              await reload();
+              setAdjusting(null);
+            }}
+          />
+        ) : null}
+      </Dialog>
     </div>
+  );
+}
+
+function BalanceDialog({
+  user,
+  onCancel,
+  onDone,
+}: {
+  user: User;
+  onCancel: () => void;
+  onDone: () => void | Promise<void>;
+}) {
+  const [direction, setDirection] = React.useState<"add" | "subtract">("add");
+  const [amount, setAmount] = React.useState("");
+  const [note, setNote] = React.useState("");
+  const [saving, setSaving] = React.useState(false);
+  const [errors, setErrors] = React.useState<{ amount?: string; note?: string }>({});
+  const current = user.creditBalance ?? 0;
+  const value = Number(amount || 0);
+  const next = direction === "add" ? current + value : current - value;
+
+  async function handleSubmit(event: React.FormEvent) {
+    event.preventDefault();
+    const nextErrors: typeof errors = {};
+    if (!value) nextErrors.amount = "Masukkan nominal lebih dari 0.";
+    else if (direction === "subtract" && value > current) {
+      nextErrors.amount = "Pengurangan melebihi saldo user.";
+    }
+    if (!note.trim()) nextErrors.note = "Tulis alasan perubahan saldo.";
+    setErrors(nextErrors);
+    if (Object.keys(nextErrors).length > 0) return;
+
+    setSaving(true);
+    try {
+      await api(`/admin/users/${user.id}/balance`, {
+        method: "POST",
+        body: JSON.stringify({
+          amount: direction === "add" ? value : -value,
+          note: note.trim(),
+        }),
+      });
+      toast.success(
+        direction === "add" ? "Saldo ditambahkan" : "Saldo dikurangi",
+        { description: `Saldo ${user.fullName} sekarang ${formatRupiah(next)}.` },
+      );
+      await onDone();
+    } catch (err) {
+      toast.error("Gagal", {
+        description: err instanceof ApiError ? err.message : "Ubah saldo gagal",
+      });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <DialogContent
+      title="Atur saldo"
+      description={`${user.fullName} (@${user.username}) · saldo saat ini ${formatRupiah(current)}`}
+      footer={
+        <>
+          <Button type="button" variant="ghost" onClick={onCancel}>
+            Batal
+          </Button>
+          <Button
+            type="submit"
+            form="balance-form"
+            loading={saving}
+            loadingLabel="Menyimpan"
+          >
+            Simpan
+          </Button>
+        </>
+      }
+    >
+      <form id="balance-form" onSubmit={handleSubmit} noValidate className="space-y-4">
+        <Field label="Jenis" htmlFor="balanceDirection">
+          <Select
+            id="balanceDirection"
+            value={direction}
+            onValueChange={(v) => setDirection(v as "add" | "subtract")}
+            options={[
+              { value: "add", label: "Tambah saldo" },
+              { value: "subtract", label: "Kurangi saldo" },
+            ]}
+          />
+        </Field>
+        <Field
+          label="Nominal (Rp)"
+          htmlFor="balanceAmount"
+          required
+          error={errors.amount}
+          hint={value ? `Saldo setelah disimpan: ${formatRupiah(next)}` : undefined}
+        >
+          <Input
+            id="balanceAmount"
+            inputMode="numeric"
+            className="font-data tabular"
+            placeholder="0"
+            value={amount}
+            invalid={Boolean(errors.amount)}
+            onChange={(event) => setAmount(event.target.value.replace(/\D/g, ""))}
+          />
+        </Field>
+        <Field label="Catatan" htmlFor="balanceNote" required error={errors.note}>
+          <Input
+            id="balanceNote"
+            maxLength={300}
+            placeholder="Misalnya: koreksi refund manual"
+            value={note}
+            invalid={Boolean(errors.note)}
+            onChange={(event) => setNote(event.target.value)}
+          />
+        </Field>
+      </form>
+    </DialogContent>
   );
 }
 

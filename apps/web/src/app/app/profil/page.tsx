@@ -93,7 +93,7 @@ export default async function ProfilPage() {
                   <span className="text-ink-soft">Belum ada layanan aktif</span>
                 )}
               </DetailRow>
-              <DetailRow label="Saldo kredit">
+              <DetailRow label="Saldo">
                 <DataValue>
                   {formatRupiah(user.creditBalance ?? 0)}
                 </DataValue>

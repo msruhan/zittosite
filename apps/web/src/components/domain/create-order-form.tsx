@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { Info, QrCode } from "@phosphor-icons/react";
+import { Info, QrCode, Wallet } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Field, Textarea } from "@/components/ui/field";
@@ -17,10 +17,13 @@ import type { Service } from "@/lib/types";
 export function CreateOrderForm({
   services,
   priceFor,
+  balance,
 }: {
   services: Service[];
   /** Resolved server-side so a negotiated price is never guessed here. */
   priceFor: Record<string, number>;
+  /** Account balance; spent before QRIS at checkout. */
+  balance: number;
 }) {
   const router = useRouter();
   const [serviceId, setServiceId] = React.useState<string>("");
@@ -39,6 +42,9 @@ export function CreateOrderForm({
     imeis.length < MAX_BULK_IMEIS;
   const quantity = imeis.length + (draftComplete ? 1 : 0);
   const total = price !== null ? price * Math.max(quantity, 1) : null;
+  const balanceUsed = total !== null ? Math.min(Math.max(balance, 0), total) : 0;
+  const due = total !== null ? total - balanceUsed : null;
+  const paidByBalance = due === 0;
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -65,7 +71,7 @@ export function CreateOrderForm({
 
     setSubmitting(true);
     try {
-      const order = await api<{ orderId: string }>("/orders", {
+      const order = await api<{ orderId: string; status: string }>("/orders", {
         method: "POST",
         body: JSON.stringify({
           serviceId,
@@ -73,7 +79,16 @@ export function CreateOrderForm({
           notes: notes.trim() || undefined,
         }),
       });
-      toast.success(quantity > 1 ? `${quantity} order dibuat` : "Order dibuat", {
+      const title = quantity > 1 ? `${quantity} order dibuat` : "Order dibuat";
+      if (order.status !== "waiting_payment") {
+        toast.success(title, {
+          description: "Lunas dengan saldo akun. Order langsung masuk antrean admin.",
+        });
+        router.push(`/app/order/${order.orderId}`);
+        router.refresh();
+        return;
+      }
+      toast.success(title, {
         description: "Invoice QRIS sudah diterbitkan. Selesaikan pembayaran.",
       });
       router.push(`/app/order/${order.orderId}/bayar`);
@@ -189,25 +204,58 @@ export function CreateOrderForm({
         />
       </Field>
 
-      <div className="flex items-baseline justify-between gap-4 border-t border-hairline pt-4">
-        <div>
-          <span className="text-body text-ink-soft">Total yang harus dibayar</span>
-          {price !== null && quantity > 1 ? (
-            <DataValue className="block text-body text-ink-soft">
-              {quantity} IMEI × {formatRupiah(price)}
-            </DataValue>
-          ) : null}
+      <div className="space-y-2 border-t border-hairline pt-4">
+        {balanceUsed > 0 && total !== null ? (
+          <>
+            <div className="flex items-baseline justify-between gap-4">
+              <span className="text-body text-ink-soft">
+                Total
+                {price !== null && quantity > 1
+                  ? ` (${quantity} IMEI × ${formatRupiah(price)})`
+                  : ""}
+              </span>
+              <DataValue>{formatRupiah(total)}</DataValue>
+            </div>
+            <div className="flex items-baseline justify-between gap-4">
+              <span className="text-body text-ink-soft">
+                Dipotong saldo (saldo {formatRupiah(balance)})
+              </span>
+              <DataValue className="text-cleared-ink">
+                −{formatRupiah(balanceUsed)}
+              </DataValue>
+            </div>
+          </>
+        ) : null}
+        <div className="flex items-baseline justify-between gap-4">
+          <div>
+            <span className="text-body text-ink-soft">
+              {balanceUsed > 0 ? "Sisa dibayar via QRIS" : "Total yang harus dibayar"}
+            </span>
+            {balanceUsed === 0 && price !== null && quantity > 1 ? (
+              <DataValue className="block text-body text-ink-soft">
+                {quantity} IMEI × {formatRupiah(price)}
+              </DataValue>
+            ) : null}
+          </div>
+          <DataValue emphasis className="text-headline">
+            {due !== null ? formatRupiah(due) : "—"}
+          </DataValue>
         </div>
-        <DataValue emphasis className="text-headline">
-          {total !== null ? formatRupiah(total) : "—"}
-        </DataValue>
       </div>
 
       <Button type="submit" block loading={submitting} loadingLabel="Membuat order">
-        <QrCode className="size-4" aria-hidden="true" />
-        {quantity > 1
-          ? `Buat ${quantity} order dan terbitkan 1 QRIS`
-          : "Buat order dan terbitkan QRIS"}
+        {paidByBalance ? (
+          <Wallet className="size-4" aria-hidden="true" />
+        ) : (
+          <QrCode className="size-4" aria-hidden="true" />
+        )}
+        {paidByBalance
+          ? quantity > 1
+            ? `Buat ${quantity} order, bayar dengan saldo`
+            : "Buat order, bayar dengan saldo"
+          : quantity > 1
+            ? `Buat ${quantity} order dan terbitkan 1 QRIS`
+            : "Buat order dan terbitkan QRIS"}
       </Button>
     </form>
   );

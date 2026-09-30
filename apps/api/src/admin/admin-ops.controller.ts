@@ -23,6 +23,7 @@ import { AdminReportsService } from "./admin-reports.service";
 import { AdminTotpService } from "./admin-totp.service";
 import { AuditLogService } from "../security/audit-log.service";
 import { SENSITIVE_THROTTLE } from "../security/throttle";
+import { parseAdjustment } from "../orders/balance";
 import {
   optBoolean,
   optEnum,
@@ -145,6 +146,29 @@ export class AdminOpsController {
       userId: id,
       status: input.status,
       passwordReset: Boolean(input.password),
+    });
+    return user;
+  }
+
+  @Post("users/:id/balance")
+  @UseGuards(SuperAdminGuard)
+  @Throttle(SENSITIVE_THROTTLE)
+  async adjustUserBalance(
+    @Req() req: AdminReq,
+    @Param("id") id: string,
+    @Body() body: Json,
+  ) {
+    const amount = parseAdjustment(body.amount);
+    const note = String(optString(body.note, "Catatan", 300) ?? "");
+    const user = await this.users.adjustBalance(req.admin.sub, id, {
+      amount,
+      note,
+    });
+    this.audit.record("admin.user.balance_adjusted", {
+      actorId: req.admin.sub,
+      userId: id,
+      amount,
+      note: note.trim(),
     });
     return user;
   }

@@ -6,6 +6,14 @@ import {
 import { Prisma, type OrderStatus } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
 import { serializeOrderListItem } from "../orders/orders.serializer";
+import {
+  refundNote,
+  refundOrderToBalance,
+  reverseOrderRefund,
+  reversalNote,
+  type RefundReason,
+} from "../orders/balance";
+import { AuditLogService } from "../security/audit-log.service";
 
 const orderInclude = {
   service: true,
@@ -35,7 +43,10 @@ const ALL_STATUSES: OrderStatus[] = [
 
 @Injectable()
 export class AdminOrdersService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly audit: AuditLogService,
+  ) {}
 
   private async redactFor(viewerAdminId: string): Promise<boolean> {
     const viewer = await this.prisma.admin.findUnique({
@@ -111,32 +122,68 @@ export class AdminOrdersService {
     });
     const order = await this.prisma.order.findUnique({
       where: { orderId: publicOrderId },
+      include: { result: { select: { resultStatus: true } } },
     });
     if (!order) throw new NotFoundException("Order tidak ditemukan.");
 
     const next = status as OrderStatus;
-    const updated = await this.prisma.order.update({
-      where: { id: order.id },
-      data: {
-        status: next,
-        ...(next === "done" && !order.completedAt
-          ? { completedAt: new Date() }
-          : {}),
-        ...(next === "in_process" && !order.startedAt
-          ? { startedAt: new Date() }
-          : {}),
-        activity: {
-          create: {
-            status: next,
-            note:
-              String(note ?? "").trim() ||
-              `Status diubah manual oleh Super Admin menjadi ${next}.`,
-            actor: admin.fullName,
+    const refundReason: RefundReason | null =
+      next === "rejected"
+        ? "order_rejected"
+        : next === "cancel"
+          ? "order_cancelled"
+          : next === "done" && order.result?.resultStatus === "failed"
+            ? "order_failed"
+            : null;
+    const { updated, refunded, reversed } = await this.prisma.$transaction(async (tx) => {
+      const refunded = refundReason
+        ? await refundOrderToBalance(tx, order, refundReason)
+        : 0;
+      const reversed = refundReason ? 0 : await reverseOrderRefund(tx, order);
+      const updated = await tx.order.update({
+        where: { id: order.id },
+        data: {
+          status: next,
+          ...(next === "done" && !order.completedAt
+            ? { completedAt: new Date() }
+            : {}),
+          ...(next === "in_process" && !order.startedAt
+            ? { startedAt: new Date() }
+            : {}),
+          activity: {
+            create: {
+              status: next,
+              note:
+                (String(note ?? "").trim() ||
+                  `Status diubah manual oleh Super Admin menjadi ${next}.`) +
+                refundNote(refunded) +
+                reversalNote(reversed),
+              actor: admin.fullName,
+            },
           },
         },
-      },
-      include: orderInclude,
+        include: orderInclude,
+      });
+      return { updated, refunded, reversed };
     });
+    if (refunded > 0) {
+      this.audit.record("balance.refunded", {
+        actorId: adminId,
+        userId: updated.userId,
+        orderId: updated.orderId,
+        amount: refunded,
+        reason: refundReason ?? undefined,
+      });
+    }
+    if (reversed > 0) {
+      this.audit.record("balance.refund_reversed", {
+        actorId: adminId,
+        userId: updated.userId,
+        orderId: updated.orderId,
+        amount: reversed,
+        status: next,
+      });
+    }
     return serializeOrderListItem(updated, {
       redactUser: admin.role !== "super_admin",
     });

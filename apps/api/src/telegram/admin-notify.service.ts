@@ -9,7 +9,16 @@ import {
   orderCardCancelledHtml,
   superAdminFollowUpHtml,
   userOrderNoticeHtml,
+  type CardCustomer,
 } from "./telegram-messages";
+
+/**
+ * Customer username and price go only to a Super Admin's private chat, never to
+ * operators or group chats (Telegram group/supergroup chat ids are negative).
+ */
+function showsCustomer(dest: { role: string; chatId: string }): boolean {
+  return dest.role === "super_admin" && !dest.chatId.startsWith("-");
+}
 
 @Injectable()
 export class AdminNotifyService {
@@ -103,10 +112,14 @@ export class AdminNotifyService {
       imei: order.imei,
       serviceName: order.service.name,
     };
-    const operatorHtml = newOrderAdminHtml(cardInput);
+    const operatorHtml = newOrderAdminHtml({ ...cardInput, viaWhatsapp });
     const superAdminHtml = newOrderAdminHtml({
       ...cardInput,
-      customer: { username: order.user.username, channel: order.channel },
+      customer: {
+        username: order.user.username,
+        channel: order.channel,
+        price: order.price,
+      },
       viaWhatsapp,
     });
     const replyMarkup = {
@@ -128,7 +141,7 @@ export class AdminNotifyService {
       try {
         const body = await this.sendMessageRaw(token, {
           chat_id: dest.chatId,
-          text: dest.role === "super_admin" ? superAdminHtml : operatorHtml,
+          text: showsCustomer(dest) ? superAdminHtml : operatorHtml,
           parse_mode: "HTML",
           disable_web_page_preview: true,
           reply_markup:
@@ -199,20 +212,40 @@ export class AdminNotifyService {
       where: { id: internalOrderId },
       include: {
         service: true,
-        telegramNotifications: true,
+        user: { select: { username: true } },
+        telegramNotifications: {
+          include: { admin: { select: { role: true } } },
+        },
       },
     });
     if (!order) return;
 
-    let html: string;
-    let keyboard: { text: string; callback_data: string }[][] = [];
-    if (kind === "taken") {
-      html = orderCardTakenHtml({
+    const render = (customer?: CardCustomer): string => {
+      const base = {
         orderId: order.orderId,
         imei: order.imei,
         serviceName: order.service.name,
         actorName: meta.actorName,
-      });
+        customer,
+      };
+      if (kind === "taken") return orderCardTakenHtml(base);
+      if (kind === "cancelled") {
+        return orderCardCancelledHtml({ ...base, reason: meta.note ?? "—" });
+      }
+      if (kind === "rejected") {
+        return orderCardRejectedHtml({ ...base, reason: meta.note ?? "—" });
+      }
+      return orderCardDoneHtml({ ...base, note: meta.note ?? "—" });
+    };
+    const operatorHtml = render();
+    const superAdminHtml = render({
+      username: order.user.username,
+      channel: order.channel,
+      price: order.price,
+    });
+
+    let keyboard: { text: string; callback_data: string }[][] = [];
+    if (kind === "taken") {
       keyboard = [
         [
           {
@@ -225,33 +258,12 @@ export class AdminNotifyService {
           },
         ],
       ];
-    } else if (kind === "cancelled") {
-      html = orderCardCancelledHtml({
-        orderId: order.orderId,
-        imei: order.imei,
-        serviceName: order.service.name,
-        actorName: meta.actorName,
-        reason: meta.note ?? "—",
-      });
-    } else if (kind === "rejected") {
-      html = orderCardRejectedHtml({
-        orderId: order.orderId,
-        imei: order.imei,
-        serviceName: order.service.name,
-        actorName: meta.actorName,
-        reason: meta.note ?? "—",
-      });
-    } else {
-      html = orderCardDoneHtml({
-        orderId: order.orderId,
-        imei: order.imei,
-        serviceName: order.service.name,
-        actorName: meta.actorName,
-        note: meta.note ?? "—",
-      });
     }
 
     for (const row of order.telegramNotifications) {
+      const html = showsCustomer({ role: row.admin.role, chatId: row.chatId })
+        ? superAdminHtml
+        : operatorHtml;
       if (!row.messageId) continue;
       const isAssigneeCard =
         kind === "taken" &&
@@ -300,18 +312,26 @@ export class AdminNotifyService {
       ).filter((d) => d.role === "super_admin" && d.adminId !== actor.id);
       if (!recipients.length) return;
 
-      const html = superAdminFollowUpHtml({
+      const base = {
         kind,
         orderId: order.orderId,
         imei: order.imei,
-        customerUsername: order.user.username,
         serviceName: order.service.name,
         adminUsername: actor.username,
         adminFullName: actor.fullName,
         note,
+      };
+      const withCustomer = superAdminFollowUpHtml({
+        ...base,
+        customer: { username: order.user.username, price: order.price },
       });
+      const withoutCustomer = superAdminFollowUpHtml(base);
       for (const dest of recipients) {
-        await this.sendMessage(token, dest.chatId, html);
+        await this.sendMessage(
+          token,
+          dest.chatId,
+          showsCustomer(dest) ? withCustomer : withoutCustomer,
+        );
       }
     } catch (err) {
       this.logger.warn(

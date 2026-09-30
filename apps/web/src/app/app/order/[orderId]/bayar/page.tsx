@@ -106,6 +106,24 @@ export default async function PaymentPage({
               </dd>
             </div>
           )}
+          {order.invoice.balanceUsed ? (
+            <>
+              <div className="flex items-baseline justify-between gap-4 py-2.5">
+                <dt className="text-body text-ink-soft">Total</dt>
+                <dd>
+                  <DataValue>{formatRupiah(order.invoice.amount)}</DataValue>
+                </dd>
+              </div>
+              <div className="flex items-baseline justify-between gap-4 py-2.5">
+                <dt className="text-body text-ink-soft">Dipotong saldo</dt>
+                <dd>
+                  <DataValue className="text-cleared-ink">
+                    −{formatRupiah(order.invoice.balanceUsed)}
+                  </DataValue>
+                </dd>
+              </div>
+            </>
+          ) : null}
           <div className="flex items-baseline justify-between gap-4 py-2.5">
             <dt className="text-body text-ink-soft">Invoice</dt>
             <dd>
@@ -132,7 +150,10 @@ export default async function PaymentPage({
             order.invoice.qrisString ??
             (order.invoice.checkoutUrl
               ? null
-              : qrisPayload(order.orderId, order.invoice.amount))
+              : qrisPayload(
+                  order.orderId,
+                  order.invoice.amountDue ?? order.invoice.amount,
+                ))
           }
           checkoutUrl={order.invoice.checkoutUrl ?? null}
           gateway={order.invoice.paymentChannel === "sayabayar"}

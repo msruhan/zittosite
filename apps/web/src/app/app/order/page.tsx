@@ -6,7 +6,7 @@ import { Card, CardBody } from "@/components/ui/card";
 import { CreateOrderForm } from "@/components/domain/create-order-form";
 import { ApiError } from "@/lib/api";
 import { serverApi } from "@/lib/server-api";
-import type { Service } from "@/lib/types";
+import type { Service, User } from "@/lib/types";
 
 export const metadata: Metadata = {
   title: "Buat Order",
@@ -14,8 +14,14 @@ export const metadata: Metadata = {
 
 export default async function CreateOrderPage() {
   let services: Service[] = [];
+  let balance = 0;
   try {
-    services = await serverApi<Service[]>("/services");
+    const [list, me] = await Promise.all([
+      serverApi<Service[]>("/services"),
+      serverApi<User>("/me"),
+    ]);
+    services = list;
+    balance = me.creditBalance ?? 0;
   } catch (err) {
     if (err instanceof ApiError && err.status === 401) redirect("/login");
     throw err;
@@ -35,7 +41,11 @@ export default async function CreateOrderPage() {
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,20rem)]">
         <Card>
           <CardBody>
-            <CreateOrderForm services={services} priceFor={priceFor} />
+            <CreateOrderForm
+              services={services}
+              priceFor={priceFor}
+              balance={balance}
+            />
           </CardBody>
         </Card>
 
@@ -46,8 +56,8 @@ export default async function CreateOrderPage() {
               {[
                 {
                   step: "01",
-                  title: "Invoice QRIS terbit",
-                  body: "Selesaikan pembayaran sebelum hitung mundur di halaman bayar habis.",
+                  title: "Bayar dengan saldo atau QRIS",
+                  body: "Saldo akun dipakai lebih dulu. Jika kurang, sisanya dibayar lewat QRIS sebelum hitung mundur habis.",
                 },
                 {
                   step: "02",

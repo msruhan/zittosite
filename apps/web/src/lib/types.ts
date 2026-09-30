@@ -24,7 +24,7 @@ export type OrderChannel = "web" | "telegram";
 
 export type UserStatus = "active" | "suspended";
 
-export type ResultStatus = "success" | "partial" | "failed";
+export type ResultStatus = "success" | "failed";
 
 export type FulfillmentChannel = "telegram" | "whatsapp";
 
@@ -108,6 +108,8 @@ export interface PaymentInvoice {
   invoiceId: string;
   orderId: string;
   amount: number;
+  /** Part of `amount` paid from the account balance at checkout. */
+  balanceUsed?: number;
   /** Amount the customer must transfer (includes the gateway's unique code). */
   amountDue?: number;
   qrisString?: string | null;

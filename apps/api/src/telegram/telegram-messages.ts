@@ -13,10 +13,6 @@ function row(icon: string, label: string, value: string, code = false): string {
   return `${icon} <b>${escapeHtml(label)}:</b> ${v}`;
 }
 
-export function formatCredits(n: number): string {
-  return `${n.toLocaleString("id-ID")} kredit`;
-}
-
 export function unlinkedHtml(loginUrl: string): string {
   return [
     "🔗 <b>Akun belum tertaut</b>",
@@ -64,7 +60,7 @@ export function startLinkedMemberHtml(input: {
     "<i>Akun tertaut</i>",
     "",
     row("👤", "Username", input.username),
-    row("💎", "Saldo", formatCredits(input.balance)),
+    row("💎", "Saldo", formatRp(input.balance)),
     "",
     "Pilih menu di bawah, atau ketik /menu kapan saja.",
   ].join("\n");
@@ -97,7 +93,7 @@ export function statusMemberHtml(input: {
     "",
     row("🪪", "Nama", input.fullName),
     row("🔖", "Username", input.username),
-    row("💎", "Saldo", formatCredits(input.balance)),
+    row("💎", "Saldo", formatRp(input.balance)),
     row("🟢", "Status", input.status),
     row("🔗", "Telegram", "tertaut"),
     "",
@@ -398,9 +394,9 @@ export function saldoMemberHtml(input: {
   portalUrl: string;
 }): string {
   return [
-    "💎 <b>Saldo kredit</b>",
+    "💎 <b>Saldo akun</b>",
     "",
-    row("💰", "Saldo", formatCredits(input.balance)),
+    row("💰", "Saldo", formatRp(input.balance)),
     "",
     `🌐 Portal: ${escapeHtml(input.portalUrl)}`,
   ].join("\n");
@@ -408,9 +404,9 @@ export function saldoMemberHtml(input: {
 
 export function saldoAdminHtml(): string {
   return [
-    "💎 <b>Saldo kredit</b>",
+    "💎 <b>Saldo akun</b>",
     "",
-    "<i>Saldo kredit hanya untuk akun user. Admin memakai Telegram untuk notifikasi.</i>",
+    "<i>Saldo hanya untuk akun user. Admin memakai Telegram untuk notifikasi.</i>",
   ].join("\n");
 }
 
@@ -437,23 +433,31 @@ export function formatRp(n: number): string {
   return `Rp${n.toLocaleString("id-ID")}`;
 }
 
+/** Customer and price rows shown on Super Admin cards only. */
+export type CardCustomer = { username: string; channel: string; price: number };
+
+function customerLines(customer?: CardCustomer): string[] {
+  return customer
+    ? [
+        row("👤", "User", customer.username, true),
+        row("📡", "Via", customer.channel),
+        row("💰", "Harga", formatRp(customer.price)),
+      ]
+    : [];
+}
+
 export function newOrderAdminHtml(input: {
   orderId: string;
   imei: string;
   serviceName: string;
-  customer?: { username: string; channel: string };
+  customer?: CardCustomer;
   viaWhatsapp?: boolean;
 }): string {
   return [
     "🆕 <b>ORDER BARU</b>",
     "",
     row("🎫", "Order ID", input.orderId, true),
-    ...(input.customer
-      ? [
-          row("👤", "User", input.customer.username, true),
-          row("📡", "Via", input.customer.channel),
-        ]
-      : []),
+    ...customerLines(input.customer),
     row("📱", "IMEI", input.imei, true),
     row("📦", "Layanan", input.serviceName),
     ...(input.viaWhatsapp
@@ -473,8 +477,8 @@ export function superAdminFollowUpHtml(input: {
   kind: keyof typeof FOLLOW_UP_TITLE;
   orderId: string;
   imei: string;
-  customerUsername: string;
   serviceName: string;
+  customer?: { username: string; price: number };
   adminUsername: string;
   adminFullName: string;
   note?: string;
@@ -484,8 +488,13 @@ export function superAdminFollowUpHtml(input: {
     "",
     row("🎫", "Order ID", input.orderId, true),
     row("📱", "IMEI", input.imei, true),
-    row("👤", "User", input.customerUsername, true),
+    ...(input.customer
+      ? [row("👤", "User", input.customer.username, true)]
+      : []),
     row("📦", "Layanan", input.serviceName),
+    ...(input.customer
+      ? [row("💰", "Harga", formatRp(input.customer.price))]
+      : []),
     row("👷", "Admin", `${input.adminUsername} (${input.adminFullName})`),
     ...(input.note
       ? [row("📝", input.kind === "done" ? "Hasil" : "Alasan", input.note)]
@@ -497,12 +506,14 @@ export function orderCardTakenHtml(input: {
   orderId: string;
   imei: string;
   serviceName: string;
+  customer?: CardCustomer;
   actorName: string;
 }): string {
   return [
     "🛠️ <b>IN PROCESS</b>",
     "",
     row("🎫", "Order ID", input.orderId, true),
+    ...customerLines(input.customer),
     row("📱", "IMEI", input.imei, true),
     row("📦", "Layanan", input.serviceName),
     row("👷", "Diambil oleh", input.actorName),
@@ -513,6 +524,7 @@ export function orderCardRejectedHtml(input: {
   orderId: string;
   imei: string;
   serviceName: string;
+  customer?: CardCustomer;
   actorName: string;
   reason: string;
 }): string {
@@ -520,6 +532,7 @@ export function orderCardRejectedHtml(input: {
     "❌ <b>REJECTED</b>",
     "",
     row("🎫", "Order ID", input.orderId, true),
+    ...customerLines(input.customer),
     row("📱", "IMEI", input.imei, true),
     row("📦", "Layanan", input.serviceName),
     row("👷", "Oleh", input.actorName),
@@ -531,6 +544,7 @@ export function orderCardCancelledHtml(input: {
   orderId: string;
   imei: string;
   serviceName: string;
+  customer?: CardCustomer;
   actorName: string;
   reason: string;
 }): string {
@@ -538,6 +552,7 @@ export function orderCardCancelledHtml(input: {
     "🚫 <b>DIBATALKAN</b>",
     "",
     row("🎫", "Order ID", input.orderId, true),
+    ...customerLines(input.customer),
     row("📱", "IMEI", input.imei, true),
     row("📦", "Layanan", input.serviceName),
     row("👤", "Oleh", input.actorName),
@@ -549,6 +564,7 @@ export function orderCardDoneHtml(input: {
   orderId: string;
   imei: string;
   serviceName: string;
+  customer?: CardCustomer;
   actorName: string;
   note: string;
 }): string {
@@ -556,6 +572,7 @@ export function orderCardDoneHtml(input: {
     "✅ <b>DONE</b>",
     "",
     row("🎫", "Order ID", input.orderId, true),
+    ...customerLines(input.customer),
     row("📱", "IMEI", input.imei, true),
     row("📦", "Layanan", input.serviceName),
     row("👷", "Oleh", input.actorName),
@@ -602,16 +619,39 @@ function orderIdLines(orderId: string, items?: BulkItem[]): string[] {
   ];
 }
 
+function balanceUsedLines(balanceUsed: number | undefined): string[] {
+  return balanceUsed && balanceUsed > 0
+    ? [row("💳", "Dipotong saldo", formatRp(balanceUsed))]
+    : [];
+}
+
+export function orderPaidByBalanceHtml(input: {
+  orderId: string;
+  amount: number;
+  items?: BulkItem[];
+}): string {
+  return [
+    "✅ <b>Order dibuat &amp; lunas</b>",
+    "",
+    ...orderIdLines(input.orderId, input.items),
+    row("💳", "Dibayar dengan saldo", formatRp(input.amount)),
+    "",
+    "Order Anda langsung masuk antrean admin. Kami kabari lagi saat mulai dikerjakan.",
+  ].join("\n");
+}
+
 export function orderCreatedHtml(input: {
   orderId: string;
   payUrl: string;
   amount: number;
+  balanceUsed?: number;
   items?: BulkItem[];
 }): string {
   return [
     "✅ <b>Order dibuat</b>",
     "",
     ...orderIdLines(input.orderId, input.items),
+    ...balanceUsedLines(input.balanceUsed),
     row("💰", "Tagihan", formatRp(input.amount)),
     "",
     "Bayar di portal:",
@@ -622,6 +662,7 @@ export function orderCreatedHtml(input: {
 export function pendingOrderHtml(input: {
   orderId: string;
   amount: number;
+  balanceUsed?: number;
   expiresAt: Date | null;
   items?: BulkItem[];
 }): string {
@@ -636,6 +677,7 @@ export function pendingOrderHtml(input: {
     "⏳ <b>Masih ada order menunggu pembayaran</b>",
     "",
     ...orderIdLines(input.orderId, input.items),
+    ...balanceUsedLines(input.balanceUsed),
     row("💰", "Tagihan", formatRp(input.amount)),
     ...(until ? [row("⏰", "Bayar sebelum", `${until} WIB`)] : []),
     "",
@@ -659,17 +701,35 @@ export function cancelConfirmHtml(orderId: string, bulkCount = 1): string {
 /** Caption for the QRIS photo; Telegram caps captions at 1024 characters. */
 const RESULT_LABEL: Record<string, string> = {
   success: "✅ Berhasil",
-  partial: "⚠️ Sebagian berhasil",
   failed: "❌ Gagal",
 };
 
 type UserOrderNotice =
   | { kind: "paid"; orderId: string; imei: string; serviceName: string }
   | { kind: "taken"; orderId: string }
-  | { kind: "rejected"; orderId: string; reason: string }
-  | { kind: "done"; orderId: string; resultStatus: string; note: string }
-  | { kind: "cancelled"; orderId: string; reason: string; wasPaid: boolean }
-  | { kind: "expired"; orderId: string };
+  | { kind: "rejected"; orderId: string; reason: string; refund?: number }
+  | {
+      kind: "done";
+      orderId: string;
+      resultStatus: string;
+      note: string;
+      refund?: number;
+    }
+  | {
+      kind: "cancelled";
+      orderId: string;
+      reason: string;
+      wasPaid: boolean;
+      refund?: number;
+    }
+  | { kind: "expired"; orderId: string }
+  | { kind: "late_payment"; orderId: string; refund: number };
+
+function refundLines(amount: number | undefined): string[] {
+  return amount && amount > 0
+    ? ["", `💳 Dana <b>${formatRp(amount)}</b> sudah dikembalikan ke saldo akun Anda.`]
+    : [];
+}
 
 /** Status updates sent to the customer's own chat. */
 export function userOrderNoticeHtml(notice: UserOrderNotice): string {
@@ -699,6 +759,7 @@ export function userOrderNoticeHtml(notice: UserOrderNotice): string {
         "",
         id,
         row("📝", "Alasan", notice.reason),
+        ...refundLines(notice.refund),
       ].join("\n");
     case "done":
       return [
@@ -707,6 +768,7 @@ export function userOrderNoticeHtml(notice: UserOrderNotice): string {
         id,
         row("📊", "Hasil", RESULT_LABEL[notice.resultStatus] ?? notice.resultStatus),
         ...(notice.note ? [row("📝", "Catatan", notice.note)] : []),
+        ...refundLines(notice.refund),
       ].join("\n");
     case "cancelled":
       return [
@@ -714,9 +776,20 @@ export function userOrderNoticeHtml(notice: UserOrderNotice): string {
         "",
         id,
         row("📝", "Alasan", notice.reason),
-        ...(notice.wasPaid
-          ? ["", "Pembayaran Anda sudah kami terima. Hubungi support untuk pengembalian dana."]
-          : []),
+        ...(notice.refund
+          ? refundLines(notice.refund)
+          : notice.wasPaid
+            ? ["", "Pembayaran Anda sudah kami terima. Hubungi support untuk pengembalian dana."]
+            : []),
+      ].join("\n");
+    case "late_payment":
+      return [
+        "💳 <b>Pembayaran terlambat diterima</b>",
+        "",
+        id,
+        "",
+        "Pembayaran masuk setelah order dibatalkan.",
+        ...refundLines(notice.refund),
       ].join("\n");
     case "expired":
       return [
@@ -733,6 +806,7 @@ export function userOrderNoticeHtml(notice: UserOrderNotice): string {
 export function orderQrisCaptionHtml(input: {
   orderId: string;
   amount: number;
+  balanceUsed?: number;
   expiresAt: Date;
   items?: BulkItem[];
 }): string {
@@ -745,6 +819,7 @@ export function orderQrisCaptionHtml(input: {
     "✅ <b>Order dibuat</b>",
     "",
     ...orderIdLines(input.orderId, input.items),
+    ...balanceUsedLines(input.balanceUsed),
     row("💰", "Tagihan", formatRp(input.amount)),
     row("⏰", "Bayar sebelum", `${until} WIB`),
     "",

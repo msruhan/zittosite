@@ -29,7 +29,6 @@ async function main() {
       password: "user1234",
       fullName: "Muhammad Al Fajri",
       telegramHandle: "@alfajri",
-      creditBalance: 25,
       botAccess: true,
     },
     {
@@ -37,7 +36,6 @@ async function main() {
       password: "user1234",
       fullName: "Siti Aminah",
       telegramHandle: "@sitiaminah",
-      creditBalance: 10,
       botAccess: true,
     },
     {
@@ -45,7 +43,6 @@ async function main() {
       password: "user1234",
       fullName: "Agus Setiawan",
       telegramHandle: "@agussetiawan",
-      creditBalance: 5,
       botAccess: true,
     },
   ];
@@ -116,7 +113,6 @@ async function main() {
         passwordHash: await hash(user.password),
         fullName: user.fullName,
         telegramHandle: user.telegramHandle,
-        creditBalance: user.creditBalance,
         botAccess: user.botAccess,
         status: "active",
       },
@@ -124,7 +120,6 @@ async function main() {
         passwordHash: await hash(user.password),
         fullName: user.fullName,
         telegramHandle: user.telegramHandle,
-        creditBalance: user.creditBalance,
         botAccess: user.botAccess,
         status: "active",
       },

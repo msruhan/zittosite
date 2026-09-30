@@ -77,7 +77,6 @@ enum WhatsappNotificationStatus {
 
 enum ResultStatus {
   success
-  partial
   failed
 }
 
@@ -97,8 +96,26 @@ model User {
   linkTokens     TelegramLinkToken[]
   orders         Order[]
   servicePrices  UserServicePrice[]
+  balanceEntries BalanceEntry[]
 
   @@map("users")
+}
+
+/// Append-only ledger of creditBalance changes; `refKey` makes each refund apply once.
+model BalanceEntry {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  amount    Int
+  reason    String
+  refKey    String   @unique @map("ref_key")
+  orderId   String?  @map("order_id")
+  note      String
+  createdAt DateTime @default(now()) @map("created_at")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  order     Order?   @relation(fields: [orderId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@map("balance_entries")
 }
 
 /// Append-only activity trail shown to Super Admin; names are snapshots at event time.
@@ -317,6 +334,7 @@ model Order {
   result           OrderResult?
   activity         OrderActivityLog[]
   telegramNotifications OrderTelegramNotification[]
+  balanceEntries   BalanceEntry[]
 
   @@index([userId, createdAt])
   @@index([status, createdAt])
@@ -347,6 +365,8 @@ model PaymentInvoice {
   invoiceId        String        @unique @map("invoice_id")
   /// Bulk total: one invoice pays for every order in `orders`.
   amount           Int
+  /// Part of `amount` paid from creditBalance at checkout; the gateway charges the rest.
+  balanceUsed      Int           @default(0) @map("balance_used")
   amountDue        Int?          @map("amount_due")
   qrisString       String?       @map("qris_string")
   checkoutUrl      String?       @map("checkout_url")

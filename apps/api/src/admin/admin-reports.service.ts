@@ -90,14 +90,14 @@ export class AdminReportsService {
     ] = await Promise.all([
       this.prisma.paymentInvoice.aggregate({
         where: { paymentStatus: "paid" },
-        _sum: { amount: true },
+        _sum: { amount: true, balanceUsed: true },
       }),
       this.prisma.paymentInvoice.aggregate({
         where: {
           paymentStatus: "paid",
           paidAt: { gte: todayStart, lt: tomorrowStart },
         },
-        _sum: { amount: true },
+        _sum: { amount: true, balanceUsed: true },
       }),
       this.prisma.order.count({
         where: { createdAt: { gte: todayStart, lt: tomorrowStart } },
@@ -119,7 +119,7 @@ export class AdminReportsService {
           paymentStatus: "paid",
           paidAt: { gte: windowStart, lt: tomorrowStart },
         },
-        select: { paidAt: true, amount: true },
+        select: { paidAt: true, amount: true, balanceUsed: true },
       }),
       this.prisma.paymentInvoice.findMany({
         where: { paymentStatus: "paid" },
@@ -166,7 +166,7 @@ export class AdminReportsService {
       );
       return {
         label: formatDayLabel(day),
-        revenue: dayPaid.reduce((sum, inv) => sum + inv.amount, 0),
+        revenue: dayPaid.reduce((sum, inv) => sum + inv.amount - inv.balanceUsed, 0),
         orders: dayPaid.length,
       };
     });
@@ -213,8 +213,10 @@ export class AdminReportsService {
 
     return {
       kpis: {
-        revenueTotal: revenueTotalAgg._sum.amount ?? 0,
-        revenueToday: revenueTodayAgg._sum.amount ?? 0,
+        revenueTotal:
+          (revenueTotalAgg._sum.amount ?? 0) - (revenueTotalAgg._sum.balanceUsed ?? 0),
+        revenueToday:
+          (revenueTodayAgg._sum.amount ?? 0) - (revenueTodayAgg._sum.balanceUsed ?? 0),
         ordersToday,
         usersTotal,
         usersActive,

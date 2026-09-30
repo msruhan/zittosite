@@ -11,7 +11,9 @@ import type {
   UserServicePrice,
 } from "@prisma/client";
 import * as bcrypt from "bcryptjs";
+import { randomUUID } from "crypto";
 import { PrismaService } from "../prisma/prisma.service";
+import { applyBalance } from "../orders/balance";
 import { serializeUser } from "../orders/orders.serializer";
 import { passwordPolicyError } from "../security/password";
 import type { ServicePriceInput } from "../security/input";
@@ -166,6 +168,33 @@ export class AdminUsersService {
       });
     }
 
+    return serializeManagedUser(user);
+  }
+
+  /** Super Admin top-up (positive) or deduction (negative); a deduction cannot go below zero. */
+  async adjustBalance(
+    adminId: string,
+    id: string,
+    input: { amount: number; note: string },
+  ) {
+    const note = input.note.trim();
+    if (!note) throw new BadRequestException("Catatan wajib diisi.");
+    const existing = await this.prisma.user.findUnique({ where: { id } });
+    if (!existing) throw new NotFoundException("User tidak ditemukan.");
+
+    const user = await this.prisma.$transaction(async (tx) => {
+      await applyBalance(tx, {
+        userId: id,
+        amount: input.amount,
+        reason: "admin_adjust",
+        refKey: `admin:${adminId}:${randomUUID()}`,
+        note,
+      });
+      return tx.user.findUniqueOrThrow({
+        where: { id },
+        include: managedUserInclude,
+      });
+    });
     return serializeManagedUser(user);
   }
 

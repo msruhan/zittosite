@@ -31,6 +31,7 @@ import {
   operatorRecapHtml,
   adminOrderRecapHtml,
   orderCreatedHtml,
+  orderPaidByBalanceHtml,
   orderHistoryHtml,
   orderQrisCaptionHtml,
   pendingOrderHtml,
@@ -54,7 +55,7 @@ const MEMBER_COMMANDS: BotCommandDef[] = [
   { command: "start", description: "Mulai / status tautan" },
   { command: "menu", description: "Menu utama" },
   { command: "status", description: "Info akun tertaut" },
-  { command: "saldo", description: "Cek saldo kredit" },
+  { command: "saldo", description: "Cek saldo akun" },
   { command: "order", description: "Buat order baru" },
   { command: "riwayat", description: "5 order terakhir" },
 ];
@@ -252,6 +253,7 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
       orderId: string;
       qris: string;
       amount: number;
+      balanceUsed?: number;
       expiresAt: Date;
       items?: BulkItem[];
     },
@@ -521,12 +523,26 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
           });
           const invoice = order.invoice;
           const amount = invoice?.amountDue ?? invoice?.amount ?? order.price;
+          const balanceUsed = invoice?.balanceUsed ?? 0;
           const items = invoice?.orders;
+          if (order.status !== "waiting_payment") {
+            await this.replyHtml(
+              ctx,
+              orderPaidByBalanceHtml({
+                orderId: order.orderId,
+                amount: invoice?.amount ?? order.price,
+                items,
+              }),
+              { reply_markup: backToMenuKeyboard() },
+            );
+            return;
+          }
           if (invoice?.qrisString) {
             const sent = await this.replyQris(ctx, {
               orderId: order.orderId,
               qris: invoice.qrisString,
               amount,
+              balanceUsed,
               expiresAt: new Date(invoice.expiredAt),
               items,
             });
@@ -535,7 +551,13 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
           const payUrl = `${webPublicUrl()}/app/order/${order.orderId}/bayar`;
           await this.replyHtml(
             ctx,
-            orderCreatedHtml({ orderId: order.orderId, payUrl, amount, items }),
+            orderCreatedHtml({
+              orderId: order.orderId,
+              payUrl,
+              amount,
+              balanceUsed,
+              items,
+            }),
             { reply_markup: backToMenuKeyboard() },
           );
         } catch (err: any) {
@@ -853,7 +875,7 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
     const parts = payload.split(":");
     const resultStatus = parts.pop() as ResultStatus;
     const orderId = parts.join(":");
-    if (!["success", "partial", "failed"].includes(resultStatus)) {
+    if (!["success", "failed"].includes(resultStatus)) {
       await ctx.answerCallbackQuery({ text: "Status tidak valid", show_alert: true });
       return;
     }
@@ -912,6 +934,7 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
       pendingOrderHtml({
         orderId: order.orderId,
         amount: invoice?.amountDue ?? invoice?.amount ?? order.price,
+        balanceUsed: invoice?.balanceUsed,
         expiresAt: invoice ? new Date(invoice.expiredAt) : null,
         items: invoice?.orders,
       }),
@@ -936,6 +959,7 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
       orderId: order.orderId,
       qris: invoice.qrisString,
       amount: invoice.amountDue ?? invoice.amount,
+      balanceUsed: invoice.balanceUsed,
       expiresAt: new Date(invoice.expiredAt),
       items: invoice.orders,
     });
@@ -988,6 +1012,11 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
         "",
         "Kirim <b>IMEI 15 digit</b> sekarang.",
         `Bulk order: kirim beberapa IMEI dalam satu pesan, <b>satu per baris</b> (maksimal ${MAX_BULK_IMEIS}). Total = jumlah IMEI × harga, dibayar dengan 1 QRIS.`,
+        ...(actor.user.creditBalance > 0
+          ? [
+              `💳 Saldo Anda ${formatRp(actor.user.creditBalance)} otomatis dipakai dulu; sisanya dibayar via QRIS.`,
+            ]
+          : []),
         "",
         "⚠️ IMEI wajib berstatus <b>UNKNOWN</b>. Cek CEIR di infoceir.com.",
         "Apabila IMEI tidak berstatus <b>UNKNOWN</b>, maka <b>tidak ada refund</b>.",

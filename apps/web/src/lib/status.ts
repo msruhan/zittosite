@@ -99,12 +99,6 @@ export const RESULT_STATUS: Record<ResultStatus, StatusStamp> = {
     solid: "bg-cleared-edge",
     meaning: "Aktivasi berhasil dan terdaftar.",
   },
-  partial: {
-    label: "Sebagian",
-    stamp: "bg-working-wash text-working-ink border-working-edge",
-    solid: "bg-working-edge",
-    meaning: "Sebagian permintaan berhasil, sisanya perlu tindak lanjut.",
-  },
   failed: {
     label: "Gagal",
     stamp: "bg-refused-wash/50 text-refused-ink border-refused-ink",

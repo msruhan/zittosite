@@ -68,8 +68,8 @@ export function AdminCancelOrder({
       </Field>
       {paid ? (
         <p className="text-body text-refused-ink">
-          Order ini sudah dibayar. Setelah dibatalkan, pengembalian dana harus
-          diproses manual.
+          Order ini sudah dibayar. Setelah dibatalkan, dananya otomatis
+          dikembalikan ke saldo akun user.
         </p>
       ) : null}
       <div className="flex flex-wrap gap-2">
