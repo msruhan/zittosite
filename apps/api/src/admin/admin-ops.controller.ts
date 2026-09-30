@@ -278,6 +278,27 @@ export class AdminOpsController {
     return order;
   }
 
+  @Patch("orders/:orderId/reason")
+  @UseGuards(SuperAdminGuard)
+  async updateOrderReason(
+    @Req() req: AdminReq,
+    @Param("orderId") orderId: string,
+    @Body() body: Json,
+  ) {
+    const reason = optNullableString(body.reason, "Keterangan", 500) ?? null;
+    const order = await this.orders.updateStatusReason(
+      req.admin.sub,
+      orderId,
+      reason,
+    );
+    this.audit.record("admin.order.reason_updated", {
+      actorId: req.admin.sub,
+      orderId,
+      reason: order.statusReason ?? undefined,
+    });
+    return order;
+  }
+
   @Post("orders/:orderId/cancel")
   @UseGuards(SuperAdminGuard)
   async cancelOrder(

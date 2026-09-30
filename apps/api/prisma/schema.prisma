@@ -320,6 +320,8 @@ model Order {
   imei             String
   notes            String?
   status           OrderStatus        @default(waiting_payment)
+  /// Keterangan for rejected/cancelled orders; null means "tidak ada keterangan".
+  statusReason     String?            @map("status_reason")
   price            Int
   assignedAdminId  String?            @map("assigned_admin_id")
   invoiceId        String?            @map("invoice_row_id")

@@ -19,6 +19,7 @@ import {
 import { OrderStepper } from "@/components/domain/order-stepper";
 import { AdminOrderStatusOverride } from "@/components/domain/admin-order-status-override";
 import { AdminCancelOrder } from "@/components/domain/admin-cancel-order";
+import { AdminOrderReason } from "@/components/domain/admin-order-reason";
 import { Avatar } from "@/components/shell/user-chip";
 import { ORDER_STATUS } from "@/lib/status";
 import { ApiError } from "@/lib/api";
@@ -54,6 +55,7 @@ export default async function AdminOrderDetailPage({
 
   const isSuperAdmin = me.role === "super_admin";
   const showCustomer = isSuperAdmin && order.user;
+  const isClosed = order.status === "rejected" || order.status === "cancel";
 
   return (
     <>
@@ -118,6 +120,13 @@ export default async function AdminOrderDetailPage({
                     </DataValue>
                   </DetailRow>
                 ) : null}
+                {isClosed ? (
+                  <DetailRow label="Keterangan">
+                    {order.statusReason ?? (
+                      <span className="text-ink-faint">Tidak ada keterangan</span>
+                    )}
+                  </DetailRow>
+                ) : null}
               </dl>
 
               {order.notes ? (
@@ -138,6 +147,13 @@ export default async function AdminOrderDetailPage({
                 <AdminCancelOrder
                   orderId={order.orderId}
                   paid={order.invoice?.paymentStatus === "paid"}
+                />
+              ) : null}
+
+              {isSuperAdmin && isClosed ? (
+                <AdminOrderReason
+                  orderId={order.orderId}
+                  currentReason={order.statusReason ?? null}
                 />
               ) : null}
 

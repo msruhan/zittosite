@@ -129,8 +129,17 @@ type TelegramActor =
     }
   | { kind: "member"; user: User };
 
+/** Operators can only reject with no reason or this preset; Super Admin can type a custom one on the web. */
+const REJECT_PRESET_REASON = "Eks Kemen / Roamer";
+
+function rejectReasonKeyboard(orderId: string) {
+  return new InlineKeyboard()
+    .text("Tidak ada keterangan", `ord:rjn:${orderId}`)
+    .row()
+    .text(`📝 ${REJECT_PRESET_REASON}`, `ord:rjr:${orderId}`);
+}
+
 type ChatSession =
-  | { kind: "reject"; orderId: string; adminId: string }
   | {
       kind: "done_note";
       orderId: string;
@@ -383,6 +392,14 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
           await this.handleAccept(ctx, data.slice("ord:accept:".length));
         } else if (data.startsWith("ord:reject:")) {
           await this.handleRejectStart(ctx, data.slice("ord:reject:".length));
+        } else if (data.startsWith("ord:rjn:")) {
+          await this.handleRejectConfirm(ctx, data.slice("ord:rjn:".length));
+        } else if (data.startsWith("ord:rjr:")) {
+          await this.handleRejectConfirm(
+            ctx,
+            data.slice("ord:rjr:".length),
+            REJECT_PRESET_REASON,
+          );
         } else if (data.startsWith("ord:done:")) {
           await this.handleDoneStart(ctx, data.slice("ord:done:".length));
         } else if (data.startsWith("ord:dskip:")) {
@@ -456,30 +473,6 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
       const chatId = String(ctx.chat?.id ?? "");
       const session = this.sessions.get(chatId);
       if (!session) return next();
-
-      if (session.kind === "reject") {
-        this.sessions.delete(chatId);
-        try {
-          const order = await this.orders.rejectOrder(
-            session.adminId,
-            session.orderId,
-            text.trim(),
-          );
-          await this.replyHtml(
-            ctx,
-            [
-              `❌ Order <code>${escapeHtml(session.orderId)}</code> ditolak.`,
-              `📱 IMEI: <code>${escapeHtml(order.imei)}</code>`,
-            ].join("\n"),
-          );
-        } catch (err: any) {
-          await this.replyHtml(
-            ctx,
-            `⚠️ ${escapeHtml(err?.message ?? "Gagal menolak")}`,
-          );
-        }
-        return;
-      }
 
       if (session.kind === "done_note") {
         this.sessions.delete(chatId);
@@ -816,17 +809,31 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
   private async handleRejectStart(ctx: Context, orderId: string) {
     const actor = await this.requireOperator(ctx);
     if (!actor) return;
-    const chatId = String(ctx.chat?.id ?? "");
-    this.sessions.set(chatId, {
-      kind: "reject",
-      orderId,
-      adminId: actor.admin.id,
-    });
     await ctx.answerCallbackQuery();
     await this.replyHtml(
       ctx,
-      `Kirim <b>alasan penolakan</b> untuk <code>${escapeHtml(orderId)}</code>.`,
+      `Tambahkan <b>keterangan penolakan</b> untuk <code>${escapeHtml(orderId)}</code>?`,
+      { reply_markup: rejectReasonKeyboard(orderId) },
     );
+  }
+
+  private async handleRejectConfirm(
+    ctx: Context,
+    orderId: string,
+    reason?: string,
+  ) {
+    const actor = await this.requireOperator(ctx);
+    if (!actor) return;
+    const order = await this.orders.rejectOrder(actor.admin.id, orderId, reason);
+    await ctx.answerCallbackQuery({ text: "Order ditolak" });
+    const html = [
+      `❌ Order <code>${escapeHtml(orderId)}</code> ditolak.`,
+      `📱 IMEI: <code>${escapeHtml(order.imei)}</code>`,
+      `📝 Keterangan: ${reason ? escapeHtml(reason) : "<i>tidak ada</i>"}`,
+    ].join("\n");
+    await ctx
+      .editMessageText(html, { parse_mode: TELEGRAM_PARSE_MODE })
+      .catch(() => this.replyHtml(ctx, html));
   }
 
   private async handleDoneStart(ctx: Context, orderId: string) {

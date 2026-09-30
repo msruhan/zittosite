@@ -145,6 +145,7 @@ export function serializeOrderListItem(
     imei: order.imei,
     notes: order.notes,
     status: order.status,
+    statusReason: order.statusReason,
     price: order.price,
     assignedAdminId: order.assignedAdminId,
     startedAt: iso(order.startedAt),

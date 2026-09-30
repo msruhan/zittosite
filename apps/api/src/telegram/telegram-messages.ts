@@ -526,7 +526,7 @@ export function orderCardRejectedHtml(input: {
   serviceName: string;
   customer?: CardCustomer;
   actorName: string;
-  reason: string;
+  reason?: string;
 }): string {
   return [
     "❌ <b>REJECTED</b>",
@@ -536,7 +536,7 @@ export function orderCardRejectedHtml(input: {
     row("📱", "IMEI", input.imei, true),
     row("📦", "Layanan", input.serviceName),
     row("👷", "Oleh", input.actorName),
-    row("📝", "Alasan", input.reason),
+    ...(input.reason ? [row("📝", "Alasan", input.reason)] : []),
   ].join("\n");
 }
 
@@ -707,7 +707,7 @@ const RESULT_LABEL: Record<string, string> = {
 type UserOrderNotice =
   | { kind: "paid"; orderId: string; imei: string; serviceName: string }
   | { kind: "taken"; orderId: string }
-  | { kind: "rejected"; orderId: string; reason: string; refund?: number }
+  | { kind: "rejected"; orderId: string; reason?: string; refund?: number }
   | {
       kind: "done";
       orderId: string;
@@ -758,7 +758,7 @@ export function userOrderNoticeHtml(notice: UserOrderNotice): string {
         "❌ <b>Order ditolak</b>",
         "",
         id,
-        row("📝", "Alasan", notice.reason),
+        ...(notice.reason ? [row("📝", "Alasan", notice.reason)] : []),
         ...refundLines(notice.refund),
       ].join("\n");
     case "done":

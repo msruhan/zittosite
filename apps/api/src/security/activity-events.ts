@@ -203,6 +203,14 @@ export const ACTIVITY_EVENTS = {
     label: "Order dibatalkan admin",
     summary: ({ fields }) => withReason(`Membatalkan order ${fields.orderId}`, fields.reason),
   },
+  "admin.order.reason_updated": {
+    category: "order",
+    label: "Keterangan order diubah",
+    summary: ({ fields }) =>
+      fields.reason
+        ? `Mengubah keterangan order ${fields.orderId} menjadi: ${String(fields.reason)}`
+        : `Menghapus keterangan order ${fields.orderId}`,
+  },
   "admin.order.status_override": {
     category: "order",
     label: "Status order diubah",

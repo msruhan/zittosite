@@ -233,7 +233,7 @@ export class AdminNotifyService {
         return orderCardCancelledHtml({ ...base, reason: meta.note ?? "—" });
       }
       if (kind === "rejected") {
-        return orderCardRejectedHtml({ ...base, reason: meta.note ?? "—" });
+        return orderCardRejectedHtml({ ...base, reason: meta.note });
       }
       return orderCardDoneHtml({ ...base, note: meta.note ?? "—" });
     };

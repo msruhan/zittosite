@@ -381,16 +381,24 @@ export class OrdersService {
       );
     }
 
-    const why = String(reason ?? "").trim() || "Dibatalkan oleh Super Admin.";
+    const typed = String(reason ?? "").trim() || null;
+    const why = typed ?? "Dibatalkan oleh Super Admin.";
     const wasPaid = order.invoice?.paymentStatus === "paid";
 
     if (order.invoice?.paymentStatus === "pending") {
-      const cancelled = await this.prisma.$transaction((tx) =>
-        this.closePendingInvoice(tx, order.invoice!.id, "cancelled", {
+      const cancelled = await this.prisma.$transaction(async (tx) => {
+        const rows = await this.closePendingInvoice(tx, order.invoice!.id, "cancelled", {
           note: `Order dibatalkan oleh Super Admin. Alasan: ${why}`,
           actor: admin.fullName,
-        }),
-      );
+        });
+        if (typed && rows?.length) {
+          await tx.order.updateMany({
+            where: { orderId: { in: rows.map((row) => row.orderId) } },
+            data: { statusReason: typed },
+          });
+        }
+        return rows;
+      });
       for (const row of cancelled ?? []) {
         this.audit.record("admin.order.cancelled", {
           actorId: adminId,
@@ -432,6 +440,7 @@ export class OrdersService {
       const updated = await tx.order.update({
         where: { id: order.id },
         data: {
+          statusReason: typed,
           activity: {
             create: {
               status: "cancel",
@@ -673,8 +682,8 @@ export class OrdersService {
     return serializeOrderListItem(claimed);
   }
 
-  async rejectOrder(adminId: string, publicOrderId: string, reason: string) {
-    const note = String(reason ?? "").trim() || "Ditolak tanpa alasan.";
+  async rejectOrder(adminId: string, publicOrderId: string, reason?: string) {
+    const note = String(reason ?? "").trim() || undefined;
     const admin = await this.prisma.admin.findUniqueOrThrow({
       where: { id: adminId },
     });
@@ -689,7 +698,11 @@ export class OrdersService {
         await this.assertAssignedToService(tx, admin, order.serviceId);
         const result = await tx.order.updateMany({
           where: { id: order.id, status: "waiting_action" },
-          data: { status: "rejected", assignedAdminId: adminId },
+          data: {
+            status: "rejected",
+            assignedAdminId: adminId,
+            statusReason: note ?? null,
+          },
         });
         if (result.count !== 1) {
           throw new ConflictException("Status order berubah.");
@@ -702,7 +715,7 @@ export class OrdersService {
         }
         const result = await tx.order.updateMany({
           where: { id: order.id, status: "in_process" },
-          data: { status: "rejected" },
+          data: { status: "rejected", statusReason: note ?? null },
         });
         if (result.count !== 1) {
           throw new ConflictException("Status order berubah.");
@@ -716,7 +729,7 @@ export class OrdersService {
         data: {
           orderId: order.id,
           status: "rejected",
-          note: `Ditolak: ${note}${refundNote(refunded)}`,
+          note: `${note ? `Ditolak: ${note}` : "Ditolak"}${refundNote(refunded)}`,
           actor: admin.fullName,
         },
       });
@@ -740,12 +753,7 @@ export class OrdersService {
       actorName: admin.fullName,
       note,
     });
-    void this.adminNotify.notifySuperAdminsFollowUp(
-      updated.id,
-      "rejected",
-      admin,
-      note,
-    );
+    void this.adminNotify.notifySuperAdminsFollowUp(updated.id, "rejected", admin, note);
     void this.adminNotify.notifyUserById(
       updated.userId,
       userOrderNoticeHtml({
@@ -888,6 +896,7 @@ export class OrdersService {
           status: next,
           ...(update.kind === "processing" ? { startedAt: now } : {}),
           ...(update.kind === "done" ? { completedAt: now } : {}),
+          ...(update.kind === "rejected" ? { statusReason: update.reason } : {}),
         },
       });
       if (result.count !== 1) return null;

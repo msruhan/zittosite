@@ -141,6 +141,8 @@ export interface Order {
   imei: string;
   notes: string | null;
   status: OrderStatus;
+  /** Keterangan for rejected/cancelled orders; null means none. */
+  statusReason?: string | null;
   price: number;
   assignedAdminId: string | null;
   startedAt: string | null;

@@ -189,6 +189,45 @@ export class AdminOrdersService {
     });
   }
 
+  /** Super Admin edits the keterangan of a closed order; the customer is not notified. */
+  async updateStatusReason(
+    adminId: string,
+    publicOrderId: string,
+    reason: string | null,
+  ) {
+    const admin = await this.prisma.admin.findUniqueOrThrow({
+      where: { id: adminId },
+    });
+    const order = await this.prisma.order.findUnique({
+      where: { orderId: publicOrderId },
+    });
+    if (!order) throw new NotFoundException("Order tidak ditemukan.");
+    if (order.status !== "rejected" && order.status !== "cancel") {
+      throw new BadRequestException(
+        "Keterangan hanya untuk order yang ditolak atau dibatalkan.",
+      );
+    }
+
+    const next = String(reason ?? "").trim() || null;
+    const updated = await this.prisma.order.update({
+      where: { id: order.id },
+      data: {
+        statusReason: next,
+        activity: {
+          create: {
+            status: order.status,
+            note: next
+              ? `Keterangan diubah: ${next}`
+              : "Keterangan dihapus (tidak ada keterangan).",
+            actor: admin.fullName,
+          },
+        },
+      },
+      include: orderInclude,
+    });
+    return serializeOrderListItem(updated);
+  }
+
   async dashboardStats(viewerAdminId: string) {
     const redactUser = await this.redactFor(viewerAdminId);
     const start = new Date();
