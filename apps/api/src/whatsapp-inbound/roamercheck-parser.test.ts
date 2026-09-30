@@ -41,6 +41,24 @@ test("success message means done", () => {
   ]);
 });
 
+test("failed message means rejected", () => {
+  assert.deepEqual(
+    parseRoamercheckMessage(
+      "❌ IMEI 353941308991338 GAGAL. Coba lagi nanti / hubungi admin.",
+    ),
+    [
+      {
+        kind: "rejected",
+        imei: "353941308991338",
+        reason: "Gagal diproses. Coba lagi nanti / hubungi admin.",
+      },
+    ],
+  );
+  assert.deepEqual(parseRoamercheckMessage("❌ *IMEI 353941308991338 GAGAL*"), [
+    { kind: "rejected", imei: "353941308991338", reason: "Gagal diproses." },
+  ]);
+});
+
 test("invalid list rejects each IMEI with its own reason", () => {
   const text = [
     "❌ *Ada IMEI nggak valid:*",

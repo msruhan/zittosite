@@ -7,6 +7,7 @@ const PROCESSING = /IMEI\s*\*?\s*(\d{15})\s*\*?\s*(?:sedang diproses|masuk ke an
 const PROCESSING_LINE = /^.*\bProcessing\b[\s*_]*IMEI\b.*$/gim;
 const IMEI_IN_LINE = /(?<!\d)\d{15}(?!\d)/g;
 const DONE = /IMEI\s*\*?\s*(\d{15})\s*\*?\s*BERHASIL/gi;
+const FAILED = /IMEI\s*\*?\s*(\d{15})\s*\*?\s*GAGAL\b[\s*_.:!-]*(.*)$/gim;
 const INVALID_HEADER = /Ada IMEI nggak valid/i;
 const INVALID_LINE = /^\s*[•\-]\s*(\d{15})\s*:\s*(.+?)\s*$/gm;
 const MAX_REASON = 300;
@@ -24,6 +25,7 @@ function cleanReason(value: string): string {
  * - `⏳ IMEI *358790737367981* sedang diproses, …`       → processing
  * - `⏳ *Processing* IMEI *356609236832323* + 353241103298751...` → processing (each IMEI)
  * - `✅ *IMEI 358790737367981 BERHASIL* ✅`               → done
+ * - `❌ IMEI 353941308991338 GAGAL. Coba lagi nanti …`   → rejected
  * - `❌ *Ada IMEI nggak valid:*` + `• <imei>: <reason>`  → rejected
  */
 export function parseRoamercheckMessage(text: string): ProcessorUpdate[] {
@@ -38,6 +40,15 @@ export function parseRoamercheckMessage(text: string): ProcessorUpdate[] {
   }
   for (const [, imei] of text.matchAll(DONE)) {
     byImei.set(imei, { kind: "done", imei });
+  }
+  for (const [, imei, rest] of text.matchAll(FAILED)) {
+    if (byImei.has(imei)) continue;
+    const detail = cleanReason(rest);
+    byImei.set(imei, {
+      kind: "rejected",
+      imei,
+      reason: detail ? `Gagal diproses. ${detail}` : "Gagal diproses.",
+    });
   }
   for (const [, imei] of text.matchAll(PROCESSING)) {
     if (!byImei.has(imei)) byImei.set(imei, { kind: "processing", imei });
