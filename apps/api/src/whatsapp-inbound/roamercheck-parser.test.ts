@@ -20,6 +20,21 @@ test("in-progress message with bold IMEI means processing", () => {
   );
 });
 
+test("paired Processing message marks every IMEI as processing", () => {
+  const expected = [
+    { kind: "processing", imei: "356609236832323" },
+    { kind: "processing", imei: "353241103298751" },
+  ];
+  assert.deepEqual(
+    parseRoamercheckMessage("⏳ Processing IMEI 356609236832323 + 353241103298751..."),
+    expected,
+  );
+  assert.deepEqual(
+    parseRoamercheckMessage("⏳ *Processing* IMEI *356609236832323* + 353241103298751..."),
+    expected,
+  );
+});
+
 test("success message means done", () => {
   assert.deepEqual(parseRoamercheckMessage("✅ *IMEI 358790737367981 BERHASIL* ✅"), [
     { kind: "done", imei: "358790737367981" },
