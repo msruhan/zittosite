@@ -230,11 +230,21 @@ export function superAdminRecapHtml(input: {
     total: number;
     web: number;
     telegram: number;
+    viaTelegram: number;
+    viaWhatsapp: number;
     byStatus: Partial<Record<string, number>>;
   };
   revenue: { amount: number; payments: number };
   handled: { taken: number; done: number; rejected: number; inProcess: number };
   queue: number;
+  whatsapp: {
+    taken: number;
+    done: number;
+    rejected: number;
+    inProcess: number;
+    queue: number;
+    orders: Array<{ at: Date; imei: string; status: string }>;
+  };
   perAdmin: Array<{
     fullName: string;
     telegramHandle: string | null;
@@ -261,15 +271,24 @@ export function superAdminRecapHtml(input: {
     `<i>${escapeHtml(recapDay(input.day))} · per ${recapStamp()} WIB</i>`,
     "",
     `🧾 Order masuk: <b>${input.created.total}</b> (Web ${input.created.web} · Telegram ${input.created.telegram})`,
+    `🔀 Jalur proses: Telegram ${input.created.viaTelegram} · WhatsApp ${input.created.viaWhatsapp}`,
     `✅ Selesai: ${orDash(count("done"))}`,
     `🚫 Batal: ${orDash(count("cancel"))}`,
     `💰 Pendapatan: <b>${escapeHtml(formatRp(input.revenue.amount))}</b> dari ${input.revenue.payments} pembayaran`,
     "",
     "",
-    "👥 <b>Per admin</b>",
+    "👥 <b>Per admin</b> (jalur Telegram)",
     adminBlocks.length
       ? adminBlocks.join("\n\n")
       : "<i>Belum ada aktivitas admin hari ini.</i>",
+    "",
+    "",
+    "💬 <b>WhatsApp · Roamercheck</b>",
+    handledLine(input.whatsapp),
+    `📥 Antrean: ${orDash(input.whatsapp.queue)}`,
+    ...(input.whatsapp.orders.length
+      ? recapOrderLines(input.whatsapp.orders, 40)
+      : ["<i>Belum ada order WhatsApp yang diproses hari ini.</i>"]),
   ].join("\n");
 }
 

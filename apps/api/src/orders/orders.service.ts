@@ -822,7 +822,7 @@ export class OrdersService {
     });
     if (!updated) return "noop";
 
-    const followUpActor = { id: "external-processor", ...actor };
+    // WhatsApp-fulfilled orders have no admin Telegram cards; only the customer is told.
     const base = {
       userId: updated.userId,
       orderId: updated.orderId,
@@ -832,21 +832,12 @@ export class OrdersService {
     };
     if (update.kind === "processing") {
       this.audit.record("order.taken", base);
-      await this.adminNotify.syncOrderCards(updated.id, "taken", {
-        actorName: actorLabel,
-      });
-      void this.adminNotify.notifySuperAdminsFollowUp(updated.id, "taken", followUpActor);
       void this.adminNotify.notifyUserById(
         updated.userId,
         userOrderNoticeHtml({ kind: "taken", orderId: updated.orderId }),
       );
     } else if (update.kind === "done") {
       this.audit.record("order.done", base);
-      await this.adminNotify.syncOrderCards(updated.id, "done", {
-        actorName: actorLabel,
-        note,
-      });
-      void this.adminNotify.notifySuperAdminsFollowUp(updated.id, "done", followUpActor, note);
       void this.adminNotify.notifyUserById(
         updated.userId,
         userOrderNoticeHtml({
@@ -858,16 +849,6 @@ export class OrdersService {
       );
     } else {
       this.audit.record("order.rejected", { ...base, reason: note });
-      await this.adminNotify.syncOrderCards(updated.id, "rejected", {
-        actorName: actorLabel,
-        note,
-      });
-      void this.adminNotify.notifySuperAdminsFollowUp(
-        updated.id,
-        "rejected",
-        followUpActor,
-        note,
-      );
       void this.adminNotify.notifyUserById(
         updated.userId,
         userOrderNoticeHtml({

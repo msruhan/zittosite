@@ -65,22 +65,36 @@ export class AdminNotifyService {
     });
     if (!order || order.status !== "waiting_action") return;
 
-    // WhatsApp-fulfilled services are processed in the WA group, so operators get no card.
+    const paidNotice = () =>
+      this.notifyUserById(
+        order.userId,
+        userOrderNoticeHtml({
+          kind: "paid",
+          orderId: order.orderId,
+          imei: order.imei,
+          serviceName: order.service.name,
+        }),
+      );
+    // WhatsApp-fulfilled services are processed in the WA group; no admin gets a Telegram card.
+    if (order.service.fulfillmentChannel === "whatsapp") {
+      await paidNotice();
+      return;
+    }
+
     const assigned = new Set(
-      order.service.fulfillmentChannel === "whatsapp"
-        ? []
-        : (
-            await this.prisma.serviceAssignment.findMany({
-              where: { serviceId: order.serviceId },
-              select: { adminId: true },
-            })
-          ).map((row) => row.adminId),
+      (
+        await this.prisma.serviceAssignment.findMany({
+          where: { serviceId: order.serviceId },
+          select: { adminId: true },
+        })
+      ).map((row) => row.adminId),
     );
     const destinations = (
       await this.adminTelegram.notificationDestinations()
     ).filter((d) => d.role === "super_admin" || assigned.has(d.adminId));
     if (!destinations.length) {
       this.logger.warn("No linked admin chats for new order notify");
+      await paidNotice();
       return;
     }
 
@@ -169,15 +183,7 @@ export class AdminNotifyService {
       }
     }
 
-    await this.notifyUserById(
-      order.userId,
-      userOrderNoticeHtml({
-        kind: "paid",
-        orderId: order.orderId,
-        imei: order.imei,
-        serviceName: order.service.name,
-      }),
-    );
+    await paidNotice();
   }
 
   async syncOrderCards(

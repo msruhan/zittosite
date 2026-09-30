@@ -17,11 +17,16 @@ export type SuperAdminRecap = {
     total: number;
     web: number;
     telegram: number;
+    /** By fulfillment channel of the service. */
+    viaTelegram: number;
+    viaWhatsapp: number;
     byStatus: Partial<Record<OrderStatus, number>>;
   };
   revenue: { amount: number; payments: number };
   handled: AdminDayStats;
   queue: number;
+  /** WhatsApp-fulfilled orders handled by the group processor (no admin assignee). */
+  whatsapp: AdminDayStats & { queue: number; orders: RecapOrderLine[] };
   perAdmin: Array<
     {
       adminId: string;
@@ -120,6 +125,30 @@ export class OrderRecapService {
         }),
       ]);
 
+    const viaWhatsappService = { service: { fulfillmentChannel: "whatsapp" } } as const;
+    const processorOrder = { assignedAdminId: null, ...viaWhatsappService } as const;
+    const countProcessor = (w: Prisma.OrderWhereInput) =>
+      this.prisma.order.count({ where: { ...w, ...processorOrder } });
+    const [viaWhatsapp, waTaken, waDone, waRejected, waInProcess, waQueue, waOrders] =
+      await Promise.all([
+        this.prisma.order.count({ where: { createdAt: range, ...viaWhatsappService } }),
+        countProcessor(where.taken),
+        countProcessor(where.done),
+        countProcessor(where.rejected),
+        countProcessor(where.inProcess),
+        this.prisma.order.count({
+          where: { status: "waiting_action", ...viaWhatsappService },
+        }),
+        this.prisma.order.findMany({
+          where: {
+            ...processorOrder,
+            OR: [where.taken, where.done, where.rejected, where.inProcess],
+          },
+          select: { imei: true, status: true, startedAt: true, updatedAt: true },
+          orderBy: [{ startedAt: "asc" }, { updatedAt: "asc" }],
+        }),
+      ]);
+
     const ordersByAdmin = new Map<string, RecapOrderLine[]>();
     for (const o of handledOrders) {
       const list = ordersByAdmin.get(o.assignedAdminId!) ?? [];
@@ -175,11 +204,25 @@ export class OrderRecapService {
         total,
         web: channelCount("web"),
         telegram: channelCount("telegram"),
+        viaTelegram: total - viaWhatsapp,
+        viaWhatsapp,
         byStatus: statusCounts,
       },
       revenue: { amount: paid._sum.amount ?? 0, payments: paid._count._all },
       handled: { taken: t.total, done: d.total, rejected: r.total, inProcess: p.total },
       queue,
+      whatsapp: {
+        taken: waTaken,
+        done: waDone,
+        rejected: waRejected,
+        inProcess: waInProcess,
+        queue: waQueue,
+        orders: waOrders.map((o) => ({
+          at: o.startedAt ?? o.updatedAt,
+          imei: o.imei,
+          status: o.status,
+        })),
+      },
       perAdmin,
     };
   }
