@@ -34,8 +34,11 @@ export default async function PaymentPage({
     throw err;
   }
 
-  if (order.status !== "waiting_payment") {
+  if (order.status === "cancel") {
     redirect(`/app/order/${order.orderId}`);
+  }
+  if (order.status !== "waiting_payment") {
+    redirect("/app/riwayat");
   }
   if (!order.invoice) notFound();
   const bulk = order.invoice.orders ?? [];

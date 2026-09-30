@@ -47,9 +47,9 @@ export function PaymentPanel({
     toast.success("Pembayaran diterima", {
       description: "Order Anda masuk antrean admin.",
     });
-    router.push(`/app/order/${orderId}/status`);
+    router.push("/app/riwayat");
     router.refresh();
-  }, [orderId, router]);
+  }, [router]);
 
   React.useEffect(() => {
     if (!gateway || expired) return;

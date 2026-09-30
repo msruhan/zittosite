@@ -210,7 +210,7 @@ export class OrdersService {
             : `${service.name} — ${orderIds[0]}`,
         customerName: user.fullName,
         expiredMinutes: INVOICE_TTL_MINUTES,
-        redirectUrl: `${webPublicUrl()}/app/order/${orderIds[0]}/status`,
+        redirectUrl: `${webPublicUrl()}/app/riwayat`,
       });
     } else if (!paymentSimulationEnabled()) {
       throw new ServiceUnavailableException(
