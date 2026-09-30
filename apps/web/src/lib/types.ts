@@ -26,6 +26,8 @@ export type UserStatus = "active" | "suspended";
 
 export type ResultStatus = "success" | "partial" | "failed";
 
+export type FulfillmentChannel = "telegram" | "whatsapp";
+
 export interface Service {
   id: string;
   code?: string;
@@ -34,6 +36,8 @@ export interface Service {
   price: number;
   estimate: string;
   active: boolean;
+  /** Admin panel only: where paid orders are processed. */
+  fulfillmentChannel?: FulfillmentChannel;
   /** Admin panel only: operators who receive and may process this service's orders. */
   assignedAdmins?: ServiceAssignee[];
 }
@@ -96,7 +100,7 @@ export interface OrderResult {
   resultStatus: ResultStatus;
   resultNote: string;
   resultData: Record<string, string> | null;
-  createdByAdminId: string;
+  createdByAdminId: string | null;
   createdAt: string;
 }
 

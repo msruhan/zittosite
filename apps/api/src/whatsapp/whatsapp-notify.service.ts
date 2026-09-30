@@ -21,7 +21,8 @@ export class WhatsappNotifyService {
 
   /**
    * Queues the group message for a just-paid invoice inside the settle
-   * transaction. Returns the queue row id, or null when WhatsApp is off.
+   * transaction. Returns the queue row id, or null when WhatsApp is off or
+   * the invoice has no orders for a WhatsApp-fulfilled service.
    */
   async enqueuePaidInvoice(
     tx: Prisma.TransactionClient,
@@ -35,10 +36,11 @@ export class WhatsappNotifyService {
       select: {
         paidAt: true,
         orders: {
-          where: { status: "waiting_action" },
+          where: { status: "waiting_action", service: { fulfillmentChannel: "whatsapp" } },
           orderBy: { orderId: "asc" },
           select: {
             imei: true,
+            service: { select: { name: true } },
             user: { select: { username: true } },
           },
         },
@@ -50,7 +52,7 @@ export class WhatsappNotifyService {
     const text = paidInvoiceGroupText({
       username: first.user.username,
       paidAt: invoice.paidAt ?? new Date(),
-      imeis: invoice.orders.map((o) => o.imei),
+      orders: invoice.orders.map((o) => ({ imei: o.imei, serviceName: o.service.name })),
     });
     const row = await tx.whatsappNotification.upsert({
       where: { invoiceId: invoiceRowId },

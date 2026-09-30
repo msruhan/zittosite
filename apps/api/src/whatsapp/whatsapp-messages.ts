@@ -1,7 +1,7 @@
 export type PaidInvoiceInput = {
   username: string;
   paidAt: Date;
-  imeis: string[];
+  orders: Array<{ imei: string; serviceName: string }>;
 };
 
 /** Removes WhatsApp formatting markers so user-supplied text cannot restyle the message. */
@@ -24,15 +24,31 @@ export function formatWib(date: Date): string {
   return `${get("day")} ${get("month")} ${get("year")}, ${get("hour")}:${get("minute")} WIB`;
 }
 
-/** Group message for one paid invoice: user, payment time and IMEIs. */
+/**
+ * Group message for one paid invoice: user, payment time, and IMEIs grouped
+ * per service in first-seen order with continuous numbering.
+ */
 export function paidInvoiceGroupText(input: PaidInvoiceInput): string {
-  return [
+  const byService = new Map<string, string[]>();
+  for (const order of input.orders) {
+    const imeis = byService.get(order.serviceName) ?? [];
+    imeis.push(order.imei);
+    byService.set(order.serviceName, imeis);
+  }
+
+  const lines = [
     "✅ *PEMBAYARAN DITERIMA*",
     "",
     `👤 User: *${stripWaMarkdown(input.username)}*`,
     `🕒 Dibayar: ${formatWib(input.paidAt)}`,
-    "",
-    "📱 IMEI:",
-    ...input.imeis.map((imei, i) => `${i + 1}. \`${imei}\``),
-  ].join("\n");
+  ];
+  let n = 0;
+  for (const [serviceName, imeis] of byService) {
+    lines.push("", `📦 *${stripWaMarkdown(serviceName)}*`);
+    for (const imei of imeis) {
+      n += 1;
+      lines.push(`${n}. \`${imei}\``);
+    }
+  }
+  return lines.join("\n");
 }

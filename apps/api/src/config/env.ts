@@ -97,6 +97,17 @@ export function whatsappConfig() {
   return { mock: false, baseUrl, apiKey, session, groupChatId };
 }
 
+/**
+ * Inbound WAHA webhook for the group's processor bot (Roamercheck); null (off)
+ * until the webhook HMAC secret and the processor's phone number are set.
+ */
+export function wahaInboundConfig() {
+  const secret = process.env.WAHA_WEBHOOK_SECRET?.trim() || "";
+  const processorNumber = (process.env.WA_PROCESSOR_NUMBER ?? "").replace(/\D/g, "");
+  if (!secret || !processorNumber) return null;
+  return { secret, processorNumber };
+}
+
 const PLACEHOLDER_SECRET = /change-me|changeme|example|placeholder/i;
 
 /**
@@ -138,6 +149,8 @@ export function validateStartupEnv(warn: (message: string) => void) {
   }
   if (!whatsappConfig()) {
     warn("WAHA_API_KEY / WA_GROUP_CHAT_ID not set — WhatsApp group notifications are off");
+  } else if (!wahaInboundConfig()) {
+    warn("WAHA_WEBHOOK_SECRET / WA_PROCESSOR_NUMBER not set — Roamercheck status updates are off");
   }
 
   if (!webPublicUrl().startsWith("https://")) {

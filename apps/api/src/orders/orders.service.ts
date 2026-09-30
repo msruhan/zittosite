@@ -53,10 +53,13 @@ const orderInclude = {
   activity: { orderBy: { createdAt: "asc" as const } },
 } satisfies Prisma.OrderInclude;
 
-/** Orders whose service is assigned to this operator. */
+/** Orders of Telegram-fulfilled services assigned to this operator. */
 export function assignedServiceFilter(adminId: string) {
   return {
-    service: { assignments: { some: { adminId } } },
+    service: {
+      fulfillmentChannel: "telegram",
+      assignments: { some: { adminId } },
+    },
   } satisfies Prisma.OrderWhereInput;
 }
 
@@ -746,6 +749,137 @@ export class OrdersService {
     return serializeOrderListItem(updated);
   }
 
+  /**
+   * Applies a status update reported by the external processor (Roamercheck)
+   * to a WhatsApp-fulfilled order. Only moves forward: waiting_action →
+   * in_process → done/rejected. Returns "noop" when the order is already past
+   * the requested state.
+   */
+  async applyProcessorUpdate(
+    internalOrderId: string,
+    update:
+      | { kind: "processing" }
+      | { kind: "done" }
+      | { kind: "rejected"; reason: string },
+    actor: { username: string; fullName: string },
+  ): Promise<"applied" | "noop"> {
+    const actorLabel = `${actor.username} (${actor.fullName})`;
+    const fromStatuses: OrderStatus[] =
+      update.kind === "processing"
+        ? ["waiting_action"]
+        : ["waiting_action", "in_process"];
+    const next: OrderStatus =
+      update.kind === "processing"
+        ? "in_process"
+        : update.kind === "done"
+          ? "done"
+          : "rejected";
+    const note =
+      update.kind === "processing"
+        ? `Diproses oleh ${actorLabel}.`
+        : update.kind === "done"
+          ? "IMEI berhasil diproses."
+          : update.reason;
+
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const now = new Date();
+      const result = await tx.order.updateMany({
+        where: { id: internalOrderId, status: { in: fromStatuses } },
+        data: {
+          status: next,
+          ...(update.kind === "processing" ? { startedAt: now } : {}),
+          ...(update.kind === "done" ? { completedAt: now } : {}),
+        },
+      });
+      if (result.count !== 1) return null;
+      if (update.kind === "done") {
+        await tx.orderResult.create({
+          data: {
+            orderId: internalOrderId,
+            resultStatus: "success",
+            resultNote: note,
+            createdByAdminId: null,
+          },
+        });
+      }
+      await tx.orderActivityLog.create({
+        data: {
+          orderId: internalOrderId,
+          status: next,
+          note:
+            update.kind === "rejected"
+              ? `Ditolak: ${note}`
+              : update.kind === "done"
+                ? "Hasil dikirim (success)."
+                : note,
+          actor: actorLabel,
+        },
+      });
+      return tx.order.findUniqueOrThrow({
+        where: { id: internalOrderId },
+        include: orderInclude,
+      });
+    });
+    if (!updated) return "noop";
+
+    const followUpActor = { id: "external-processor", ...actor };
+    const base = {
+      userId: updated.userId,
+      orderId: updated.orderId,
+      serviceName: updated.service.name,
+      imei: updated.imei,
+      by: actor.username,
+    };
+    if (update.kind === "processing") {
+      this.audit.record("order.taken", base);
+      await this.adminNotify.syncOrderCards(updated.id, "taken", {
+        actorName: actorLabel,
+      });
+      void this.adminNotify.notifySuperAdminsFollowUp(updated.id, "taken", followUpActor);
+      void this.adminNotify.notifyUserById(
+        updated.userId,
+        userOrderNoticeHtml({ kind: "taken", orderId: updated.orderId }),
+      );
+    } else if (update.kind === "done") {
+      this.audit.record("order.done", base);
+      await this.adminNotify.syncOrderCards(updated.id, "done", {
+        actorName: actorLabel,
+        note,
+      });
+      void this.adminNotify.notifySuperAdminsFollowUp(updated.id, "done", followUpActor, note);
+      void this.adminNotify.notifyUserById(
+        updated.userId,
+        userOrderNoticeHtml({
+          kind: "done",
+          orderId: updated.orderId,
+          resultStatus: "success",
+          note: "",
+        }),
+      );
+    } else {
+      this.audit.record("order.rejected", { ...base, reason: note });
+      await this.adminNotify.syncOrderCards(updated.id, "rejected", {
+        actorName: actorLabel,
+        note,
+      });
+      void this.adminNotify.notifySuperAdminsFollowUp(
+        updated.id,
+        "rejected",
+        followUpActor,
+        note,
+      );
+      void this.adminNotify.notifyUserById(
+        updated.userId,
+        userOrderNoticeHtml({
+          kind: "rejected",
+          orderId: updated.orderId,
+          reason: note,
+        }),
+      );
+    }
+    return "applied";
+  }
+
   async listRecentForUser(userId: string, take = 5) {
     const rows = await this.prisma.order.findMany({
       where: { userId },
@@ -788,10 +922,13 @@ export class OrdersService {
     if (admin.role === "super_admin") return;
     const assignment = await tx.serviceAssignment.findUnique({
       where: { serviceId_adminId: { serviceId, adminId: admin.id } },
-      select: { adminId: true },
+      select: { service: { select: { fulfillmentChannel: true } } },
     });
     if (!assignment) {
       throw new ForbiddenException("Layanan ini tidak di-assign ke Anda.");
+    }
+    if (assignment.service.fulfillmentChannel === "whatsapp") {
+      throw new ForbiddenException("Layanan ini diproses lewat grup WhatsApp.");
     }
   }
 

@@ -80,6 +80,7 @@ export function ServiceManagement({
             price: next.price,
             estimate: next.estimate,
             active: next.active,
+            fulfillmentChannel: next.fulfillmentChannel ?? "telegram",
             assignedAdminIds: next.assignedAdminIds,
           }),
         });
@@ -92,6 +93,7 @@ export function ServiceManagement({
             price: next.price,
             estimate: next.estimate,
             active: next.active,
+            fulfillmentChannel: next.fulfillmentChannel ?? "telegram",
             assignedAdminIds: next.assignedAdminIds,
           }),
         });
@@ -148,6 +150,7 @@ export function ServiceManagement({
       price: 150_000,
       estimate: "1–3 jam",
       active: true,
+      fulfillmentChannel: "telegram",
       assignedAdminIds: [],
     });
   }
@@ -185,6 +188,7 @@ export function ServiceManagement({
                     <TH>Layanan</TH>
                     <TH>Harga</TH>
                     <TH>Estimasi</TH>
+                    <TH>Jalur</TH>
                     <TH>Assign</TH>
                     <TH>Status</TH>
                     <TH className="w-28">Aksi</TH>
@@ -212,7 +216,20 @@ export function ServiceManagement({
                         </DataValue>
                       </TD>
                       <TD>
-                        <AssigneeList assignees={service.assignedAdmins ?? []} />
+                        <Tag className="border-hairline bg-mist text-ink">
+                          {service.fulfillmentChannel === "whatsapp"
+                            ? "WhatsApp"
+                            : "Telegram"}
+                        </Tag>
+                      </TD>
+                      <TD>
+                        {service.fulfillmentChannel === "whatsapp" ? (
+                          <span className="text-body text-ink-soft">
+                            Grup WA (Roamercheck)
+                          </span>
+                        ) : (
+                          <AssigneeList assignees={service.assignedAdmins ?? []} />
+                        )}
                       </TD>
                       <TD>
                         <div className="flex items-center gap-2.5">
@@ -581,13 +598,39 @@ function ServiceFormDialog({
             ]}
           />
         </Field>
-        <OperatorPicker
-          operators={operators}
-          selected={draft.assignedAdminIds}
-          onChange={(assignedAdminIds) =>
-            setDraft((current) => ({ ...current, assignedAdminIds }))
+        <Field
+          label="Jalur proses order"
+          htmlFor="fulfillmentChannel"
+          hint={
+            draft.fulfillmentChannel === "whatsapp"
+              ? "Order dikirim ke grup WhatsApp dan diproses bot Roamercheck; status berubah otomatis. Operator Telegram tidak menerima order ini."
+              : "Order dikirim ke operator Telegram yang di-assign dan tidak dikirim ke grup WhatsApp."
           }
-        />
+        >
+          <Select
+            id="fulfillmentChannel"
+            value={draft.fulfillmentChannel ?? "telegram"}
+            onValueChange={(value) =>
+              setDraft((current) => ({
+                ...current,
+                fulfillmentChannel: value === "whatsapp" ? "whatsapp" : "telegram",
+              }))
+            }
+            options={[
+              { value: "telegram", label: "Telegram — operator yang di-assign" },
+              { value: "whatsapp", label: "WhatsApp — grup WA (Roamercheck)" },
+            ]}
+          />
+        </Field>
+        {draft.fulfillmentChannel !== "whatsapp" ? (
+          <OperatorPicker
+            operators={operators}
+            selected={draft.assignedAdminIds}
+            onChange={(assignedAdminIds) =>
+              setDraft((current) => ({ ...current, assignedAdminIds }))
+            }
+          />
+        ) : null}
       </form>
     </DialogContent>
   );

@@ -38,6 +38,7 @@ type AdminReq = { admin: { sub: string } };
 type Json = Record<string, unknown>;
 
 const TOTP_HEADER = "x-totp-code";
+const FULFILLMENT_CHANNELS = ["telegram", "whatsapp"] as const;
 const WIB_OFFSET_MS = 7 * 60 * 60 * 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -176,6 +177,7 @@ export class AdminOpsController {
       price: optNonNegativeInt(body.price, "Harga"),
       estimate: optString(body.estimate, "Estimasi", 60),
       active: optBoolean(body.active, "Aktif"),
+      fulfillmentChannel: optEnum(body.fulfillmentChannel, FULFILLMENT_CHANNELS, "Jalur proses"),
       assignedAdminIds: optIdList(body.assignedAdminIds, "Assign admin"),
     });
     this.audit.record("admin.service.created", {
@@ -200,6 +202,7 @@ export class AdminOpsController {
       price: optNonNegativeInt(body.price, "Harga"),
       estimate: optString(body.estimate, "Estimasi", 60),
       active: optBoolean(body.active, "Aktif"),
+      fulfillmentChannel: optEnum(body.fulfillmentChannel, FULFILLMENT_CHANNELS, "Jalur proses"),
       assignedAdminIds: optIdList(body.assignedAdminIds, "Assign admin"),
     };
     const service = await this.services.update(id, input);
@@ -209,6 +212,7 @@ export class AdminOpsController {
       serviceName: service.name,
       price: input.price,
       active: input.active,
+      fulfillmentChannel: input.fulfillmentChannel,
       assignedAdmins: input.assignedAdminIds?.join(","),
     });
     return service;

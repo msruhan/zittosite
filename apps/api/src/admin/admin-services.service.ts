@@ -4,7 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
-import type { Prisma } from "@prisma/client";
+import type { FulfillmentChannel, Prisma } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
 import { serializeService } from "../orders/orders.serializer";
 
@@ -32,6 +32,7 @@ type ServiceWithAssignments = Prisma.ServiceGetPayload<{
 function serializeAdminService(service: ServiceWithAssignments) {
   return {
     ...serializeService(service),
+    fulfillmentChannel: service.fulfillmentChannel,
     assignedAdmins: service.assignments.map(({ admin }) => ({
       id: admin.id,
       username: admin.username,
@@ -60,6 +61,7 @@ export class AdminServicesService {
     price?: number;
     estimate?: string;
     active?: boolean;
+    fulfillmentChannel?: FulfillmentChannel;
     assignedAdminIds?: string[];
   }) {
     const code = String(input.code ?? "")
@@ -88,6 +90,7 @@ export class AdminServicesService {
         price,
         estimate,
         active: input.active !== false,
+        fulfillmentChannel: input.fulfillmentChannel ?? "telegram",
         assignments: { create: adminIds.map((adminId) => ({ adminId })) },
       },
       include: SERVICE_INCLUDE,
@@ -103,6 +106,7 @@ export class AdminServicesService {
       price?: number;
       estimate?: string;
       active?: boolean;
+      fulfillmentChannel?: FulfillmentChannel;
       assignedAdminIds?: string[];
     },
   ) {
@@ -142,6 +146,9 @@ export class AdminServicesService {
           ...(input.price !== undefined ? { price } : {}),
           ...(typeof input.active === "boolean"
             ? { active: input.active }
+            : {}),
+          ...(input.fulfillmentChannel
+            ? { fulfillmentChannel: input.fulfillmentChannel }
             : {}),
         },
         include: SERVICE_INCLUDE,

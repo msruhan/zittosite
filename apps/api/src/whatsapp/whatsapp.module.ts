@@ -7,6 +7,6 @@ import { WhatsappRetryService } from "./whatsapp-retry.service";
 @Module({
   imports: [PrismaModule],
   providers: [WahaClient, WhatsappNotifyService, WhatsappRetryService],
-  exports: [WhatsappNotifyService],
+  exports: [WhatsappNotifyService, WahaClient],
 })
 export class WhatsappModule {}

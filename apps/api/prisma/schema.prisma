@@ -55,6 +55,11 @@ enum OrderChannel {
   telegram
 }
 
+enum FulfillmentChannel {
+  telegram
+  whatsapp
+}
+
 enum PaymentStatus {
   pending
   paid
@@ -266,6 +271,8 @@ model Service {
   price       Int
   estimate    String
   active      Boolean  @default(true)
+  /// Where paid orders are processed: Telegram operators, or the WhatsApp group (Roamercheck).
+  fulfillmentChannel FulfillmentChannel @default(telegram) @map("fulfillment_channel")
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
   orders      Order[]
@@ -398,10 +405,11 @@ model OrderResult {
   resultStatus     ResultStatus @map("result_status")
   resultNote       String       @map("result_note")
   resultData       Json?        @map("result_data")
-  createdByAdminId String       @map("created_by_admin_id")
+  /// Null when the result came from an external processor (Roamercheck).
+  createdByAdminId String?      @map("created_by_admin_id")
   createdAt        DateTime     @default(now()) @map("created_at")
   order            Order        @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  createdByAdmin   Admin        @relation(fields: [createdByAdminId], references: [id])
+  createdByAdmin   Admin?       @relation(fields: [createdByAdminId], references: [id])
 
   @@map("order_results")
 }

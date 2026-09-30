@@ -67,6 +67,36 @@ docker compose -f docker-compose.prod.yml exec postgres \
   psql -U zittosite -c "select status, attempts, last_error, sent_at from whatsapp_notifications order by created_at desc limit 5;"
 ```
 
+## 6. Roamercheck status updates (optional)
+
+Services whose **Jalur proses order** is *WhatsApp* are announced only in the
+group (operators on Telegram get no card; Super Admins still do). The group's
+processor bot (Roamercheck) replies to each announcement, and the API turns its
+replies into order status changes:
+
+| Roamercheck message | Order status |
+|---|---|
+| `📥 IMEI … masuk ke antrian …` / `⏳ IMEI *…* sedang diproses …` | in_process |
+| `✅ *IMEI … BERHASIL* ✅` | done |
+| `❌ *Ada IMEI nggak valid:*` + `• <imei>: <reason>` | rejected (reason copied) |
+
+Enable it in `/opt/zittosite/.env` and redeploy:
+
+```bash
+WAHA_WEBHOOK_SECRET=<openssl rand -hex 32>
+WA_PROCESSOR_NUMBER=6281319455208
+```
+
+`deploy.sh` then points WAHA's webhook at `http://api:4000/webhooks/waha`
+(HMAC-SHA512 signed). Only messages in `WA_GROUP_CHAT_ID` from that number are
+used; the sender's WhatsApp LID is resolved through WAHA. Replies are matched to
+the invoice through the quoted announcement, falling back to the oldest active
+WhatsApp-channel order with that IMEI. Outcomes are logged by
+`WahaWebhookController`.
+
+Do not post test announcements in the production group: Roamercheck processes
+every "PEMBAYARAN DITERIMA" message.
+
 ## Operations
 
 - **Failed sends** are retried automatically (1, 2, 5, 10, then every 30 minutes,

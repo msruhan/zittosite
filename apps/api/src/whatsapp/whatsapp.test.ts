@@ -10,7 +10,7 @@ test("single order message", () => {
   const text = paidInvoiceGroupText({
     username: "budi123",
     paidAt,
-    imeis: ["356938035643809"],
+    orders: [{ imei: "356938035643809", serviceName: "3B Slow" }],
   });
   assert.equal(
     text,
@@ -20,22 +20,44 @@ test("single order message", () => {
       "👤 User: *budi123*",
       "🕒 Dibayar: 30 Sep 2026, 14:05 WIB",
       "",
-      "📱 IMEI:",
+      "📦 *3B Slow*",
       "1. `356938035643809`",
     ].join("\n"),
   );
 });
 
-test("bulk order lists every IMEI", () => {
-  const imeis = Array.from({ length: 6 }, (_, i) => `35693803564380${i}`);
-  const text = paidInvoiceGroupText({ username: "x", paidAt, imeis });
-  assert.match(text, /1\. `356938035643800`/);
+test("bulk order lists every IMEI under its service", () => {
+  const orders = Array.from({ length: 6 }, (_, i) => ({
+    imei: `35693803564380${i}`,
+    serviceName: "Unlock",
+  }));
+  const text = paidInvoiceGroupText({ username: "x", paidAt, orders });
+  assert.match(text, /📦 \*Unlock\*\n1\. `356938035643800`/);
   assert.match(text, /6\. `356938035643805`/);
 });
 
+test("mixed services are grouped with continuous numbering", () => {
+  const text = paidInvoiceGroupText({
+    username: "x",
+    paidAt,
+    orders: [
+      { imei: "1", serviceName: "S1" },
+      { imei: "2", serviceName: "S2" },
+      { imei: "3", serviceName: "S1" },
+    ],
+  });
+  assert.match(text, /📦 \*S1\*\n1\. `1`\n2\. `3`/);
+  assert.match(text, /📦 \*S2\*\n3\. `2`/);
+});
+
 test("markdown markers in user text are stripped", () => {
-  const text = paidInvoiceGroupText({ username: "*evil_`user`~", paidAt, imeis: ["1"] });
+  const text = paidInvoiceGroupText({
+    username: "*evil_`user`~",
+    paidAt,
+    orders: [{ imei: "1", serviceName: "_Svc*" }],
+  });
   assert.match(text, /👤 User: \*eviluser\*/);
+  assert.match(text, /📦 \*Svc\*/);
 });
 
 test("WIB formatting", () => {

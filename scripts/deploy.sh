@@ -44,6 +44,11 @@ if [[ -n "$(env_value WAHA_API_KEY)" ]]; then
   fi
   PROFILES="${PROFILES:+$PROFILES,}waha"
   echo "==> WhatsApp gateway (WAHA) enabled"
+  # Group messages are forwarded to the API only when the webhook is signed.
+  if [[ -n "$(env_value WAHA_WEBHOOK_SECRET)" ]]; then
+    export WAHA_HOOK_URL="${WAHA_HOOK_URL:-http://api:4000/webhooks/waha}"
+    echo "==> WAHA webhook → API enabled"
+  fi
 fi
 export COMPOSE_PROFILES="$PROFILES"
 

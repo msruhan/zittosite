@@ -50,6 +50,29 @@ export class WahaClient {
     }
     return { messageId: parseMessageId(body) };
   }
+
+  /** WhatsApp LID (`…@lid`) of a phone number; group senders are often reported by LID. */
+  async lidForPhone(phone: string): Promise<string | null> {
+    const config = whatsappConfig();
+    if (!config || config.mock) return null;
+    try {
+      const res = await fetch(
+        `${config.baseUrl}/api/${encodeURIComponent(config.session)}/lids/pn/${encodeURIComponent(phone)}`,
+        {
+          headers: { "X-Api-Key": config.apiKey },
+          signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+        },
+      );
+      if (!res.ok) return null;
+      const json = (await res.json()) as { lid?: unknown };
+      return typeof json.lid === "string" && json.lid ? json.lid : null;
+    } catch (err) {
+      this.logger.warn(
+        `WAHA LID lookup failed: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      return null;
+    }
+  }
 }
 
 function parseMessageId(body: string): string | null {

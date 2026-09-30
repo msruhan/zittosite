@@ -95,6 +95,11 @@ services:
       WAHA_DASHBOARD_PASSWORD: ${WAHA_DASHBOARD_PASSWORD:-}
       WHATSAPP_SWAGGER_USERNAME: ${WAHA_DASHBOARD_USERNAME:-admin}
       WHATSAPP_SWAGGER_PASSWORD: ${WAHA_DASHBOARD_PASSWORD:-}
+      # Group messages → API (Roamercheck status updates). deploy.sh sets
+      # WAHA_HOOK_URL only when WAHA_WEBHOOK_SECRET is configured.
+      WHATSAPP_HOOK_URL: ${WAHA_HOOK_URL:-}
+      WHATSAPP_HOOK_EVENTS: message
+      WHATSAPP_HOOK_HMAC_KEY: ${WAHA_WEBHOOK_SECRET:-}
     ports:
       - "127.0.0.1:3001:3000"
     volumes:

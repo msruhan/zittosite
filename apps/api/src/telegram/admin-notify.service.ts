@@ -65,13 +65,16 @@ export class AdminNotifyService {
     });
     if (!order || order.status !== "waiting_action") return;
 
+    // WhatsApp-fulfilled services are processed in the WA group, so operators get no card.
     const assigned = new Set(
-      (
-        await this.prisma.serviceAssignment.findMany({
-          where: { serviceId: order.serviceId },
-          select: { adminId: true },
-        })
-      ).map((row) => row.adminId),
+      order.service.fulfillmentChannel === "whatsapp"
+        ? []
+        : (
+            await this.prisma.serviceAssignment.findMany({
+              where: { serviceId: order.serviceId },
+              select: { adminId: true },
+            })
+          ).map((row) => row.adminId),
     );
     const destinations = (
       await this.adminTelegram.notificationDestinations()
