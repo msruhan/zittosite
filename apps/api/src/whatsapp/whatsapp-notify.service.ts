@@ -33,17 +33,12 @@ export class WhatsappNotifyService {
     const invoice = await tx.paymentInvoice.findUnique({
       where: { id: invoiceRowId },
       select: {
-        amount: true,
-        amountDue: true,
         paidAt: true,
         orders: {
           where: { status: "waiting_action" },
           orderBy: { orderId: "asc" },
           select: {
-            orderId: true,
             imei: true,
-            channel: true,
-            service: { select: { name: true } },
             user: { select: { username: true } },
           },
         },
@@ -54,14 +49,8 @@ export class WhatsappNotifyService {
 
     const text = paidInvoiceGroupText({
       username: first.user.username,
-      channel: first.channel,
-      total: invoice.amountDue ?? invoice.amount,
       paidAt: invoice.paidAt ?? new Date(),
-      orders: invoice.orders.map((o) => ({
-        orderId: o.orderId,
-        imei: o.imei,
-        serviceName: o.service.name,
-      })),
+      imeis: invoice.orders.map((o) => o.imei),
     });
     const row = await tx.whatsappNotification.upsert({
       where: { invoiceId: invoiceRowId },

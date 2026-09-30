@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { afterEach, test } from "node:test";
 import { whatsappConfig } from "../config/env";
-import { formatRupiah, formatWib, paidInvoiceGroupText } from "./whatsapp-messages";
+import { formatWib, paidInvoiceGroupText } from "./whatsapp-messages";
 import { backoffMs, MAX_ATTEMPTS, shouldGiveUp } from "./whatsapp-retry-policy";
 
 const paidAt = new Date("2026-09-30T07:05:00Z");
@@ -9,75 +9,36 @@ const paidAt = new Date("2026-09-30T07:05:00Z");
 test("single order message", () => {
   const text = paidInvoiceGroupText({
     username: "budi123",
-    channel: "web",
-    total: 50_000,
     paidAt,
-    orders: [{ orderId: "ORD-1", imei: "356938035643809", serviceName: "Unlock" }],
+    imeis: ["356938035643809"],
   });
   assert.equal(
     text,
     [
       "✅ *PEMBAYARAN DITERIMA*",
-      "──────────────",
+      "",
       "👤 User: *budi123*",
-      "🛒 Via: Web",
-      "💰 Total: *Rp 50.000*",
       "🕒 Dibayar: 30 Sep 2026, 14:05 WIB",
       "",
-      "📦 *Unlock* (1 order)",
-      "1. `ORD-1` · `356938035643809`",
+      "📱 IMEI:",
+      "1. `356938035643809`",
     ].join("\n"),
   );
 });
 
-test("bulk order lists every IMEI under its service", () => {
-  const orders = Array.from({ length: 6 }, (_, i) => ({
-    orderId: `ORD-${i + 1}`,
-    imei: `35693803564380${i}`,
-    serviceName: "Unlock",
-  }));
-  const text = paidInvoiceGroupText({
-    username: "x",
-    channel: "telegram",
-    total: 300_000,
-    paidAt,
-    orders,
-  });
-  assert.match(text, /🛒 Via: Telegram/);
-  assert.match(text, /📦 \*Unlock\* \(6 order\)/);
-  assert.match(text, /6\. `ORD-6` · `356938035643805`/);
-});
-
-test("mixed services are grouped with continuous numbering", () => {
-  const text = paidInvoiceGroupText({
-    username: "x",
-    channel: "web",
-    total: 1,
-    paidAt,
-    orders: [
-      { orderId: "A", imei: "1", serviceName: "S1" },
-      { orderId: "B", imei: "2", serviceName: "S2" },
-      { orderId: "C", imei: "3", serviceName: "S1" },
-    ],
-  });
-  assert.match(text, /📦 \*S1\* \(2 order\)\n1\. `A` · `1`\n2\. `C` · `3`/);
-  assert.match(text, /📦 \*S2\* \(1 order\)\n3\. `B` · `2`/);
+test("bulk order lists every IMEI", () => {
+  const imeis = Array.from({ length: 6 }, (_, i) => `35693803564380${i}`);
+  const text = paidInvoiceGroupText({ username: "x", paidAt, imeis });
+  assert.match(text, /1\. `356938035643800`/);
+  assert.match(text, /6\. `356938035643805`/);
 });
 
 test("markdown markers in user text are stripped", () => {
-  const text = paidInvoiceGroupText({
-    username: "*evil_`user`~",
-    channel: "web",
-    total: 1,
-    paidAt,
-    orders: [{ orderId: "A", imei: "1", serviceName: "_Svc*" }],
-  });
+  const text = paidInvoiceGroupText({ username: "*evil_`user`~", paidAt, imeis: ["1"] });
   assert.match(text, /👤 User: \*eviluser\*/);
-  assert.match(text, /📦 \*Svc\*/);
 });
 
-test("rupiah and WIB formatting", () => {
-  assert.equal(formatRupiah(1_250_000), "Rp 1.250.000");
+test("WIB formatting", () => {
   assert.equal(formatWib(new Date("2026-01-01T17:30:00Z")), "2 Jan 2026, 00:30 WIB");
 });
 
