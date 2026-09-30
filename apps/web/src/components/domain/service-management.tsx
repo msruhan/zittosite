@@ -593,20 +593,12 @@ function ServiceFormDialog({
               }))
             }
             options={[
-              { value: "active", label: "Online — bisa dipesan" },
-              { value: "inactive", label: "Offline — disembunyikan dari menu order" },
+              { value: "active", label: "Online" },
+              { value: "inactive", label: "Offline" },
             ]}
           />
         </Field>
-        <Field
-          label="Jalur proses order"
-          htmlFor="fulfillmentChannel"
-          hint={
-            draft.fulfillmentChannel === "whatsapp"
-              ? "Order dikirim ke grup WhatsApp dan diproses bot Roamercheck; status berubah otomatis. Operator Telegram tidak menerima order ini."
-              : "Order dikirim ke operator Telegram yang di-assign dan tidak dikirim ke grup WhatsApp."
-          }
-        >
+        <Field label="Jalur proses order" htmlFor="fulfillmentChannel">
           <Select
             id="fulfillmentChannel"
             value={draft.fulfillmentChannel ?? "telegram"}
@@ -617,8 +609,8 @@ function ServiceFormDialog({
               }))
             }
             options={[
-              { value: "telegram", label: "Telegram — operator yang di-assign" },
-              { value: "whatsapp", label: "WhatsApp — grup WA (Roamercheck)" },
+              { value: "telegram", label: "Telegram" },
+              { value: "whatsapp", label: "WhatsApp" },
             ]}
           />
         </Field>
