@@ -75,11 +75,8 @@ export class AdminNotifyService {
           serviceName: order.service.name,
         }),
       );
-    // WhatsApp-fulfilled services are processed in the WA group; no admin gets a Telegram card.
-    if (order.service.fulfillmentChannel === "whatsapp") {
-      await paidNotice();
-      return;
-    }
+    // WhatsApp-fulfilled services are processed in the WA group; only super admins get an info card.
+    const viaWhatsapp = order.service.fulfillmentChannel === "whatsapp";
 
     const assigned = new Set(
       (
@@ -91,7 +88,10 @@ export class AdminNotifyService {
     );
     const destinations = (
       await this.adminTelegram.notificationDestinations()
-    ).filter((d) => d.role === "super_admin" || assigned.has(d.adminId));
+    ).filter(
+      (d) =>
+        d.role === "super_admin" || (!viaWhatsapp && assigned.has(d.adminId)),
+    );
     if (!destinations.length) {
       this.logger.warn("No linked admin chats for new order notify");
       await paidNotice();
@@ -107,6 +107,7 @@ export class AdminNotifyService {
     const superAdminHtml = newOrderAdminHtml({
       ...cardInput,
       customer: { username: order.user.username, channel: order.channel },
+      viaWhatsapp,
     });
     const replyMarkup = {
       inline_keyboard: [

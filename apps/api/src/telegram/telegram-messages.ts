@@ -442,6 +442,7 @@ export function newOrderAdminHtml(input: {
   imei: string;
   serviceName: string;
   customer?: { username: string; channel: string };
+  viaWhatsapp?: boolean;
 }): string {
   return [
     "🆕 <b>ORDER BARU</b>",
@@ -455,6 +456,9 @@ export function newOrderAdminHtml(input: {
       : []),
     row("📱", "IMEI", input.imei, true),
     row("📦", "Layanan", input.serviceName),
+    ...(input.viaWhatsapp
+      ? [row("🔀", "Jalur", "WhatsApp (Roamercheck)")]
+      : []),
     row("🟢", "Status", "waiting_action"),
   ].join("\n");
 }

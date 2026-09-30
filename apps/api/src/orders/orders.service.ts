@@ -822,7 +822,16 @@ export class OrdersService {
     });
     if (!updated) return "noop";
 
-    // WhatsApp-fulfilled orders have no admin Telegram cards; only the customer is told.
+    const cardKind =
+      update.kind === "processing"
+        ? "taken"
+        : update.kind === "done"
+          ? "done"
+          : "rejected";
+    void this.adminNotify.syncOrderCards(internalOrderId, cardKind, {
+      actorName: actorLabel,
+      note,
+    });
     const base = {
       userId: updated.userId,
       orderId: updated.orderId,
