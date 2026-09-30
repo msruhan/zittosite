@@ -8,7 +8,7 @@ import { PaymentPanel } from "@/components/domain/payment-panel";
 import { CancelOrderButton } from "@/components/domain/cancel-order-button";
 import { ApiError } from "@/lib/api";
 import { serverApi } from "@/lib/server-api";
-import { formatDateTime } from "@/lib/format";
+import { formatDateTime, formatRupiah } from "@/lib/format";
 import type { OrderDetail } from "@/lib/types";
 
 export const metadata: Metadata = {
@@ -38,6 +38,8 @@ export default async function PaymentPage({
     redirect(`/app/order/${order.orderId}`);
   }
   if (!order.invoice) notFound();
+  const bulk = order.invoice.orders ?? [];
+  const isBulk = bulk.length > 1;
 
   return (
     <div className="mx-auto w-full max-w-xl">
@@ -62,12 +64,45 @@ export default async function PaymentPage({
               {order.service.name}
             </dd>
           </div>
-          <div className="flex items-baseline justify-between gap-4 py-2.5">
-            <dt className="text-body text-ink-soft">IMEI</dt>
-            <dd>
-              <DataValue>{order.imei}</DataValue>
-            </dd>
-          </div>
+          {isBulk ? (
+            <>
+              <div className="flex items-baseline justify-between gap-4 py-2.5">
+                <dt className="text-body text-ink-soft">Jumlah</dt>
+                <dd>
+                  <DataValue>
+                    {bulk.length} × {formatRupiah(order.price)}
+                  </DataValue>
+                </dd>
+              </div>
+              <div className="py-2.5">
+                <dt className="text-body text-ink-soft">
+                  IMEI ({bulk.length} order, 1 QRIS)
+                </dt>
+                <dd className="mt-2">
+                  <ul className="space-y-1.5">
+                    {bulk.map((item) => (
+                      <li
+                        key={item.orderId}
+                        className="flex items-baseline justify-between gap-4"
+                      >
+                        <DataValue className="text-ink-soft">
+                          {item.orderId}
+                        </DataValue>
+                        <DataValue>{item.imei}</DataValue>
+                      </li>
+                    ))}
+                  </ul>
+                </dd>
+              </div>
+            </>
+          ) : (
+            <div className="flex items-baseline justify-between gap-4 py-2.5">
+              <dt className="text-body text-ink-soft">IMEI</dt>
+              <dd>
+                <DataValue>{order.imei}</DataValue>
+              </dd>
+            </div>
+          )}
           <div className="flex items-baseline justify-between gap-4 py-2.5">
             <dt className="text-body text-ink-soft">Invoice</dt>
             <dd>
@@ -100,7 +135,10 @@ export default async function PaymentPage({
           gateway={order.invoice.paymentChannel === "sayabayar"}
         />
         <div className="border-t border-hairline px-4 py-3 sm:px-5">
-          <CancelOrderButton orderId={order.orderId} />
+          <CancelOrderButton
+            orderId={order.orderId}
+            bulkCount={bulk.filter((o) => o.status === "waiting_payment").length}
+          />
         </div>
       </Card>
     </div>

@@ -11,7 +11,14 @@ const orderInclude = {
   service: true,
   user: true,
   assignedAdmin: true,
-  invoice: true,
+  invoice: {
+    include: {
+      orders: {
+        select: { orderId: true, imei: true, status: true },
+        orderBy: { orderId: "asc" as const },
+      },
+    },
+  },
   result: true,
   activity: { orderBy: { createdAt: "asc" as const } },
 } satisfies Prisma.OrderInclude;

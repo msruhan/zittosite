@@ -8,11 +8,15 @@ import type {
   User,
 } from "@prisma/client";
 
+type InvoiceWithOrders = PaymentInvoice & {
+  orders?: Array<Pick<Order, "orderId" | "imei" | "status">>;
+};
+
 type OrderWithRelations = Order & {
   service: Service;
   user: User;
   assignedAdmin: Admin | null;
-  invoice: PaymentInvoice | null;
+  invoice: InvoiceWithOrders | null;
   result:
     | (OrderResult & {
         createdByAdmin?: Pick<Admin, "id" | "username" | "fullName"> | null;
@@ -71,7 +75,7 @@ export function serializeAdmin(admin: Admin | null) {
   };
 }
 
-export function serializeInvoice(invoice: PaymentInvoice | null) {
+export function serializeInvoice(invoice: InvoiceWithOrders | null) {
   if (!invoice) return null;
   return {
     invoiceId: invoice.invoiceId,
@@ -85,6 +89,12 @@ export function serializeInvoice(invoice: PaymentInvoice | null) {
     paymentStatus: invoice.paymentStatus,
     expiredAt: invoice.expiredAt.toISOString(),
     paidAt: iso(invoice.paidAt),
+    /** Every order this invoice pays for (more than one for a bulk order). */
+    orders: (invoice.orders ?? []).map((o) => ({
+      orderId: o.orderId,
+      imei: o.imei,
+      status: o.status,
+    })),
   };
 }
 

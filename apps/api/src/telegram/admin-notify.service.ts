@@ -85,7 +85,6 @@ export class AdminNotifyService {
       orderId: order.orderId,
       imei: order.imei,
       serviceName: order.service.name,
-      price: order.price,
     };
     const operatorHtml = newOrderAdminHtml(cardInput);
     const superAdminHtml = newOrderAdminHtml({

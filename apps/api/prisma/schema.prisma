@@ -291,6 +291,7 @@ model Order {
   status           OrderStatus        @default(waiting_payment)
   price            Int
   assignedAdminId  String?            @map("assigned_admin_id")
+  invoiceId        String?            @map("invoice_row_id")
   startedAt        DateTime?          @map("started_at")
   completedAt      DateTime?          @map("completed_at")
   createdAt        DateTime           @default(now()) @map("created_at")
@@ -298,7 +299,7 @@ model Order {
   user             User               @relation(fields: [userId], references: [id], onDelete: Cascade)
   service          Service            @relation(fields: [serviceId], references: [id])
   assignedAdmin    Admin?             @relation("OrderAssignedAdmin", fields: [assignedAdminId], references: [id])
-  invoice          PaymentInvoice?
+  invoice          PaymentInvoice?    @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
   result           OrderResult?
   activity         OrderActivityLog[]
   telegramNotifications OrderTelegramNotification[]
@@ -306,6 +307,7 @@ model Order {
   @@index([userId, createdAt])
   @@index([status, createdAt])
   @@index([imei])
+  @@index([invoiceId])
   @@map("orders")
 }
 
@@ -329,7 +331,7 @@ model OrderTelegramNotification {
 model PaymentInvoice {
   id               String        @id @default(cuid())
   invoiceId        String        @unique @map("invoice_id")
-  orderId          String        @unique @map("order_id")
+  /// Bulk total: one invoice pays for every order in `orders`.
   amount           Int
   amountDue        Int?          @map("amount_due")
   qrisString       String?       @map("qris_string")
@@ -342,7 +344,7 @@ model PaymentInvoice {
   gatewayPayload   Json?         @map("gateway_payload")
   createdAt        DateTime      @default(now()) @map("created_at")
   updatedAt        DateTime      @updatedAt @map("updated_at")
-  order            Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orders           Order[]
 
   @@index([paymentReference])
   @@map("payment_invoices")

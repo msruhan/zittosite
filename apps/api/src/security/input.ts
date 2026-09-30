@@ -69,6 +69,24 @@ export function optIdList(
   return [...new Set(value as string[])];
 }
 
+/** A short list of strings, kept as sent (duplicates included) for the caller to validate. */
+export function optStringList(
+  value: unknown,
+  field: string,
+  maxItems: number,
+  maxLength: number,
+): string[] | undefined {
+  if (value === undefined) return undefined;
+  if (
+    !Array.isArray(value) ||
+    value.length > maxItems ||
+    value.some((item) => typeof item !== "string" || item.length > maxLength)
+  ) {
+    throw new BadRequestException(`${field} tidak valid.`);
+  }
+  return value as string[];
+}
+
 export type ServicePriceInput = { serviceId: string; price: number };
 
 /** `[{ serviceId, price }]`: the complete set of per-service price overrides. */

@@ -125,7 +125,10 @@ export class AdminReportsService {
         where: { paymentStatus: "paid" },
         select: {
           amount: true,
-          order: { select: { service: { select: { name: true } } } },
+          orders: {
+            select: { service: { select: { name: true } } },
+            take: 1,
+          },
         },
       }),
       this.prisma.admin.findMany({
@@ -181,7 +184,7 @@ export class AdminReportsService {
 
     const serviceTotals = new Map<string, number>();
     for (const inv of paidAllWithService) {
-      const name = inv.order?.service?.name ?? "Lainnya";
+      const name = inv.orders[0]?.service?.name ?? "Lainnya";
       serviceTotals.set(name, (serviceTotals.get(name) ?? 0) + 1);
     }
     const serviceMix = [...serviceTotals.entries()]

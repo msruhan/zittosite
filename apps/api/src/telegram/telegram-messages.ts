@@ -422,7 +422,6 @@ export function newOrderAdminHtml(input: {
   orderId: string;
   imei: string;
   serviceName: string;
-  price: number;
   customer?: { username: string; channel: string };
 }): string {
   return [
@@ -437,7 +436,6 @@ export function newOrderAdminHtml(input: {
       : []),
     row("📱", "IMEI", input.imei, true),
     row("📦", "Layanan", input.serviceName),
-    row("💰", "Harga", formatRp(input.price)),
     row("🟢", "Status", "waiting_action"),
   ].join("\n");
 }
@@ -567,15 +565,30 @@ export function orderHistoryHtml(
   ].join("\n");
 }
 
+export type BulkItem = { orderId: string; imei: string };
+
+/** Order ID row for a single order, or one line per IMEI for a bulk order. */
+function orderIdLines(orderId: string, items?: BulkItem[]): string[] {
+  if (!items || items.length < 2) return [row("🎫", "Order ID", orderId, true)];
+  return [
+    `📦 <b>Bulk ${items.length} IMEI</b> (1 QRIS)`,
+    ...items.map(
+      (item) =>
+        `• <code>${escapeHtml(item.orderId)}</code> · <code>${escapeHtml(item.imei)}</code>`,
+    ),
+  ];
+}
+
 export function orderCreatedHtml(input: {
   orderId: string;
   payUrl: string;
   amount: number;
+  items?: BulkItem[];
 }): string {
   return [
     "✅ <b>Order dibuat</b>",
     "",
-    row("🎫", "Order ID", input.orderId, true),
+    ...orderIdLines(input.orderId, input.items),
     row("💰", "Tagihan", formatRp(input.amount)),
     "",
     "Bayar di portal:",
@@ -587,6 +600,7 @@ export function pendingOrderHtml(input: {
   orderId: string;
   amount: number;
   expiresAt: Date | null;
+  items?: BulkItem[];
 }): string {
   const until = input.expiresAt
     ? new Intl.DateTimeFormat("id-ID", {
@@ -598,7 +612,7 @@ export function pendingOrderHtml(input: {
   return [
     "⏳ <b>Masih ada order menunggu pembayaran</b>",
     "",
-    row("🎫", "Order ID", input.orderId, true),
+    ...orderIdLines(input.orderId, input.items),
     row("💰", "Tagihan", formatRp(input.amount)),
     ...(until ? [row("⏰", "Bayar sebelum", `${until} WIB`)] : []),
     "",
@@ -606,7 +620,13 @@ export function pendingOrderHtml(input: {
   ].join("\n");
 }
 
-export function cancelConfirmHtml(orderId: string): string {
+export function cancelConfirmHtml(orderId: string, bulkCount = 1): string {
+  if (bulkCount > 1) {
+    return [
+      `Batalkan order <code>${escapeHtml(orderId)}</code>?`,
+      `Order ini bagian dari bulk ${bulkCount} IMEI dengan 1 QRIS, jadi <b>semua ${bulkCount} order</b> ikut dibatalkan.`,
+    ].join("\n");
+  }
   return [
     `Batalkan order <code>${escapeHtml(orderId)}</code>?`,
     "QRIS untuk order ini tidak bisa dipakai lagi setelah dibatalkan.",
@@ -691,6 +711,7 @@ export function orderQrisCaptionHtml(input: {
   orderId: string;
   amount: number;
   expiresAt: Date;
+  items?: BulkItem[];
 }): string {
   const until = new Intl.DateTimeFormat("id-ID", {
     timeZone: "Asia/Jakarta",
@@ -700,7 +721,7 @@ export function orderQrisCaptionHtml(input: {
   return [
     "✅ <b>Order dibuat</b>",
     "",
-    row("🎫", "Order ID", input.orderId, true),
+    ...orderIdLines(input.orderId, input.items),
     row("💰", "Tagihan", formatRp(input.amount)),
     row("⏰", "Bayar sebelum", `${until} WIB`),
     "",

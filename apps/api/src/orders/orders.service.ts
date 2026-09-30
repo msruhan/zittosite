@@ -23,6 +23,7 @@ import {
   type SayabayarInvoice,
 } from "../payments/sayabayar.client";
 import { serializeOrderListItem, serializeService } from "./orders.serializer";
+import { parseImeiList } from "./imei-list";
 
 /** SayaBayar only accepts invoice lifetimes of 60 minutes or more. */
 const INVOICE_TTL_MINUTES = 60;
@@ -39,7 +40,14 @@ const orderInclude = {
   service: true,
   user: true,
   assignedAdmin: true,
-  invoice: true,
+  invoice: {
+    include: {
+      orders: {
+        select: { orderId: true, imei: true, status: true },
+        orderBy: { orderId: "asc" as const },
+      },
+    },
+  },
   result: true,
   activity: { orderBy: { createdAt: "asc" as const } },
 } satisfies Prisma.OrderInclude;
@@ -132,19 +140,23 @@ export class OrdersService {
     return expired;
   }
 
+  /**
+   * Creates one order per IMEI (up to MAX_BULK_IMEIS), all paid by a single
+   * invoice for `imeis.length × price`. Returns the first order.
+   */
   async createOrder(
     userId: string,
     input: {
       serviceId?: string;
       serviceCode?: string;
       imei?: string;
+      imeis?: string[] | string;
       notes?: string;
       channel?: OrderChannel;
     },
   ) {
     let serviceId = String(input.serviceId ?? "").trim();
     const serviceCode = String(input.serviceCode ?? "").trim();
-    const imei = String(input.imei ?? "").trim();
     const notes = String(input.notes ?? "").trim() || null;
     const channel: OrderChannel = input.channel ?? "web";
 
@@ -155,9 +167,9 @@ export class OrdersService {
       if (byCode) serviceId = byCode.id;
     }
     if (!serviceId) throw new BadRequestException("Pilih layanan.");
-    if (!/^\d{15}$/.test(imei)) {
-      throw new BadRequestException("IMEI harus 15 digit angka.");
-    }
+    const parsed = parseImeiList(input.imeis ?? String(input.imei ?? ""));
+    if (!parsed.ok) throw new BadRequestException(parsed.errors.join(" "));
+    const imeis = parsed.imeis;
 
     const existing = await this.pendingOrder(userId);
     if (existing) {
@@ -179,18 +191,24 @@ export class OrdersService {
     }
 
     const price = override?.price ?? service.price;
-    const orderId = await this.nextOrderId();
-    const invoiceId = `INV-${orderId}`;
+    const total = price * imeis.length;
+    const orderIds = await this.nextOrderIds(imeis.length);
+    const invoiceId = `INV-${orderIds[0]}`;
     const via = channel === "telegram" ? "Telegram" : "website";
+    const bulkNote =
+      imeis.length > 1 ? ` Bulk ${imeis.length} IMEI, 1 QRIS.` : "";
 
     let gateway: SayabayarInvoice | null = null;
     if (this.sayabayar.enabled()) {
       gateway = await this.sayabayar.createInvoice({
-        amount: price,
-        description: `${service.name} — ${orderId}`,
+        amount: total,
+        description:
+          imeis.length > 1
+            ? `${service.name} × ${imeis.length} — ${orderIds[0]}`
+            : `${service.name} — ${orderIds[0]}`,
         customerName: user.fullName,
         expiredMinutes: INVOICE_TTL_MINUTES,
-        redirectUrl: `${webPublicUrl()}/app/order/${orderId}/status`,
+        redirectUrl: `${webPublicUrl()}/app/order/${orderIds[0]}/status`,
       });
     } else if (!paymentSimulationEnabled()) {
       throw new ServiceUnavailableException(
@@ -200,53 +218,63 @@ export class OrdersService {
     const expiredAt =
       gateway?.expiredAt ?? new Date(Date.now() + INVOICE_TTL_MS);
 
-    const created = await this.prisma.order.create({
-      data: {
-        orderId,
-        userId,
-        serviceId: service.id,
-        channel,
-        imei,
-        notes,
-        status: "waiting_payment",
-        price,
-        invoice: {
-          create: {
-            invoiceId,
-            amount: price,
-            paymentStatus: "pending",
-            expiredAt,
-            ...(gateway
-              ? {
-                  paymentChannel: "sayabayar",
-                  paymentReference: gateway.id,
-                  amountDue: gateway.amountDue,
-                  qrisString: gateway.qrisString,
-                  checkoutUrl: gateway.paymentUrl,
-                  gatewayPayload: gateway.raw as Prisma.InputJsonValue,
-                }
-              : { paymentChannel: "qris_placeholder" }),
-          },
+    const created = await this.prisma.$transaction(async (tx) => {
+      const invoice = await tx.paymentInvoice.create({
+        data: {
+          invoiceId,
+          amount: total,
+          paymentStatus: "pending",
+          expiredAt,
+          ...(gateway
+            ? {
+                paymentChannel: "sayabayar",
+                paymentReference: gateway.id,
+                amountDue: gateway.amountDue,
+                qrisString: gateway.qrisString,
+                checkoutUrl: gateway.paymentUrl,
+                gatewayPayload: gateway.raw as Prisma.InputJsonValue,
+              }
+            : { paymentChannel: "qris_placeholder" }),
         },
-        activity: {
-          create: {
+      });
+      for (const [i, imei] of imeis.entries()) {
+        await tx.order.create({
+          data: {
+            orderId: orderIds[i],
+            userId,
+            serviceId: service.id,
+            invoiceId: invoice.id,
+            channel,
+            imei,
+            notes,
             status: "waiting_payment",
-            note: `Order dibuat lewat ${via}. Invoice QRIS diterbitkan.`,
-            actor: user.fullName,
+            price,
+            activity: {
+              create: {
+                status: "waiting_payment",
+                note: `Order dibuat lewat ${via}. Invoice QRIS diterbitkan.${bulkNote}`,
+                actor: user.fullName,
+              },
+            },
           },
-        },
-      },
-      include: orderInclude,
+        });
+      }
+      return tx.order.findUniqueOrThrow({
+        where: { orderId: orderIds[0] },
+        include: orderInclude,
+      });
     });
 
-    this.audit.record("order.created", {
-      actorUserId: userId,
-      orderId,
-      serviceName: service.name,
-      imei,
-      price,
-      channel,
-    });
+    for (const [i, imei] of imeis.entries()) {
+      this.audit.record("order.created", {
+        actorUserId: userId,
+        orderId: orderIds[i],
+        serviceName: service.name,
+        imei,
+        price,
+        channel,
+      });
+    }
     return serializeOrderListItem(created);
   }
 
@@ -259,34 +287,22 @@ export class OrdersService {
       );
     }
 
-    const updated = await this.prisma.$transaction(async (tx) => {
-      if (current.invoice) {
-        await tx.paymentInvoice.update({
-          where: { id: current.invoice.id },
-          data: { paymentStatus: "cancelled" },
-        });
-      }
-      return tx.order.update({
-        where: { id: current.id },
-        data: {
-          status: "cancel",
-          activity: {
-            create: {
-              status: "cancel",
-              note: "Order dibatalkan oleh user.",
-              actor: current.user.fullName,
-            },
-          },
-        },
-        include: orderInclude,
+    const invoice = current.invoice;
+    if (!invoice) throw new BadRequestException("Invoice order tidak ditemukan.");
+    const cancelled = await this.prisma.$transaction((tx) =>
+      this.closePendingInvoice(tx, invoice.id, "cancelled", {
+        note: "Order dibatalkan oleh user.",
+        actor: current.user.fullName,
+      }),
+    );
+    for (const order of cancelled ?? []) {
+      this.audit.record("order.cancelled_by_user", {
+        actorUserId: userId,
+        orderId: order.orderId,
+        imei: order.imei,
       });
-    });
-    this.audit.record("order.cancelled_by_user", {
-      actorUserId: userId,
-      orderId: current.orderId,
-      imei: current.imei,
-    });
-    return serializeOrderListItem(updated);
+    }
+    return serializeOrderListItem(await this.findOwned(userId, publicOrderId));
   }
 
   /**
@@ -314,13 +330,44 @@ export class OrdersService {
 
     const why = String(reason ?? "").trim() || "Dibatalkan oleh Super Admin.";
     const wasPaid = order.invoice?.paymentStatus === "paid";
-    const updated = await this.prisma.$transaction(async (tx) => {
-      if (order.invoice?.paymentStatus === "pending") {
-        await tx.paymentInvoice.update({
-          where: { id: order.invoice.id },
-          data: { paymentStatus: "cancelled" },
+
+    if (order.invoice?.paymentStatus === "pending") {
+      const cancelled = await this.prisma.$transaction((tx) =>
+        this.closePendingInvoice(tx, order.invoice!.id, "cancelled", {
+          note: `Order dibatalkan oleh Super Admin. Alasan: ${why}`,
+          actor: admin.fullName,
+        }),
+      );
+      for (const row of cancelled ?? []) {
+        this.audit.record("admin.order.cancelled", {
+          actorId: adminId,
+          userId: order.userId,
+          orderId: row.orderId,
+          imei: row.imei,
+          reason: why,
+          wasPaid: false,
         });
       }
+      if (cancelled?.length) {
+        void this.adminNotify.notifyUserById(
+          order.userId,
+          userOrderNoticeHtml({
+            kind: "cancelled",
+            orderId: cancelled.map((row) => row.orderId).join(", "),
+            reason: why,
+            wasPaid: false,
+          }),
+        );
+      }
+      return serializeOrderListItem(
+        await this.prisma.order.findUniqueOrThrow({
+          where: { id: order.id },
+          include: orderInclude,
+        }),
+      );
+    }
+
+    const updated = await this.prisma.$transaction(async (tx) => {
       return tx.order.update({
         where: { id: order.id },
         data: {
@@ -401,15 +448,12 @@ export class OrdersService {
       );
     }
 
-    const updated = await this.settleInvoice(current.id, current.invoice.id, {
+    await this.settleInvoice(current.invoice.id, {
       paidAt: new Date(),
       reference: `SIM-${Date.now()}`,
       note: "Pembayaran disimulasikan dan diverifikasi.",
     });
-    if (!updated) {
-      return serializeOrderListItem(await this.findOwned(userId, publicOrderId));
-    }
-    return serializeOrderListItem(updated);
+    return serializeOrderListItem(await this.findOwned(userId, publicOrderId));
   }
 
   /**
@@ -430,35 +474,33 @@ export class OrdersService {
     if (invoice.amount !== input.amount) return "amount_mismatch";
 
     if (invoice.paymentStatus !== "pending") {
-      await this.prisma.orderActivityLog.create({
-        data: {
-          orderId: invoice.orderId,
-          status: invoice.order.status,
+      await this.prisma.orderActivityLog.createMany({
+        data: invoice.orders.map((order) => ({
+          orderId: order.id,
+          status: order.status,
           note: `Pembayaran Rp ${input.amount} diterima gateway setelah invoice ${invoice.paymentStatus}. Perlu tindak lanjut manual (proses atau refund).`,
           actor: "Sistem",
-        },
+        })),
       });
-      const lateOrder = await this.prisma.order.findUnique({
-        where: { id: invoice.orderId },
-        select: { orderId: true, userId: true },
-      });
-      this.audit.record("payment.late", {
-        userId: lateOrder?.userId,
-        orderId: lateOrder?.orderId,
-        amount: input.amount,
-        invoiceStatus: invoice.paymentStatus,
-      });
+      for (const order of invoice.orders) {
+        this.audit.record("payment.late", {
+          userId: order.userId,
+          orderId: order.orderId,
+          amount: input.amount,
+          invoiceStatus: invoice.paymentStatus,
+        });
+      }
       return "late";
     }
 
-    const updated = await this.settleInvoice(invoice.orderId, invoice.id, {
+    const settled = await this.settleInvoice(invoice.id, {
       paidAt: input.paidAt,
       reference: input.gatewayInvoiceId,
       channel: input.channel,
       payload: input.payload,
       note: `Pembayaran diterima via SayaBayar${input.channel ? ` (${input.channel})` : ""}.`,
     });
-    return updated ? "paid" : "duplicate";
+    return settled ? "paid" : "duplicate";
   }
 
   /** Applies a verified `invoice.expired` / `invoice.cancelled` webhook. */
@@ -469,45 +511,18 @@ export class OrdersService {
     const invoice = await this.findGatewayInvoice(input);
     if (!invoice) return "unmatched";
 
-    const result = await this.prisma.$transaction(async (tx) => {
-      const claimed = await tx.paymentInvoice.updateMany({
-        where: { id: invoice.id, paymentStatus: "pending" },
-        data: { paymentStatus: status },
-      });
-      if (claimed.count !== 1) return "ignored" as const;
-      await tx.order.update({
-        where: { id: invoice.orderId },
-        data: {
-          status: "cancel",
-          activity: {
-            create: {
-              status: "cancel",
-              note:
-                status === "expired"
-                  ? "Invoice kedaluwarsa di payment gateway, order dibatalkan otomatis."
-                  : "Invoice dibatalkan di payment gateway, order dibatalkan.",
-              actor: "Sistem",
-            },
-          },
-        },
-      });
-      return "closed" as const;
-    });
-    if (result === "closed" && status === "expired") {
-      const order = await this.prisma.order.findUnique({
-        where: { id: invoice.orderId },
-        select: { userId: true, orderId: true },
-      });
-      if (order) {
-        this.notifyExpired(order.userId, order.orderId);
-        this.audit.record("order.expired", {
-          userId: order.userId,
-          orderId: order.orderId,
-          source: "gateway",
-        });
-      }
-    }
-    return result;
+    const closed = await this.prisma.$transaction((tx) =>
+      this.closePendingInvoice(tx, invoice.id, status, {
+        note:
+          status === "expired"
+            ? "Invoice kedaluwarsa di payment gateway, order dibatalkan otomatis."
+            : "Invoice dibatalkan di payment gateway, order dibatalkan.",
+        actor: "Sistem",
+      }),
+    );
+    if (closed === null) return "ignored";
+    if (status === "expired") this.reportExpired(closed, "gateway");
+    return "closed";
   }
 
   async acceptOrder(adminId: string, publicOrderId: string) {
@@ -811,9 +826,11 @@ export class OrdersService {
     }
   }
 
-  /** Marks a pending invoice paid and queues the order; null if it was no longer pending. */
+  /**
+   * Marks a pending invoice paid and queues every order it pays for; null if
+   * it was no longer pending.
+   */
   private async settleInvoice(
-    orderRowId: string,
     invoiceRowId: string,
     payment: {
       paidAt: Date;
@@ -837,40 +854,81 @@ export class OrdersService {
         },
       });
       if (claimed.count !== 1) return null;
-      await tx.orderActivityLog.create({
-        data: {
-          orderId: orderRowId,
-          status: "paid",
-          note: payment.note,
-          actor: "Sistem",
-        },
+      const orders = await tx.order.findMany({
+        where: { invoiceId: invoiceRowId, status: "waiting_payment" },
+        select: { id: true, orderId: true, userId: true, price: true },
+        orderBy: { orderId: "asc" },
       });
-      return tx.order.update({
-        where: { id: orderRowId },
-        data: {
-          status: "waiting_action",
-          activity: {
-            create: {
-              status: "waiting_action",
-              note: "Order masuk antrean dan siap diambil admin.",
-              actor: "Sistem",
+      for (const order of orders) {
+        await tx.orderActivityLog.create({
+          data: {
+            orderId: order.id,
+            status: "paid",
+            note: payment.note,
+            actor: "Sistem",
+          },
+        });
+        await tx.order.update({
+          where: { id: order.id },
+          data: {
+            status: "waiting_action",
+            activity: {
+              create: {
+                status: "waiting_action",
+                note: "Order masuk antrean dan siap diambil admin.",
+                actor: "Sistem",
+              },
             },
           },
-        },
-        include: orderInclude,
-      });
+        });
+      }
+      return orders;
     });
 
     if (updated) {
-      this.audit.record("payment.paid", {
-        userId: updated.userId,
-        orderId: updated.orderId,
-        amount: updated.invoice?.amount ?? updated.price,
-        method: payment.channel ?? updated.invoice?.paymentChannel ?? undefined,
-      });
-      void this.adminNotify.notifyNewOrder(updated.id);
+      for (const order of updated) {
+        this.audit.record("payment.paid", {
+          userId: order.userId,
+          orderId: order.orderId,
+          amount: order.price,
+          method: payment.channel,
+        });
+        void this.adminNotify.notifyNewOrder(order.id);
+      }
     }
     return updated;
+  }
+
+  /**
+   * Closes a pending invoice and cancels every unpaid order on it. Returns the
+   * cancelled orders, or null if the invoice was no longer pending.
+   */
+  private async closePendingInvoice(
+    tx: Prisma.TransactionClient,
+    invoiceRowId: string,
+    status: "expired" | "cancelled",
+    log: { note: string; actor: string },
+  ) {
+    const claimed = await tx.paymentInvoice.updateMany({
+      where: { id: invoiceRowId, paymentStatus: "pending" },
+      data: { paymentStatus: status },
+    });
+    if (claimed.count !== 1) return null;
+    const orders = await tx.order.findMany({
+      where: { invoiceId: invoiceRowId, status: "waiting_payment" },
+      select: { id: true, orderId: true, imei: true, userId: true },
+      orderBy: { orderId: "asc" },
+    });
+    for (const order of orders) {
+      await tx.order.update({
+        where: { id: order.id },
+        data: {
+          status: "cancel",
+          activity: { create: { status: "cancel", ...log } },
+        },
+      });
+    }
+    return orders;
   }
 
   private async findGatewayInvoice(ref: {
@@ -885,7 +943,11 @@ export class OrdersService {
     if (!match.length) return null;
     return this.prisma.paymentInvoice.findFirst({
       where: { OR: match },
-      include: { order: { select: { status: true } } },
+      include: {
+        orders: {
+          select: { id: true, orderId: true, userId: true, status: true },
+        },
+      },
     });
   }
 
@@ -922,53 +984,57 @@ export class OrdersService {
       if (synced.invoice?.paymentStatus !== "pending") return synced as T;
     }
 
-    let expiredNow = false;
-    const updated = await this.prisma.$transaction(async (tx) => {
-      const claimed = await tx.paymentInvoice.updateMany({
-        where: {
-          id: order.invoice!.id,
-          paymentStatus: "pending",
-        },
-        data: { paymentStatus: "expired" },
-      });
-      if (claimed.count !== 1) {
-        return tx.order.findUniqueOrThrow({
-          where: { id: order.id },
-          include: orderInclude,
-        });
-      }
-      expiredNow = true;
-      return tx.order.update({
-        where: { id: order.id },
-        data: {
-          status: "cancel",
-          activity: {
-            create: {
-              status: "cancel",
-              note: "Batas waktu pembayaran terlewat, order dibatalkan otomatis.",
-              actor: "Sistem",
-            },
-          },
-        },
-        include: orderInclude,
-      });
-    });
-    if (expiredNow) {
-      this.notifyExpired(updated.userId, updated.orderId);
-      this.audit.record("order.expired", {
-        userId: updated.userId,
-        orderId: updated.orderId,
-        source: "timeout",
-      });
-    }
-    return updated as T;
+    const invoiceRowId = order.invoice.id;
+    const expired = await this.prisma.$transaction((tx) =>
+      this.closePendingInvoice(tx, invoiceRowId, "expired", {
+        note: "Batas waktu pembayaran terlewat, order dibatalkan otomatis.",
+        actor: "Sistem",
+      }),
+    );
+    if (expired) this.reportExpired(expired, "timeout");
+    return (await this.prisma.order.findUniqueOrThrow({
+      where: { id: order.id },
+      include: orderInclude,
+    })) as T;
   }
 
-  private notifyExpired(userId: string, publicOrderId: string) {
+  /** One notice per customer listing every order that expired together. */
+  private reportExpired(
+    orders: Array<{ orderId: string; userId: string }>,
+    source: "timeout" | "gateway",
+  ) {
+    if (!orders.length) return;
+    for (const order of orders) {
+      this.audit.record("order.expired", {
+        userId: order.userId,
+        orderId: order.orderId,
+        source,
+      });
+    }
     void this.adminNotify.notifyUserById(
-      userId,
-      userOrderNoticeHtml({ kind: "expired", orderId: publicOrderId }),
+      orders[0].userId,
+      userOrderNoticeHtml({
+        kind: "expired",
+        orderId: orders.map((order) => order.orderId).join(", "),
+      }),
     );
+  }
+
+  /** `count` consecutive free Order IDs for today (Asia/Jakarta). */
+  private async nextOrderIds(count: number): Promise<string[]> {
+    const first = await this.nextOrderId();
+    const prefix = first.slice(0, -4);
+    const start = Number(first.slice(-4));
+    const ids: string[] = [];
+    for (let seq = start; ids.length < count; seq++) {
+      const candidate = `${prefix}${String(seq).padStart(4, "0")}`;
+      const clash = await this.prisma.order.findUnique({
+        where: { orderId: candidate },
+        select: { id: true },
+      });
+      if (!clash) ids.push(candidate);
+    }
+    return ids;
   }
 
   private async nextOrderId(): Promise<string> {

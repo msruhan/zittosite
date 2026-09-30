@@ -7,7 +7,14 @@ import { Button } from "@/components/ui/button";
 import { ApiError, api } from "@/lib/api";
 
 /** Two-step cancel: the first press asks, the second one cancels. */
-export function CancelOrderButton({ orderId }: { orderId: string }) {
+export function CancelOrderButton({
+  orderId,
+  bulkCount = 1,
+}: {
+  orderId: string;
+  /** Unpaid orders sharing this QRIS; cancelling one cancels them all. */
+  bulkCount?: number;
+}) {
   const router = useRouter();
   const [confirming, setConfirming] = React.useState(false);
   const [busy, setBusy] = React.useState(false);
@@ -34,7 +41,7 @@ export function CancelOrderButton({ orderId }: { orderId: string }) {
   if (!confirming) {
     return (
       <Button variant="ghost" block onClick={() => setConfirming(true)}>
-        Batalkan order
+        {bulkCount > 1 ? `Batalkan semua (${bulkCount} order)` : "Batalkan order"}
       </Button>
     );
   }
@@ -42,7 +49,9 @@ export function CancelOrderButton({ orderId }: { orderId: string }) {
   return (
     <div className="space-y-2">
       <p className="text-center text-body text-ink-soft">
-        Batalkan order {orderId}? QRIS-nya tidak bisa dipakai lagi.
+        {bulkCount > 1
+          ? `Semua ${bulkCount} order di bulk ini ikut dibatalkan karena memakai 1 QRIS.`
+          : `Batalkan order ${orderId}? QRIS-nya tidak bisa dipakai lagi.`}
       </p>
       <div className="grid grid-cols-2 gap-2">
         <Button

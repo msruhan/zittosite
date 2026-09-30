@@ -196,31 +196,33 @@ async function main() {
       ? new Date(Date.now() - 60_000)
       : new Date(Date.now() + 30 * 60_000);
 
+    const invoice = await prisma.paymentInvoice.create({
+      data: {
+        invoiceId: `INV-${sample.orderId}`,
+        amount: sample.price,
+        paymentChannel: "qris_placeholder",
+        paymentStatus: sample.paid
+          ? "paid"
+          : sample.expired
+            ? "expired"
+            : "pending",
+        expiredAt,
+        paidAt: sample.paid ? new Date() : null,
+        paymentReference: sample.paid ? "SEED-PAID" : null,
+      },
+    });
+
     await prisma.order.create({
       data: {
         orderId: sample.orderId,
         userId: fajri.id,
         serviceId: sample.serviceId,
+        invoiceId: invoice.id,
         channel: "web",
         imei: sample.imei,
         notes: sample.notes,
         status: sample.status,
         price: sample.price,
-        invoice: {
-          create: {
-            invoiceId: `INV-${sample.orderId}`,
-            amount: sample.price,
-            paymentChannel: "qris_placeholder",
-            paymentStatus: sample.paid
-              ? "paid"
-              : sample.expired
-                ? "expired"
-                : "pending",
-            expiredAt,
-            paidAt: sample.paid ? new Date() : null,
-            paymentReference: sample.paid ? "SEED-PAID" : null,
-          },
-        },
         activity: {
           create: sample.paid
             ? [

@@ -10,7 +10,7 @@ import {
 } from "@nestjs/common";
 import { UserAuthGuard } from "../auth/user-auth.guard";
 import { OrdersService } from "./orders.service";
-import { optString } from "../security/input";
+import { optString, optStringList } from "../security/input";
 
 @Controller("orders")
 @UseGuards(UserAuthGuard)
@@ -27,6 +27,7 @@ export class OrdersController {
     return this.orders.createOrder(req.user.sub, {
       serviceId: optString(body.serviceId, "Layanan", 64),
       imei: optString(body.imei, "IMEI", 32),
+      imeis: optStringList(body.imeis, "IMEI", 20, 32),
       notes: optString(body.notes, "Catatan", 500),
       channel: "web",
     });

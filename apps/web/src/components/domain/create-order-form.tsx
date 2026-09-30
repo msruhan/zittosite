@@ -5,14 +5,14 @@ import { useRouter } from "next/navigation";
 import { Info, QrCode } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { Field, Input, Textarea } from "@/components/ui/field";
+import { Field, Textarea } from "@/components/ui/field";
 import { Select } from "@/components/ui/select";
 import { DataValue } from "@/components/ui/data-value";
+import { ImeiChipInput } from "@/components/domain/imei-chip-input";
 import { ApiError, api } from "@/lib/api";
 import { formatRupiah } from "@/lib/format";
+import { IMEI_LENGTH, MAX_BULK_IMEIS } from "@/lib/imei-list";
 import type { Service } from "@/lib/types";
-
-const IMEI_LENGTH = 15;
 
 export function CreateOrderForm({
   services,
@@ -24,38 +24,44 @@ export function CreateOrderForm({
 }) {
   const router = useRouter();
   const [serviceId, setServiceId] = React.useState<string>("");
-  const [imei, setImei] = React.useState("");
+  const [imeis, setImeis] = React.useState<string[]>([]);
+  const [draft, setDraft] = React.useState("");
+  const [imeiError, setImeiError] = React.useState<string>();
   const [notes, setNotes] = React.useState("");
-  const [errors, setErrors] = React.useState<{
-    serviceId?: string;
-    imei?: string;
-  }>({});
+  const [serviceError, setServiceError] = React.useState<string>();
   const [submitting, setSubmitting] = React.useState(false);
 
   const service = services.find((s) => s.id === serviceId) ?? null;
   const price = service ? priceFor[service.id] : null;
-
-  function handleImeiChange(event: React.ChangeEvent<HTMLInputElement>) {
-    const digitsOnly = event.target.value.replace(/\D/g, "").slice(0, IMEI_LENGTH);
-    setImei(digitsOnly);
-    if (errors.imei) setErrors((e) => ({ ...e, imei: undefined }));
-  }
+  const draftComplete =
+    draft.length === IMEI_LENGTH &&
+    !imeis.includes(draft) &&
+    imeis.length < MAX_BULK_IMEIS;
+  const quantity = imeis.length + (draftComplete ? 1 : 0);
+  const total = price !== null ? price * Math.max(quantity, 1) : null;
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    const nextErrors: typeof errors = {};
-    if (!serviceId) {
-      nextErrors.serviceId = "Pilih layanan yang ingin Anda gunakan.";
+    setServiceError(
+      serviceId ? undefined : "Pilih layanan yang ingin Anda gunakan.",
+    );
+    const finalImeis = draftComplete ? [...imeis, draft] : imeis;
+    let problem: string | undefined;
+    if (draft && !draftComplete) {
+      problem =
+        draft.length !== IMEI_LENGTH
+          ? `IMEI terakhir baru ${draft.length} dari ${IMEI_LENGTH} digit. Lengkapi atau hapus dulu.`
+          : "IMEI terakhir sudah ditambahkan atau melebihi batas. Hapus dulu.";
+    } else if (finalImeis.length === 0) {
+      problem = "Masukkan IMEI perangkat Anda.";
     }
-    if (imei.length === 0) {
-      nextErrors.imei = "Masukkan IMEI perangkat Anda.";
-    } else if (imei.length !== IMEI_LENGTH) {
-      nextErrors.imei = `IMEI terdiri dari ${IMEI_LENGTH} angka. Saat ini ${imei.length} angka.`;
+    setImeiError(problem);
+    if (!serviceId || problem) return;
+    if (draftComplete) {
+      setImeis(finalImeis);
+      setDraft("");
     }
-
-    setErrors(nextErrors);
-    if (Object.keys(nextErrors).length > 0) return;
 
     setSubmitting(true);
     try {
@@ -63,11 +69,11 @@ export function CreateOrderForm({
         method: "POST",
         body: JSON.stringify({
           serviceId,
-          imei,
+          imeis: finalImeis,
           notes: notes.trim() || undefined,
         }),
       });
-      toast.success("Order dibuat", {
+      toast.success(quantity > 1 ? `${quantity} order dibuat` : "Order dibuat", {
         description: "Invoice QRIS sudah diterbitkan. Selesaikan pembayaran.",
       });
       router.push(`/app/order/${order.orderId}/bayar`);
@@ -84,7 +90,7 @@ export function CreateOrderForm({
       <Field
         label="Layanan"
         htmlFor="service"
-        error={errors.serviceId}
+        error={serviceError}
         required
         hint="Harga mengikuti layanan yang dipilih."
       >
@@ -93,10 +99,9 @@ export function CreateOrderForm({
           value={serviceId}
           onValueChange={(value) => {
             setServiceId(value);
-            if (errors.serviceId)
-              setErrors((e) => ({ ...e, serviceId: undefined }));
+            setServiceError(undefined);
           }}
-          invalid={Boolean(errors.serviceId)}
+          invalid={Boolean(serviceError)}
           placeholder="Pilih layanan"
           options={services.map((item) => ({
             value: item.id,
@@ -126,20 +131,20 @@ export function CreateOrderForm({
       <Field
         label="IMEI"
         htmlFor="imei"
-        error={errors.imei}
+        error={imeiError}
         required
-        hint={`${imei.length} dari ${IMEI_LENGTH} angka. Ketik *#06# pada perangkat untuk melihat IMEI.`}
+        hint={`${imeis.length}/${MAX_BULK_IMEIS} IMEI · ${
+          draft.length ? `${draft.length}/${IMEI_LENGTH} digit · ` : ""
+        }ketik 15 digit lalu tekan Enter untuk menambah IMEI berikutnya. Ketik *#06# pada perangkat untuk melihat IMEI.`}
       >
-        <Input
+        <ImeiChipInput
           id="imei"
-          name="imei"
-          inputMode="numeric"
-          autoComplete="off"
-          placeholder="Contoh 356938035643809"
-          className="font-data tabular tracking-[0.02em]"
-          value={imei}
-          invalid={Boolean(errors.imei)}
-          onChange={handleImeiChange}
+          imeis={imeis}
+          onImeisChange={setImeis}
+          draft={draft}
+          onDraftChange={setDraft}
+          onError={setImeiError}
+          invalid={Boolean(imeiError)}
         />
       </Field>
 
@@ -185,15 +190,24 @@ export function CreateOrderForm({
       </Field>
 
       <div className="flex items-baseline justify-between gap-4 border-t border-hairline pt-4">
-        <span className="text-body text-ink-soft">Total yang harus dibayar</span>
+        <div>
+          <span className="text-body text-ink-soft">Total yang harus dibayar</span>
+          {price !== null && quantity > 1 ? (
+            <DataValue className="block text-body text-ink-soft">
+              {quantity} IMEI × {formatRupiah(price)}
+            </DataValue>
+          ) : null}
+        </div>
         <DataValue emphasis className="text-headline">
-          {price !== null ? formatRupiah(price) : "—"}
+          {total !== null ? formatRupiah(total) : "—"}
         </DataValue>
       </div>
 
       <Button type="submit" block loading={submitting} loadingLabel="Membuat order">
         <QrCode className="size-4" aria-hidden="true" />
-        Buat order dan terbitkan QRIS
+        {quantity > 1
+          ? `Buat ${quantity} order dan terbitkan 1 QRIS`
+          : "Buat order dan terbitkan QRIS"}
       </Button>
     </form>
   );

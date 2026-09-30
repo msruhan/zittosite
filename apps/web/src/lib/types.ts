@@ -113,6 +113,8 @@ export interface PaymentInvoice {
   paymentStatus: PaymentStatus;
   expiredAt: string;
   paidAt: string | null;
+  /** Every order this invoice pays for; more than one for a bulk order. */
+  orders?: Array<{ orderId: string; imei: string; status: OrderStatus }>;
 }
 
 export interface OrderActivityLog {

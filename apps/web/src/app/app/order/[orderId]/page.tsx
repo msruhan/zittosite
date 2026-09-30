@@ -112,7 +112,14 @@ export default async function OrderDetailPage({
                 Selesaikan pembayaran
               </Link>
             </Button>
-            <CancelOrderButton orderId={order.orderId} />
+            <CancelOrderButton
+              orderId={order.orderId}
+              bulkCount={
+                order.invoice?.orders?.filter(
+                  (o) => o.status === "waiting_payment",
+                ).length
+              }
+            />
           </div>
         ) : null}
       </Card>

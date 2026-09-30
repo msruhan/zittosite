@@ -43,7 +43,9 @@ import {
   statusMemberHtml,
   superAdminRecapHtml,
   unlinkedHtml,
+  type BulkItem,
 } from "./telegram-messages";
+import { MAX_BULK_IMEIS, parseImeiList } from "../orders/imei-list";
 
 type BotCommandDef = { command: string; description: string };
 
@@ -246,7 +248,13 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
   /** Sends the QRIS as a photo; returns false so the caller can fall back to the portal link. */
   private async replyQris(
     ctx: Context,
-    input: { orderId: string; qris: string; amount: number; expiresAt: Date },
+    input: {
+      orderId: string;
+      qris: string;
+      amount: number;
+      expiresAt: Date;
+      items?: BulkItem[];
+    },
   ): Promise<boolean> {
     try {
       const png = await QRCode.toBuffer(input.qris, {
@@ -386,7 +394,8 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
         } else if (data.startsWith("uord:cancel:")) {
           await ctx.answerCallbackQuery();
           const orderId = data.slice("uord:cancel:".length);
-          await this.replyHtml(ctx, cancelConfirmHtml(orderId), {
+          const bulk = await this.unpaidBulkSize(orderId);
+          await this.replyHtml(ctx, cancelConfirmHtml(orderId, bulk), {
             reply_markup: cancelConfirmKeyboard(orderId),
           });
         } else if (data.startsWith("uord:cancelok:")) {
@@ -396,7 +405,8 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
           if (!admin) return;
           await ctx.answerCallbackQuery();
           const orderId = data.slice("sord:cancel:".length);
-          await this.replyHtml(ctx, cancelConfirmHtml(orderId), {
+          const bulk = await this.unpaidBulkSize(orderId);
+          await this.replyHtml(ctx, cancelConfirmHtml(orderId, bulk), {
             reply_markup: new InlineKeyboard()
               .text("✅ Ya, batalkan", `sord:cancelok:${orderId}`)
               .text("↩️ Tidak", `uord:keep:${orderId}`),
@@ -490,33 +500,42 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
       }
 
       if (session.kind === "user_imei") {
-        const imei = text.replace(/\D/g, "");
-        if (!/^\d{15}$/.test(imei)) {
-          await this.replyHtml(ctx, "IMEI harus 15 digit angka. Coba lagi.");
+        const parsed = parseImeiList(text);
+        if (!parsed.ok) {
+          await this.replyHtml(
+            ctx,
+            [
+              ...parsed.errors.map((e) => `⚠️ ${escapeHtml(e)}`),
+              "",
+              `Kirim ulang IMEI, satu per baris (maksimal ${MAX_BULK_IMEIS}).`,
+            ].join("\n"),
+          );
           return;
         }
         this.sessions.delete(chatId);
         try {
           const order = await this.orders.createOrder(session.userId, {
             serviceCode: session.serviceCode,
-            imei,
+            imeis: parsed.imeis,
             channel: "telegram",
           });
-          const amount = order.invoice?.amountDue ?? order.price;
           const invoice = order.invoice;
+          const amount = invoice?.amountDue ?? invoice?.amount ?? order.price;
+          const items = invoice?.orders;
           if (invoice?.qrisString) {
             const sent = await this.replyQris(ctx, {
               orderId: order.orderId,
               qris: invoice.qrisString,
               amount,
               expiresAt: new Date(invoice.expiredAt),
+              items,
             });
             if (sent) return;
           }
           const payUrl = `${webPublicUrl()}/app/order/${order.orderId}/bayar`;
           await this.replyHtml(
             ctx,
-            orderCreatedHtml({ orderId: order.orderId, payUrl, amount }),
+            orderCreatedHtml({ orderId: order.orderId, payUrl, amount, items }),
             { reply_markup: backToMenuKeyboard() },
           );
         } catch (err: any) {
@@ -874,14 +893,27 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
       .catch(() => undefined);
   }
 
+  /** How many unpaid orders share this order's QRIS (cancelling one cancels them all). */
+  private async unpaidBulkSize(orderId: string): Promise<number> {
+    const order = await this.prisma.order.findUnique({
+      where: { orderId },
+      select: { invoiceId: true, status: true },
+    });
+    if (!order?.invoiceId || order.status !== "waiting_payment") return 1;
+    return this.prisma.order.count({
+      where: { invoiceId: order.invoiceId, status: "waiting_payment" },
+    });
+  }
+
   private async replyPendingOrder(ctx: Context, order: SerializedOrder) {
     const invoice = order.invoice;
     await this.replyHtml(
       ctx,
       pendingOrderHtml({
         orderId: order.orderId,
-        amount: invoice?.amountDue ?? order.price,
+        amount: invoice?.amountDue ?? invoice?.amount ?? order.price,
         expiresAt: invoice ? new Date(invoice.expiredAt) : null,
+        items: invoice?.orders,
       }),
       { reply_markup: unpaidOrderKeyboard(order.orderId, Boolean(invoice?.qrisString)) },
     );
@@ -903,18 +935,20 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
     await this.replyQris(ctx, {
       orderId: order.orderId,
       qris: invoice.qrisString,
-      amount: invoice.amountDue ?? order.price,
+      amount: invoice.amountDue ?? invoice.amount,
       expiresAt: new Date(invoice.expiredAt),
+      items: invoice.orders,
     });
   }
 
   private async handleUserCancel(ctx: Context, orderId: string) {
     const actor = await this.requireMember(ctx);
     if (!actor) return;
-    await this.orders.cancelOrder(actor.user.id, orderId);
+    const cancelled = await this.orders.cancelOrder(actor.user.id, orderId);
     await ctx.answerCallbackQuery({ text: "Order dibatalkan" });
+    const ids = cancelled.invoice?.orders.map((o) => o.orderId) ?? [orderId];
     const html = [
-      `🚫 Order <code>${escapeHtml(orderId)}</code> dibatalkan.`,
+      `🚫 Order ${ids.map((id) => `<code>${escapeHtml(id)}</code>`).join(", ")} dibatalkan.`,
       "Ketik /order untuk membuat order baru.",
     ].join("\n");
     await ctx
@@ -953,6 +987,7 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
         `Layanan: <b>${escapeHtml(service.name)}</b> (${formatRp(service.price)})`,
         "",
         "Kirim <b>IMEI 15 digit</b> sekarang.",
+        `Bulk order: kirim beberapa IMEI dalam satu pesan, <b>satu per baris</b> (maksimal ${MAX_BULK_IMEIS}). Total = jumlah IMEI × harga, dibayar dengan 1 QRIS.`,
         "",
         "⚠️ IMEI wajib berstatus <b>UNKNOWN</b>. Cek CEIR di infoceir.com.",
         "Apabila IMEI tidak berstatus <b>UNKNOWN</b>, maka <b>tidak ada refund</b>.",
