@@ -9,6 +9,8 @@ export type AdminDayStats = {
   done: number;
   rejected: number;
   inProcess: number;
+  /** Sum of the selling price of orders completed today. */
+  doneAmount: number;
 };
 
 export type SuperAdminRecap = {
@@ -52,6 +54,7 @@ export type OperatorRecap = {
 };
 
 type Counted = { assignedAdminId: string | null; _count: { _all: number } };
+type Summed = { assignedAdminId: string | null; _sum: { price: number | null } };
 
 function tally(rows: Counted[]) {
   const map = new Map<string, number>();
@@ -61,6 +64,35 @@ function tally(rows: Counted[]) {
     if (row.assignedAdminId) map.set(row.assignedAdminId, row._count._all);
   }
   return { map, total };
+}
+
+function sumByAdmin(rows: Summed[]) {
+  const map = new Map<string, number>();
+  let total = 0;
+  for (const row of rows) {
+    const amount = row._sum.price ?? 0;
+    total += amount;
+    if (row.assignedAdminId) map.set(row.assignedAdminId, amount);
+  }
+  return { map, total };
+}
+
+type ActivityRow = {
+  status: OrderStatus;
+  startedAt: Date | null;
+  completedAt: Date | null;
+  updatedAt: Date;
+};
+
+/** When the line's status happened: completion for done orders, last change for closed ones. */
+function activityAt(o: ActivityRow): Date {
+  if (o.status === "done") return o.completedAt ?? o.updatedAt;
+  if (o.status === "rejected" || o.status === "cancel") return o.updatedAt;
+  return o.startedAt ?? o.updatedAt;
+}
+
+function byTime(a: RecapOrderLine, b: RecapOrderLine) {
+  return a.at.getTime() - b.at.getTime();
 }
 
 /** Recap for the current Asia/Jakarta calendar day. */
@@ -96,8 +128,18 @@ export class OrderRecapService {
         _count: { _all: true },
       });
 
-    const [byStatus, byChannel, paid, taken, done, rejected, inProcess, queue, handledOrders] =
-      await Promise.all([
+    const [
+      byStatus,
+      byChannel,
+      paid,
+      taken,
+      done,
+      rejected,
+      inProcess,
+      queue,
+      handledOrders,
+      doneAmounts,
+    ] = await Promise.all([
         this.prisma.order.groupBy({
           by: ["status"],
           where: { createdAt: range, isTest: false },
@@ -128,10 +170,15 @@ export class OrderRecapService {
             imei: true,
             status: true,
             startedAt: true,
+            completedAt: true,
             updatedAt: true,
             service: { select: { name: true } },
           },
-          orderBy: [{ startedAt: "asc" }, { updatedAt: "asc" }],
+        }),
+        this.prisma.order.groupBy({
+          by: ["assignedAdminId"],
+          where: where.done,
+          _sum: { price: true },
         }),
       ]);
 
@@ -139,7 +186,7 @@ export class OrderRecapService {
     const processorOrder = { assignedAdminId: null, ...viaWhatsappService } as const;
     const countProcessor = (w: Prisma.OrderWhereInput) =>
       this.prisma.order.count({ where: { ...w, ...processorOrder } });
-    const [viaWhatsapp, waTaken, waDone, waRejected, waInProcess, waQueue, waOrders] =
+    const [viaWhatsapp, waTaken, waDone, waRejected, waInProcess, waQueue, waOrders, waAmount] =
       await Promise.all([
         this.prisma.order.count({
           where: { createdAt: range, isTest: false, ...viaWhatsappService },
@@ -156,8 +203,17 @@ export class OrderRecapService {
             ...processorOrder,
             OR: [where.taken, where.done, where.rejected, where.inProcess],
           },
-          select: { imei: true, status: true, startedAt: true, updatedAt: true },
-          orderBy: [{ startedAt: "asc" }, { updatedAt: "asc" }],
+          select: {
+            imei: true,
+            status: true,
+            startedAt: true,
+            completedAt: true,
+            updatedAt: true,
+          },
+        }),
+        this.prisma.order.aggregate({
+          where: { ...where.done, ...processorOrder },
+          _sum: { price: true },
         }),
       ]);
 
@@ -165,18 +221,20 @@ export class OrderRecapService {
     for (const o of handledOrders) {
       const list = ordersByAdmin.get(o.assignedAdminId!) ?? [];
       list.push({
-        at: o.startedAt ?? o.updatedAt,
+        at: activityAt(o),
         imei: o.imei,
         status: o.status,
         service: o.service.name,
       });
       ordersByAdmin.set(o.assignedAdminId!, list);
     }
+    for (const list of ordersByAdmin.values()) list.sort(byTime);
 
     const t = tally(taken);
     const d = tally(done);
     const r = tally(rejected);
     const p = tally(inProcess);
+    const amounts = sumByAdmin(doneAmounts);
     const adminIds = [
       ...new Set([
         ...t.map.keys(),
@@ -202,6 +260,7 @@ export class OrderRecapService {
         done: d.map.get(admin.id) ?? 0,
         rejected: r.map.get(admin.id) ?? 0,
         inProcess: p.map.get(admin.id) ?? 0,
+        doneAmount: amounts.map.get(admin.id) ?? 0,
         orders: ordersByAdmin.get(admin.id) ?? [],
       }))
       .sort((a, b) => b.done + b.taken - (a.done + a.taken));
@@ -226,19 +285,24 @@ export class OrderRecapService {
         byStatus: statusCounts,
       },
       revenue: { amount: paid._sum.amount ?? 0, payments: paid._count._all },
-      handled: { taken: t.total, done: d.total, rejected: r.total, inProcess: p.total },
+      handled: {
+        taken: t.total,
+        done: d.total,
+        rejected: r.total,
+        inProcess: p.total,
+        doneAmount: amounts.total,
+      },
       queue,
       whatsapp: {
         taken: waTaken,
         done: waDone,
         rejected: waRejected,
         inProcess: waInProcess,
+        doneAmount: waAmount._sum.price ?? 0,
         queue: waQueue,
-        orders: waOrders.map((o) => ({
-          at: o.startedAt ?? o.updatedAt,
-          imei: o.imei,
-          status: o.status,
-        })),
+        orders: waOrders
+          .map((o) => ({ at: activityAt(o), imei: o.imei, status: o.status }))
+          .sort(byTime),
       },
       perAdmin,
     };
@@ -250,7 +314,7 @@ export class OrderRecapService {
     const mine = (w: Prisma.OrderWhereInput) =>
       this.prisma.order.count({ where: { ...w, assignedAdminId: adminId } });
 
-    const [taken, done, rejected, inProcess, queue, orders] = await Promise.all([
+    const [taken, done, rejected, inProcess, queue, orders, amount] = await Promise.all([
       mine(where.taken),
       mine(where.done),
       mine(where.rejected),
@@ -267,21 +331,29 @@ export class OrderRecapService {
           status: true,
           imei: true,
           startedAt: true,
+          completedAt: true,
           updatedAt: true,
+          service: { select: { name: true } },
         },
-        orderBy: [{ startedAt: "asc" }, { updatedAt: "asc" }],
+      }),
+      this.prisma.order.aggregate({
+        where: { ...where.done, assignedAdminId: adminId },
+        _sum: { price: true },
       }),
     ]);
 
     return {
       day: start,
-      stats: { taken, done, rejected, inProcess },
+      stats: { taken, done, rejected, inProcess, doneAmount: amount._sum.price ?? 0 },
       queue,
-      orders: orders.map((o) => ({
-        at: o.startedAt ?? o.updatedAt,
-        imei: o.imei,
-        status: o.status,
-      })),
+      orders: orders
+        .map((o) => ({
+          at: activityAt(o),
+          imei: o.imei,
+          status: o.status,
+          service: o.service.name,
+        }))
+        .sort(byTime),
     };
   }
 }

@@ -14,7 +14,12 @@ import { OrdersService } from "../orders/orders.service";
 import { TopupService, type SerializedTopup } from "../orders/topup.service";
 import { TOPUP_PRESETS, parseTopupAmount, topupLimitMessage } from "../orders/topup-amount";
 import { TelegramLinkTokenService } from "./telegram-link-token.service";
-import { OrderRecapService } from "./order-recap.service";
+import { OrderRecapService, type SuperAdminRecap } from "./order-recap.service";
+import {
+  DAILY_RECAP_HOUR,
+  DAILY_RECAP_MINUTE,
+  msUntilJakartaTime,
+} from "./daily-recap-schedule";
 import {
   AdminTelegramInviteService,
   INVITE_PREFIX,
@@ -190,6 +195,7 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
   private bot: Bot | null = null;
   private ready = false;
   private polling = false;
+  private dailyRecapTimer: NodeJS.Timeout | null = null;
   private readonly seenUpdateIds = new Map<number, number>();
   private readonly sessions = new Map<string, ChatSession>();
 
@@ -251,6 +257,7 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
       );
     }
     void this.syncAdminCommandMenus();
+    this.scheduleDailyRecap();
 
     const mode = (process.env.TELEGRAM_MODE ?? "polling").toLowerCase();
     if (mode === "polling") {
@@ -281,7 +288,114 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
 
   async onModuleDestroy() {
     this.ready = false;
+    if (this.dailyRecapTimer) clearTimeout(this.dailyRecapTimer);
     if (this.bot && this.polling) await this.bot.stop();
+  }
+
+  /** Production (or TELEGRAM_DAILY_RECAP=1): recaps go out every day at 23.00 WIB. */
+  private scheduleDailyRecap() {
+    const enabled =
+      process.env.TELEGRAM_DAILY_RECAP === "1" ||
+      (process.env.NODE_ENV === "production" && process.env.TELEGRAM_DAILY_RECAP !== "0");
+    if (!enabled) return;
+    const delay = msUntilJakartaTime(new Date(), DAILY_RECAP_HOUR, DAILY_RECAP_MINUTE);
+    this.dailyRecapTimer = setTimeout(() => {
+      void this.sendDailyRecaps()
+        .catch((err) =>
+          this.logger.error(
+            `daily recap failed: ${err instanceof Error ? err.message : String(err)}`,
+          ),
+        )
+        .finally(() => this.scheduleDailyRecap());
+    }, delay);
+    this.logger.log(`Daily recap scheduled in ${Math.round(delay / 60_000)} min`);
+  }
+
+  /** Each admin gets their own recap; every linked Super Admin gets the full one. */
+  async sendDailyRecaps() {
+    if (!this.bot) return;
+    const recap = await this.recap.superAdmin();
+    const delivery = await this.deliverAdminRecaps(recap);
+
+    const superAdmins = await this.prisma.admin.findMany({
+      where: {
+        role: "super_admin",
+        status: "active",
+        telegramChatId: { not: null },
+        telegramLinkedAt: { not: null },
+      },
+      select: { id: true, telegramChatId: true },
+    });
+    const summary = [
+      `📤 <b>Rekap otomatis 23.00 WIB dikirim ke ${delivery.sent} dari ${delivery.total} admin</b>`,
+      ...(delivery.report.length ? ["", ...delivery.report] : []),
+    ].join("\n");
+    for (const admin of superAdmins) {
+      try {
+        await this.bot.api.sendMessage(admin.telegramChatId!, superAdminRecapHtml(recap), {
+          parse_mode: TELEGRAM_PARSE_MODE,
+          link_preview_options: { is_disabled: true },
+        });
+        if (delivery.total > 0) {
+          await this.bot.api.sendMessage(admin.telegramChatId!, summary, {
+            parse_mode: TELEGRAM_PARSE_MODE,
+          });
+        }
+      } catch (err) {
+        this.logger.warn(
+          `daily recap to super admin ${admin.id} failed: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
+    }
+    this.logger.log(
+      `Daily recap sent: ${delivery.sent}/${delivery.total} admins, ${superAdmins.length} super admins`,
+    );
+  }
+
+  /** Sends each admin who handled orders today their own recap; returns a per-admin report. */
+  private async deliverAdminRecaps(recap: SuperAdminRecap) {
+    const withOrders = recap.perAdmin.filter((a) => a.orders.length > 0);
+    const report: string[] = [];
+    let sent = 0;
+    if (!this.bot || !withOrders.length) return { sent, total: withOrders.length, report };
+
+    const chats = new Map(
+      (
+        await this.prisma.admin.findMany({
+          where: {
+            id: { in: withOrders.map((a) => a.adminId) },
+            status: "active",
+            telegramChatId: { not: null },
+            telegramLinkedAt: { not: null },
+          },
+          select: { id: true, telegramChatId: true },
+        })
+      ).map((a) => [a.id, a.telegramChatId!]),
+    );
+
+    for (const admin of withOrders) {
+      const label = `<b>${escapeHtml(admin.fullName)}</b> (${admin.orders.length} order)`;
+      const chatId = chats.get(admin.adminId);
+      if (!chatId) {
+        report.push(`⚠️ ${label} — Telegram belum tertaut`);
+        continue;
+      }
+      try {
+        await this.bot.api.sendMessage(
+          chatId,
+          adminOrderRecapHtml({ day: recap.day, ...admin }),
+          { parse_mode: TELEGRAM_PARSE_MODE, link_preview_options: { is_disabled: true } },
+        );
+        sent += 1;
+        report.push(`✅ ${label}`);
+      } catch (err) {
+        this.logger.warn(
+          `admin recap send failed admin=${admin.adminId}: ${err instanceof Error ? err.message : String(err)}`,
+        );
+        report.push(`❌ ${label} — gagal terkirim`);
+      }
+    }
+    return { sent, total: withOrders.length, report };
   }
 
   private async replyHtml(
@@ -696,59 +810,14 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
     const superAdmin = await this.requireSuperAdmin(ctx);
     if (!superAdmin || !this.bot) return;
 
-    const recap = await this.recap.superAdmin();
-    const withOrders = recap.perAdmin.filter((a) => a.orders.length > 0);
-    if (!withOrders.length) {
+    const { sent, total, report } = await this.deliverAdminRecaps(await this.recap.superAdmin());
+    if (!total) {
       await this.replyHtml(ctx, "📭 Belum ada order yang ditangani admin hari ini.");
       return;
     }
-
-    const chats = new Map(
-      (
-        await this.prisma.admin.findMany({
-          where: {
-            id: { in: withOrders.map((a) => a.adminId) },
-            status: "active",
-            telegramChatId: { not: null },
-            telegramLinkedAt: { not: null },
-          },
-          select: { id: true, telegramChatId: true },
-        })
-      ).map((a) => [a.id, a.telegramChatId!]),
-    );
-
-    const report: string[] = [];
-    let sent = 0;
-    for (const admin of withOrders) {
-      const label = `<b>${escapeHtml(admin.fullName)}</b> (${admin.orders.length} order)`;
-      const chatId = chats.get(admin.adminId);
-      if (!chatId) {
-        report.push(`⚠️ ${label} — Telegram belum tertaut`);
-        continue;
-      }
-      try {
-        await this.bot.api.sendMessage(
-          chatId,
-          adminOrderRecapHtml({ day: recap.day, ...admin }),
-          { parse_mode: TELEGRAM_PARSE_MODE, link_preview_options: { is_disabled: true } },
-        );
-        sent += 1;
-        report.push(`✅ ${label}`);
-      } catch (err) {
-        this.logger.warn(
-          `rekaporder send failed admin=${admin.adminId}: ${err instanceof Error ? err.message : String(err)}`,
-        );
-        report.push(`❌ ${label} — gagal terkirim`);
-      }
-    }
-
     await this.replyHtml(
       ctx,
-      [
-        `📤 <b>Rekap order dikirim ke ${sent} dari ${withOrders.length} admin</b>`,
-        "",
-        ...report,
-      ].join("\n"),
+      [`📤 <b>Rekap order dikirim ke ${sent} dari ${total} admin</b>`, "", ...report].join("\n"),
     );
   }
 

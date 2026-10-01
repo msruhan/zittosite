@@ -163,12 +163,32 @@ function handleSuffix(handle: string | null): string {
   return ` ${escapeHtml(handle.startsWith("@") ? handle : `@${handle}`)}`;
 }
 
+function doneTotalLine(s: { done: number; doneAmount: number }): string {
+  return `💰 Total selesai: <b>${escapeHtml(formatRp(s.doneAmount))}</b> (${s.done} order)`;
+}
+
 const recapClock = new Intl.DateTimeFormat("id-ID", {
   timeZone: "Asia/Jakarta",
   hour: "2-digit",
   minute: "2-digit",
   hour12: false,
 });
+
+const recapDate = new Intl.DateTimeFormat("en-GB", {
+  timeZone: "Asia/Jakarta",
+  day: "2-digit",
+  month: "2-digit",
+});
+
+const jakartaYmd = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jakarta" });
+
+/** WIB time of the line; prefixed with the date when it did not happen today. */
+function recapTime(at: Date): string {
+  const clock = recapClock.format(at).replace(".", ":");
+  return jakartaYmd.format(at) === jakartaYmd.format(new Date())
+    ? clock
+    : `${recapDate.format(at)} ${clock}`;
+}
 
 /** `1. [15:02] 359760544287879 ✅`, capped so a busy day stays under Telegram's 4096-char limit. */
 function recapOrderLines(
@@ -178,7 +198,7 @@ function recapOrderLines(
   const shown = orders.slice(0, max);
   const lines = shown.map((o, i) => {
     const icon = RECAP_STATUS[o.status]?.icon ?? "•";
-    return `${i + 1}. [${recapClock.format(o.at).replace(".", ":")}] <code>${escapeHtml(o.imei)}</code> ${icon}`;
+    return `${i + 1}. [${recapTime(o.at)}] <code>${escapeHtml(o.imei)}</code> ${icon}`;
   });
   if (orders.length > shown.length) {
     lines.push(`<i>…dan ${orders.length - shown.length} order lainnya</i>`);
@@ -224,7 +244,7 @@ function shortDay(day: Date): string {
   return `${get("day")}-${get("month")}-${get("year")}`;
 }
 
-/** Sent to each admin's own chat when a Super Admin runs /rekaporder. */
+/** Sent to each admin's own chat by /rekaporder and the daily 23.00 WIB recap. */
 export function adminOrderRecapHtml(input: {
   day: Date;
   fullName: string;
@@ -232,16 +252,17 @@ export function adminOrderRecapHtml(input: {
   done: number;
   rejected: number;
   inProcess: number;
-  orders: Array<{ at: Date; imei: string; status: string }>;
+  doneAmount: number;
+  orders: Array<{ at: Date; imei: string; status: string; service?: string }>;
 }): string {
   return [
     "📋 <b>Rekap Order Anda</b>",
-    `Halo <b>${escapeHtml(input.fullName)}</b>, berikut rekap dari Super Admin.`,
+    `Halo <b>${escapeHtml(input.fullName)}</b>, berikut rekap order yang Anda tangani hari ini.`,
     "",
     `🗓️ Total registrasi hari ini ${escapeHtml(shortDay(input.day))}: <b>${input.orders.length}</b>`,
     handledLine(input),
-    "",
-    ...recapOrderLines(input.orders, 80),
+    doneTotalLine(input),
+    ...recapOrderLinesByService(input.orders, 80),
     "",
     `<i>✅ selesai · 🛠️ dikerjakan · ❌ ditolak · 🚫 batal · per ${recapStamp()} WIB</i>`,
   ].join("\n");
@@ -258,13 +279,14 @@ export function superAdminRecapHtml(input: {
     byStatus: Partial<Record<string, number>>;
   };
   revenue: { amount: number; payments: number };
-  handled: { taken: number; done: number; rejected: number; inProcess: number };
+  handled: { taken: number; done: number; rejected: number; inProcess: number; doneAmount: number };
   queue: number;
   whatsapp: {
     taken: number;
     done: number;
     rejected: number;
     inProcess: number;
+    doneAmount: number;
     queue: number;
     orders: Array<{ at: Date; imei: string; status: string }>;
   };
@@ -275,6 +297,7 @@ export function superAdminRecapHtml(input: {
     done: number;
     rejected: number;
     inProcess: number;
+    doneAmount: number;
     orders: Array<{ at: Date; imei: string; status: string; service?: string }>;
   }>;
 }): string {
@@ -285,6 +308,7 @@ export function superAdminRecapHtml(input: {
     [
       `• <b>${escapeHtml(a.fullName)}</b>${handleSuffix(a.telegramHandle)}`,
       handledLine(a),
+      doneTotalLine(a),
       ...recapOrderLinesByService(a.orders, 40),
     ].join("\n"),
   );
@@ -301,6 +325,8 @@ export function superAdminRecapHtml(input: {
     "",
     "",
     "👥 <b>Per admin</b> (jalur Telegram)",
+    `💵 Total selesai semua admin: <b>${escapeHtml(formatRp(input.handled.doneAmount))}</b> (${input.handled.done} order)`,
+    "",
     adminBlocks.length
       ? adminBlocks.join("\n\n")
       : "<i>Belum ada aktivitas admin hari ini.</i>",
@@ -308,6 +334,7 @@ export function superAdminRecapHtml(input: {
     "",
     "💬 <b>WhatsApp · Roamercheck</b>",
     handledLine(input.whatsapp),
+    doneTotalLine(input.whatsapp),
     `📥 Antrean: ${orDash(input.whatsapp.queue)}`,
     ...(input.whatsapp.orders.length
       ? recapOrderLines(input.whatsapp.orders, 40)
@@ -317,11 +344,11 @@ export function superAdminRecapHtml(input: {
 
 export function operatorRecapHtml(input: {
   day: Date;
-  stats: { taken: number; done: number; rejected: number; inProcess: number };
+  stats: { taken: number; done: number; rejected: number; inProcess: number; doneAmount: number };
   queue: number;
-  orders: Array<{ at: Date; imei: string; status: string }>;
+  orders: Array<{ at: Date; imei: string; status: string; service?: string }>;
 }): string {
-  const orderLines = recapOrderLines(input.orders, 80);
+  const orderLines = recapOrderLinesByService(input.orders, 80);
   return [
     "📊 <b>Rekap Anda Hari Ini</b>",
     `<i>${escapeHtml(recapDay(input.day))} · per ${recapStamp()} WIB</i>`,
@@ -331,6 +358,7 @@ export function operatorRecapHtml(input: {
     row("❌", "Ditolak", String(input.stats.rejected)),
     row("⏱️", "Masih dikerjakan", String(input.stats.inProcess)),
     row("📥", "Antrean menunggu diambil", String(input.queue)),
+    row("💰", "Total selesai", formatRp(input.stats.doneAmount)),
     "",
     "📋 <b>Order yang Anda tangani</b>",
     ...(orderLines.length ? orderLines : ["<i>Belum ada order hari ini.</i>"]),
