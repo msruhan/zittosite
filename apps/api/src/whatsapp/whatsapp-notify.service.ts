@@ -38,10 +38,7 @@ export class WhatsappNotifyService {
         orders: {
           where: { status: "waiting_action", service: { fulfillmentChannel: "whatsapp" } },
           orderBy: { orderId: "asc" },
-          select: {
-            imei: true,
-            service: { select: { name: true } },
-          },
+          select: { imei: true },
         },
       },
     });
@@ -49,7 +46,7 @@ export class WhatsappNotifyService {
 
     const text = paidInvoiceGroupText({
       paidAt: invoice.paidAt ?? new Date(),
-      orders: invoice.orders.map((o) => ({ imei: o.imei, serviceName: o.service.name })),
+      orders: invoice.orders,
     });
     const row = await tx.whatsappNotification.upsert({
       where: { invoiceId: invoiceRowId },
