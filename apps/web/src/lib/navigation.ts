@@ -3,7 +3,6 @@ import {
   ClipboardText,
   ClockCounterClockwise,
   Code,
-  DeviceMobile,
   FileText,
   Gauge,
   Gear,
@@ -34,7 +33,6 @@ export const userNav: NavItem[] = [
   { href: "/app/dashboard", label: "Dashboard", icon: SquaresFour },
   { href: "/app/order", label: "Order", icon: Package, nested: true },
   { href: "/app/riwayat", label: "Riwayat Order", icon: ClockCounterClockwise },
-  { href: "/app/ceir", label: "Order Ceir", icon: DeviceMobile },
   { href: "/app/topup", label: "Topup Saldo", icon: Wallet, nested: true },
   { href: "/app/api", label: "API Access", icon: Code },
   { href: "/app/docs", label: "API Docs", icon: BookOpenText },
@@ -46,7 +44,6 @@ export const userNav: NavItem[] = [
 export const adminNav: NavItem[] = [
   { href: "/admin/dashboard", label: "Dashboard", icon: Gauge },
   { href: "/admin/orders", label: "Orders", icon: ClipboardText, nested: true },
-  { href: "/admin/ceir", label: "Order Ceir", icon: DeviceMobile },
   { href: "/admin/users", label: "Users", icon: Users },
   { href: "/admin/groups", label: "Groups", icon: UsersThree },
   { href: "/admin/admins", label: "Admins", icon: ShieldCheck },

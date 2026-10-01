@@ -31,7 +31,6 @@ export default async function AdminPanelLayout({
         admin.role === "super_admin"
           ? undefined
           : [
-              "/admin/ceir",
               "/admin/users",
               "/admin/groups",
               "/admin/services",
