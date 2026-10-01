@@ -4,7 +4,7 @@ import { PageHeader } from "@/components/shell/app-shell";
 import { Card, CardBody } from "@/components/ui/card";
 import {
   ApiConnectionCard,
-  ApiDocsCard,
+  ApiDocsLinkCard,
   ApiKeysPanel,
   WebhookPanel,
 } from "@/components/domain/api-access-panels";
@@ -56,9 +56,9 @@ export default async function ApiAccessPage() {
       />
       <div className="mx-auto w-full max-w-3xl space-y-4">
         <ApiConnectionCard endpoint={endpoint} username={keys.username} />
+        <ApiDocsLinkCard />
         <ApiKeysPanel initialKeys={keys.keys} />
         <WebhookPanel initialEndpoint={webhook.endpoint} initialDeliveries={deliveries} />
-        <ApiDocsCard endpoint={endpoint} username={keys.username} />
       </div>
     </>
   );

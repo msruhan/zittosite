@@ -2,8 +2,11 @@
 
 import * as React from "react";
 import { toast } from "sonner";
+import Link from "next/link";
 import {
   ArrowClockwise,
+  ArrowRight,
+  BookOpenText,
   Check,
   Copy,
   Key,
@@ -19,7 +22,6 @@ import { Tag } from "@/components/ui/status-badge";
 import { Switch } from "@/components/ui/switch";
 import { ApiError, api } from "@/lib/api";
 import { formatDateTime } from "@/lib/format";
-import { cn } from "@/lib/utils";
 import type { ApiKey, WebhookDelivery, WebhookEndpoint } from "@/lib/types";
 
 function errorText(err: unknown, fallback: string) {
@@ -448,106 +450,27 @@ export function WebhookPanel({
   );
 }
 
-function Code({ children, className }: { children: string; className?: string }) {
-  return (
-    <pre
-      className={cn(
-        "overflow-x-auto rounded-md border border-hairline bg-mist px-3 py-2.5 font-data text-label leading-relaxed text-ink",
-        className,
-      )}
-    >
-      <code>{children}</code>
-    </pre>
-  );
-}
-
-const ACTIONS: Array<[string, string]> = [
-  ["accountinfo", "Saldo akun (credit, currency IDR)."],
-  ["imeiservicelist", "Daftar layanan beserta harga Anda. SERVICEID dipakai sebagai ID saat order."],
-  ["placeimeiorder", "Order 1 IMEI: parameters berisi ID (layanan) dan IMEI. Mengembalikan REFERENCEID."],
-  ["placeimeiorderbulk", "Maks. 50 order: parameters berupa JSON array [{\"ID\":\"…\",\"IMEI\":\"…\"}]."],
-  ["orderstatus", "Status 1 order lewat orderid (REFERENCEID). Alias: getimeiorder."],
-  ["orderstatusbulk", "Maks. 100 order: orderid dipisah koma atau JSON array."],
-];
-
-const STATUSES: Array<[string, string]> = [
-  ["0", "Menunggu diproses"],
-  ["1", "Sedang diproses"],
-  ["3", "Ditolak / dibatalkan / gagal (saldo dikembalikan)"],
-  ["4", "Selesai — hasil ada di CODE"],
-];
-
-export function ApiDocsCard({ endpoint, username }: { endpoint: string; username: string }) {
-  const placeOrder = `curl -X POST ${endpoint} \\
-  -d username=${username} \\
-  -d apiaccesskey=AL_LIVE_KEY_ANDA \\
-  -d requestformat=JSON \\
-  -d action=placeimeiorder \\
-  --data-urlencode 'parameters=<PARAMETERS><ID>KODE_LAYANAN</ID><IMEI>356938035643809</IMEI></PARAMETERS>'`;
-  const status = `curl -X POST ${endpoint} \\
-  -d username=${username} \\
-  -d apiaccesskey=AL_LIVE_KEY_ANDA \\
-  -d action=orderstatus \\
-  -d orderid=REFERENCEID`;
-  const webhook = `POST https://website-anda.com/webhook/order
-X-Webhook-Event: order.completed
-X-Timestamp: 1767225600
-X-Signature: sha256=HMAC_SHA256(secret, "<X-Timestamp>.<raw body>")
-
-{"event":"order.completed","referenceId":"…","imei":"…",
- "service":{"id":"…","name":"…"},"status":4,"code":"hasil",
- "comments":"","message":"Order completed","completedAt":"…"}`;
-  const verify = `$expected = 'sha256=' . hash_hmac('sha256', $_SERVER['HTTP_X_TIMESTAMP'] . '.' . $rawBody, $secret);
-$valid = hash_equals($expected, $_SERVER['HTTP_X_SIGNATURE']);`;
-
+export function ApiDocsLinkCard() {
   return (
     <Card>
-      <CardHeader>
-        <CardTitle>Dokumentasi singkat</CardTitle>
-        <CardDescription>
-          Kompatibel dengan Dhru Fusion. Semua respons HTTP 200 dengan format SUCCESS atau ERROR.
-        </CardDescription>
-      </CardHeader>
-      <CardBody className="space-y-5 pt-3">
-        <section className="space-y-2">
-          <p className="text-body font-medium text-ink">Action</p>
-          <dl className="divide-y divide-hairline border-t border-hairline">
-            {ACTIONS.map(([action, text]) => (
-              <div key={action} className="grid gap-1 py-2 sm:grid-cols-[11rem_1fr] sm:gap-4">
-                <dt className="font-data text-body text-ink">{action}</dt>
-                <dd className="text-body text-ink-soft">{text}</dd>
-              </div>
-            ))}
-          </dl>
-        </section>
-        <section className="space-y-2">
-          <p className="text-body font-medium text-ink">Kode status</p>
-          <dl className="divide-y divide-hairline border-t border-hairline">
-            {STATUSES.map(([code, text]) => (
-              <div key={code} className="grid grid-cols-[3rem_1fr] gap-4 py-2">
-                <dt className="font-data text-body text-ink">{code}</dt>
-                <dd className="text-body text-ink-soft">{text}</dd>
-              </div>
-            ))}
-          </dl>
-        </section>
-        <section className="space-y-2">
-          <p className="text-body font-medium text-ink">Contoh order</p>
-          <Code>{placeOrder}</Code>
-          <Code>{`{"SUCCESS":[{"MESSAGE":"Order Placed Successfully","REFERENCEID":"…"}],"apiversion":"8.2"}`}</Code>
-        </section>
-        <section className="space-y-2">
-          <p className="text-body font-medium text-ink">Cek status</p>
-          <Code>{status}</Code>
-        </section>
-        <section className="space-y-2">
-          <p className="text-body font-medium text-ink">Webhook</p>
-          <Code>{webhook}</Code>
-          <p className="text-body text-ink-soft">
-            Balas HTTP 2xx dalam 10 detik. Jika gagal, dikirim ulang setelah 1 menit, 5 menit, 15 menit, 1 jam, dan 6 jam. Verifikasi tanda tangan (PHP):
-          </p>
-          <Code>{verify}</Code>
-        </section>
+      <CardBody className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-start gap-3">
+          <span className="flex size-9 shrink-0 items-center justify-center rounded-md bg-action-wash text-action">
+            <BookOpenText className="size-5" aria-hidden="true" />
+          </span>
+          <div>
+            <p className="text-title text-ink">Dokumentasi API</p>
+            <p className="text-body text-ink-soft">
+              Semua action, contoh kode cURL, PHP, dan Node.js, webhook, kode status, dan daftar error.
+            </p>
+          </div>
+        </div>
+        <Button asChild variant="outline" size="sm">
+          <Link href="/app/docs">
+            Buka dokumentasi
+            <ArrowRight aria-hidden="true" />
+          </Link>
+        </Button>
       </CardBody>
     </Card>
   );
