@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Info, QrCode, Wallet } from "@phosphor-icons/react";
 import { toast } from "sonner";
@@ -204,16 +205,14 @@ export function CreateOrderForm({
         />
         <p className="text-body text-hold-ink">
           Pastikan IMEI yang di-submit wajib berstatus{" "}
-          <span className="font-semibold">UNKNOWN</span>. Silakan cek CEIR
-          melalui{" "}
-          <a
-            href="https://infoceir.com"
-            target="_blank"
-            rel="noopener noreferrer"
+          <span className="font-semibold">UNKNOWN</span>. Silahkan cek Status
+          IMEI melalui menu{" "}
+          <Link
+            href="/app/ceir/order"
             className="font-semibold underline underline-offset-2 hover:opacity-80"
           >
-            infoceir.com
-          </a>
+            Order Ceir
+          </Link>
           . Apabila IMEI yang di-submit tidak berstatus{" "}
           <span className="font-semibold">UNKNOWN</span>, maka{" "}
           <span className="font-semibold">tidak ada refund</span>.

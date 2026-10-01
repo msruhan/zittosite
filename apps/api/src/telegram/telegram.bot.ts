@@ -50,7 +50,12 @@ import {
   unlinkedHtml,
   type BulkItem,
 } from "./telegram-messages";
-import { MAX_BULK_IMEIS, parseImeiList } from "../orders/imei-list";
+import {
+  INPUT_TYPE_LABEL,
+  type InputType,
+  MAX_BULK_IMEIS,
+  parseImeiList,
+} from "../orders/imei-list";
 
 type BotCommandDef = { command: string; description: string };
 
@@ -169,7 +174,14 @@ type ChatSession =
       adminId: string;
       resultStatus: ResultStatus;
     }
-  | { kind: "user_imei"; userId: string; serviceCode: string; serviceName: string; price: number }
+  | {
+      kind: "user_imei";
+      userId: string;
+      serviceCode: string;
+      serviceName: string;
+      price: number;
+      inputType: InputType;
+    }
   | { kind: "topup_amount"; userId: string };
 
 @Injectable()
@@ -556,14 +568,14 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
       }
 
       if (session.kind === "user_imei") {
-        const parsed = parseImeiList(text);
+        const parsed = parseImeiList(text, session.inputType);
         if (!parsed.ok) {
           await this.replyHtml(
             ctx,
             [
               ...parsed.errors.map((e) => `⚠️ ${escapeHtml(e)}`),
               "",
-              `Kirim ulang IMEI, satu per baris (maksimal ${MAX_BULK_IMEIS}).`,
+              `Kirim ulang ${INPUT_TYPE_LABEL[session.inputType]}, satu per baris (maksimal ${MAX_BULK_IMEIS}).`,
             ].join("\n"),
           );
           return;
@@ -1149,23 +1161,24 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
       serviceCode: service.code ?? serviceCode,
       serviceName: service.name,
       price: service.price,
+      inputType: service.inputType,
     });
+    const label = INPUT_TYPE_LABEL[service.inputType];
     await ctx.answerCallbackQuery();
     await this.replyHtml(
       ctx,
       [
         `Layanan: <b>${escapeHtml(service.name)}</b> (${formatRp(service.price)})`,
         "",
-        "Kirim <b>IMEI 15 digit</b> sekarang.",
-        `Bulk order: kirim beberapa IMEI dalam satu pesan, <b>satu per baris</b> (maksimal ${MAX_BULK_IMEIS}). Total = jumlah IMEI × harga, dibayar dengan 1 QRIS.`,
+        service.inputType === "imei"
+          ? "Kirim <b>IMEI 15 digit</b> sekarang."
+          : `Kirim <b>${label}</b> perangkat sekarang.`,
+        `Bulk order: kirim beberapa ${label} dalam satu pesan, <b>satu per baris</b> (maksimal ${MAX_BULK_IMEIS}). Total = jumlah ${label} × harga, dibayar dengan 1 QRIS.`,
         ...(actor.user.creditBalance > 0
           ? [
               `💳 Saldo Anda ${formatRp(actor.user.creditBalance)} otomatis dipakai dulu; sisanya dibayar via QRIS.`,
             ]
           : []),
-        "",
-        "⚠️ IMEI wajib berstatus <b>UNKNOWN</b>. Cek CEIR di infoceir.com.",
-        "Apabila IMEI tidak berstatus <b>UNKNOWN</b>, maka <b>tidak ada refund</b>.",
       ].join("\n"),
     );
   }
