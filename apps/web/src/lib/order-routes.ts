@@ -13,12 +13,12 @@ const REGULAR: OrderMenu = {
 };
 
 const CEIR: OrderMenu = {
-  listHref: "/app/ceir",
-  listLabel: "Order Ceir",
+  listHref: "/app/riwayat",
+  listLabel: "Riwayat order",
   createHref: "/app/ceir/order",
 };
 
-/** Supplier API services live under Order Ceir; everything else under the regular Order menu. */
+/** Supplier API services are created under Order Ceir; all orders share one history. */
 export function orderMenu(service?: Pick<Service, "via"> | null): OrderMenu {
   return service?.via === "supplier" ? CEIR : REGULAR;
 }

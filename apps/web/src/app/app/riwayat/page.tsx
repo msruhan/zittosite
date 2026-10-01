@@ -13,7 +13,7 @@ export const metadata: Metadata = {
 export default async function RiwayatPage() {
   let orders: OrderDetail[] = [];
   try {
-    orders = await serverApi<OrderDetail[]>("/orders?via=manual");
+    orders = await serverApi<OrderDetail[]>("/orders");
   } catch (err) {
     if (err instanceof ApiError && err.status === 401) redirect("/login");
     throw err;
@@ -23,7 +23,7 @@ export default async function RiwayatPage() {
     <>
       <PageHeader
         title="Riwayat order"
-        description="Order layanan reguler Anda, dari yang baru dibuat sampai yang sudah selesai."
+        description="Semua order Anda, termasuk Order Ceir, dari yang baru dibuat sampai yang sudah selesai."
       />
       <OrderHistory orders={orders} fetchedAt={new Date().toISOString()} />
     </>

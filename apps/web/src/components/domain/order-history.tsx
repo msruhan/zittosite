@@ -28,12 +28,25 @@ export function OrderHistory({
 }) {
   const [query, setQuery] = React.useState("");
   const [status, setStatus] = React.useState<OrderStatus | "all">("all");
+  const [service, setService] = React.useState("all");
   const { refreshing } = useAutoRefresh();
+
+  const serviceOptions = React.useMemo(() => {
+    const names = new Map<string, string>();
+    for (const order of orders) names.set(order.service.id, order.service.name);
+    return [
+      { value: "all", label: "Semua Layanan" },
+      ...[...names]
+        .sort((a, b) => a[1].localeCompare(b[1], "id"))
+        .map(([value, label]) => ({ value, label })),
+    ];
+  }, [orders]);
 
   const filtered = React.useMemo(() => {
     const needle = query.trim().toLowerCase();
     return orders.filter((order) => {
       if (status !== "all" && order.status !== status) return false;
+      if (service !== "all" && order.service.id !== service) return false;
       if (!needle) return true;
       return (
         order.orderId.toLowerCase().includes(needle) ||
@@ -41,7 +54,7 @@ export function OrderHistory({
         order.service.name.toLowerCase().includes(needle)
       );
     });
-  }, [orders, query, status]);
+  }, [orders, query, status, service]);
 
   return (
     <div className="space-y-4">
@@ -60,6 +73,13 @@ export function OrderHistory({
             className="pl-9"
           />
         </label>
+        <Select
+          ariaLabel="Filter layanan"
+          value={service}
+          onValueChange={setService}
+          options={serviceOptions}
+          className="sm:w-56"
+        />
         <Select
           ariaLabel="Filter status"
           value={status}
@@ -95,13 +115,14 @@ export function OrderHistory({
           <EmptyState
             icon={<MagnifyingGlass weight="regular" />}
             title="Tidak ada order yang cocok"
-            description="Coba ubah kata kunci atau reset filter status."
+            description="Coba ubah kata kunci atau reset filter."
             action={
               <Button
                 variant="outline"
                 onClick={() => {
                   setQuery("");
                   setStatus("all");
+                  setService("all");
                 }}
               >
                 Reset filter
