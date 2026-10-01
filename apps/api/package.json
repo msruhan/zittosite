@@ -1,6 +1,6 @@
 {
   "name": "@zittosite/api",
-  "version": "0.1.43",
+  "version": "0.1.44",
   "private": true,
   "scripts": {
     "start:dev": "nest start --watch",
