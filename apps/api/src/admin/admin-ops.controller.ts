@@ -40,6 +40,7 @@ type Json = Record<string, unknown>;
 
 const TOTP_HEADER = "x-totp-code";
 const FULFILLMENT_CHANNELS = ["telegram", "whatsapp", "supplier"] as const;
+const INPUT_TYPES = ["imei", "sn", "ecid"] as const;
 const USER_ROLES = ["customer", "testing"] as const;
 const WIB_OFFSET_MS = 7 * 60 * 60 * 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -235,6 +236,7 @@ export class AdminOpsController {
       assignedAdminIds: optIdList(body.assignedAdminIds, "Assign admin"),
       supplierId: optNullableString(body.supplierId, "Supplier", 40),
       supplierServiceId: optNullableString(body.supplierServiceId, "Layanan supplier", 120),
+      inputType: optEnum(body.inputType, INPUT_TYPES, "Jenis input"),
     });
     this.audit.record("admin.service.created", {
       actorId: req.admin.sub,
@@ -263,6 +265,7 @@ export class AdminOpsController {
       assignedAdminIds: optIdList(body.assignedAdminIds, "Assign admin"),
       supplierId: optNullableString(body.supplierId, "Supplier", 40),
       supplierServiceId: optNullableString(body.supplierServiceId, "Layanan supplier", 120),
+      inputType: optEnum(body.inputType, INPUT_TYPES, "Jenis input"),
     };
     const service = await this.services.update(id, input);
     this.audit.record("admin.service.updated", {
@@ -273,6 +276,7 @@ export class AdminOpsController {
       costPrice: input.costPrice,
       active: input.active,
       fulfillmentChannel: input.fulfillmentChannel,
+      inputType: input.inputType,
       assignedAdmins: input.assignedAdminIds?.join(","),
     });
     return service;

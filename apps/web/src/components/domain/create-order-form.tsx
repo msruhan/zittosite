@@ -11,7 +11,13 @@ import { DataValue } from "@/components/ui/data-value";
 import { ImeiChipInput } from "@/components/domain/imei-chip-input";
 import { ApiError, api } from "@/lib/api";
 import { formatRupiah } from "@/lib/format";
-import { IMEI_LENGTH, MAX_BULK_IMEIS } from "@/lib/imei-list";
+import {
+  IMEI_LENGTH,
+  INPUT_TYPE_LABEL,
+  MAX_BULK_IMEIS,
+  inputLengthError,
+  type InputType,
+} from "@/lib/imei-list";
 import type { Service } from "@/lib/types";
 
 export function CreateOrderForm({
@@ -39,9 +45,11 @@ export function CreateOrderForm({
   const [submitting, setSubmitting] = React.useState(false);
 
   const service = services.find((s) => s.id === serviceId) ?? null;
+  const inputType: InputType = service?.inputType ?? "imei";
+  const label = INPUT_TYPE_LABEL[inputType];
   const price = service ? priceFor[service.id] : null;
   const draftComplete =
-    draft.length === IMEI_LENGTH &&
+    !inputLengthError(draft, inputType) &&
     !imeis.includes(draft) &&
     imeis.length < MAX_BULK_IMEIS;
   const quantity = imeis.length + (draftComplete ? 1 : 0);
@@ -59,12 +67,14 @@ export function CreateOrderForm({
     const finalImeis = draftComplete ? [...imeis, draft] : imeis;
     let problem: string | undefined;
     if (draft && !draftComplete) {
-      problem =
-        draft.length !== IMEI_LENGTH
+      const lengthProblem = inputLengthError(draft, inputType);
+      problem = lengthProblem
+        ? inputType === "imei"
           ? `IMEI terakhir baru ${draft.length} dari ${IMEI_LENGTH} digit. Lengkapi atau hapus dulu.`
-          : "IMEI terakhir sudah ditambahkan atau melebihi batas. Hapus dulu.";
+          : `${label} terakhir belum valid: ${lengthProblem}`
+        : `${label} terakhir sudah ditambahkan atau melebihi batas. Hapus dulu.`;
     } else if (finalImeis.length === 0) {
-      problem = "Masukkan IMEI perangkat Anda.";
+      problem = `Masukkan ${label} perangkat Anda.`;
     }
     setImeiError(problem);
     if (!serviceId || problem) return;
@@ -119,6 +129,12 @@ export function CreateOrderForm({
           id="service"
           value={serviceId}
           onValueChange={(value) => {
+            const nextType = services.find((s) => s.id === value)?.inputType ?? "imei";
+            if (nextType !== inputType) {
+              setImeis([]);
+              setDraft("");
+              setImeiError(undefined);
+            }
             setServiceId(value);
             setServiceError(undefined);
           }}
@@ -150,16 +166,23 @@ export function CreateOrderForm({
       ) : null}
 
       <Field
-        label="IMEI"
+        label={label}
         htmlFor="imei"
         error={imeiError}
         required
-        hint={`${imeis.length}/${MAX_BULK_IMEIS} IMEI · ${
-          draft.length ? `${draft.length}/${IMEI_LENGTH} digit · ` : ""
-        }ketik 15 digit lalu tekan Enter untuk menambah IMEI berikutnya. Ketik *#06# pada perangkat untuk melihat IMEI.`}
+        hint={
+          inputType === "imei"
+            ? `${imeis.length}/${MAX_BULK_IMEIS} IMEI · ${
+                draft.length ? `${draft.length}/${IMEI_LENGTH} digit · ` : ""
+              }ketik 15 digit lalu tekan Enter untuk menambah IMEI berikutnya. Ketik *#06# pada perangkat untuk melihat IMEI.`
+            : `${imeis.length}/${MAX_BULK_IMEIS} ${label} · ketik ${
+                inputType === "sn" ? "Serial Number (SN)" : "ECID"
+              } perangkat lalu tekan Enter untuk menambah ${label} berikutnya.`
+        }
       >
         <ImeiChipInput
           id="imei"
+          inputType={inputType}
           imeis={imeis}
           onImeisChange={setImeis}
           draft={draft}
@@ -221,7 +244,7 @@ export function CreateOrderForm({
               <span className="text-body text-ink-soft">
                 Total
                 {price !== null && quantity > 1
-                  ? ` (${quantity} IMEI × ${formatRupiah(price)})`
+                  ? ` (${quantity} ${label} × ${formatRupiah(price)})`
                   : ""}
               </span>
               <DataValue>{formatRupiah(total)}</DataValue>
@@ -243,7 +266,7 @@ export function CreateOrderForm({
             </span>
             {balanceUsed === 0 && price !== null && quantity > 1 ? (
               <DataValue className="block text-body text-ink-soft">
-                {quantity} IMEI × {formatRupiah(price)}
+                {quantity} {label} × {formatRupiah(price)}
               </DataValue>
             ) : null}
           </div>

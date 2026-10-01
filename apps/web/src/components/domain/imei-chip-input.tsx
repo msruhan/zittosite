@@ -3,11 +3,25 @@
 import * as React from "react";
 import { X } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
-import { IMEI_LENGTH, MAX_BULK_IMEIS, parseImeiList } from "@/lib/imei-list";
+import {
+  IMEI_LENGTH,
+  INPUT_TYPE_LABEL,
+  MAX_BULK_IMEIS,
+  inputLengthError,
+  normalizeInput,
+  parseImeiList,
+  type InputType,
+} from "@/lib/imei-list";
+
+const PLACEHOLDER: Record<InputType, string> = {
+  imei: "Contoh 356938035643809",
+  sn: "Contoh F2LX12AB9Q0D",
+  ecid: "Contoh 000A1B2C3D4E5F",
+};
 
 /**
- * IMEI entry as chips: type 15 digits and press Enter (or leave the field) to
- * wrap it. Pasting several IMEIs splits them into chips at once.
+ * IMEI/SN/ECID entry as chips: type a value and press Enter (or leave the field
+ * for a complete IMEI) to wrap it. Pasting several values splits them at once.
  */
 export function ImeiChipInput({
   id,
@@ -17,6 +31,7 @@ export function ImeiChipInput({
   onDraftChange,
   onError,
   invalid,
+  inputType = "imei",
 }: {
   id: string;
   imeis: string[];
@@ -25,20 +40,21 @@ export function ImeiChipInput({
   onDraftChange: (next: string) => void;
   onError: (message: string | undefined) => void;
   invalid?: boolean;
+  inputType?: InputType;
 }) {
   const inputRef = React.useRef<HTMLInputElement>(null);
   const full = imeis.length >= MAX_BULK_IMEIS;
+  const label = INPUT_TYPE_LABEL[inputType];
 
   function commit(value: string, { quiet = false } = {}): boolean {
     if (!value) return false;
-    let problem: string | undefined;
-    if (value.length !== IMEI_LENGTH) {
-      problem = `IMEI harus ${IMEI_LENGTH} digit (saat ini ${value.length}).`;
-    } else if (imeis.includes(value)) {
-      problem = "IMEI ini sudah ditambahkan.";
-    } else if (full) {
-      problem = `Maksimal ${MAX_BULK_IMEIS} IMEI per order.`;
-    }
+    const problem =
+      inputLengthError(value, inputType) ??
+      (imeis.includes(value)
+        ? `${label} ini sudah ditambahkan.`
+        : full
+          ? `Maksimal ${MAX_BULK_IMEIS} ${label} per order.`
+          : undefined);
     if (problem) {
       if (!quiet) onError(problem);
       return false;
@@ -67,17 +83,20 @@ export function ImeiChipInput({
 
   function handlePaste(event: React.ClipboardEvent<HTMLInputElement>) {
     const text = event.clipboardData.getData("text");
-    if (!/[\r\n,;\s]/.test(text.trim()) && text.replace(/\D/g, "").length <= IMEI_LENGTH) {
-      return;
-    }
+    const trimmed = text.trim();
+    const single =
+      inputType === "imei"
+        ? !/[\r\n,;\s]/.test(trimmed) && text.replace(/\D/g, "").length <= IMEI_LENGTH
+        : !/[\r\n,;]/.test(trimmed);
+    if (single) return;
     event.preventDefault();
-    const parsed = parseImeiList(text.replace(/[,;]/g, "\n"));
+    const parsed = parseImeiList(text.replace(/[,;]/g, "\n"), inputType);
     const fresh = [...new Set(parsed.imeis)].filter((imei) => !imeis.includes(imei));
     const room = MAX_BULK_IMEIS - imeis.length;
     onImeisChange([...imeis, ...fresh.slice(0, room)]);
     const problems = [...parsed.errors];
     if (fresh.length > room) {
-      problems.push(`Maksimal ${MAX_BULK_IMEIS} IMEI per order; ${fresh.length - room} tidak ditambahkan.`);
+      problems.push(`Maksimal ${MAX_BULK_IMEIS} ${label} per order; ${fresh.length - room} tidak ditambahkan.`);
     }
     onError(problems.length ? problems.join(" ") : undefined);
   }
@@ -101,7 +120,7 @@ export function ImeiChipInput({
           {imei}
           <button
             type="button"
-            aria-label={`Hapus IMEI ${imei}`}
+            aria-label={`Hapus ${label} ${imei}`}
             onClick={(event) => {
               event.stopPropagation();
               remove(index);
@@ -116,7 +135,8 @@ export function ImeiChipInput({
         ref={inputRef}
         id={id}
         name="imei"
-        inputMode="numeric"
+        inputMode={inputType === "imei" ? "numeric" : "text"}
+        autoCapitalize="characters"
         autoComplete="off"
         spellCheck={false}
         disabled={full}
@@ -124,19 +144,19 @@ export function ImeiChipInput({
         value={draft}
         placeholder={
           full
-            ? `Maksimal ${MAX_BULK_IMEIS} IMEI`
+            ? `Maksimal ${MAX_BULK_IMEIS} ${label}`
             : imeis.length
-              ? "IMEI berikutnya…"
-              : "Contoh 356938035643809"
+              ? `${label} berikutnya…`
+              : PLACEHOLDER[inputType]
         }
         onChange={(event) => {
-          onDraftChange(event.target.value.replace(/\D/g, "").slice(0, IMEI_LENGTH));
+          onDraftChange(normalizeInput(event.target.value, inputType));
           onError(undefined);
         }}
         onKeyDown={handleKeyDown}
         onPaste={handlePaste}
         onBlur={() => {
-          if (draft.length === IMEI_LENGTH) commit(draft, { quiet: true });
+          if (inputType === "imei" && draft.length === IMEI_LENGTH) commit(draft, { quiet: true });
         }}
         className="h-8 min-w-[12ch] flex-1 bg-transparent px-1.5 font-data tabular tracking-[0.02em] text-body text-ink placeholder:text-ink-faint focus:outline-none disabled:cursor-not-allowed"
       />

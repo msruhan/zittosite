@@ -3,7 +3,7 @@ import type { Supplier } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
 import { OrdersService } from "../orders/orders.service";
 import { SupplierDispatch } from "../orders/supplier-dispatch";
-import { SupplierRequestError } from "./dhru-supplier-client";
+import { SupplierRequestError, supplierInputFields } from "./dhru-supplier-client";
 import { supplierClient } from "./suppliers.service";
 
 export const MAX_SUBMIT_ATTEMPTS = 5;
@@ -135,6 +135,7 @@ export class SupplierWorkerService implements OnModuleInit, OnModuleDestroy {
         const reply = await supplierClient(supplier).placeOrder(
           order.service.supplierServiceId!,
           order.imei,
+          supplierInputFields(order.service.inputType, order.imei),
         );
         if (reply.ok) {
           await this.prisma.order.update({

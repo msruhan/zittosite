@@ -7,6 +7,8 @@ import {
 import type { FulfillmentChannel, Prisma } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
 import { serializeService } from "../orders/orders.serializer";
+import { type InputType, parseInputType } from "../orders/imei-list";
+import { isSpecialSupplierService } from "../orders/supplier-routed";
 
 const SERVICE_INCLUDE = {
   assignments: {
@@ -27,6 +29,19 @@ const SERVICE_INCLUDE = {
 } satisfies Prisma.ServiceInclude;
 
 type SupplierRoute = { supplierId?: string | null; supplierServiceId?: string | null };
+
+/** SN/ECID are only for Layanan Spesial; regular and Ceir services always take an IMEI. */
+function inputTypeFor(
+  route: { supplierServiceId: string | null },
+  requested: unknown,
+  current: InputType = "imei",
+): InputType {
+  if (!isSpecialSupplierService(route.supplierServiceId)) return "imei";
+  if (requested === undefined) return current;
+  const type = parseInputType(requested);
+  if (!type) throw new BadRequestException("Jenis input harus IMEI, SN, atau ECID.");
+  return type;
+}
 
 type ServiceWithAssignments = Prisma.ServiceGetPayload<{
   include: typeof SERVICE_INCLUDE;
@@ -71,6 +86,7 @@ export class AdminServicesService {
     active?: boolean;
     fulfillmentChannel?: FulfillmentChannel;
     assignedAdminIds?: string[];
+    inputType?: unknown;
   } & SupplierRoute) {
     const code = String(input.code ?? "")
       .trim()
@@ -95,6 +111,7 @@ export class AdminServicesService {
     const adminIds = await this.validOperatorIds(input.assignedAdminIds ?? []);
     const fulfillmentChannel = input.fulfillmentChannel ?? "telegram";
     const route = await this.supplierRoute(fulfillmentChannel, input);
+    const inputType = inputTypeFor(route, input.inputType);
 
     const row = await this.prisma.service.create({
       data: {
@@ -107,6 +124,7 @@ export class AdminServicesService {
         active: input.active !== false,
         fulfillmentChannel,
         ...route,
+        inputType,
         assignments: { create: adminIds.map((adminId) => ({ adminId })) },
       },
       include: SERVICE_INCLUDE,
@@ -141,6 +159,7 @@ export class AdminServicesService {
       active?: boolean;
       fulfillmentChannel?: FulfillmentChannel;
       assignedAdminIds?: string[];
+      inputType?: unknown;
     } & SupplierRoute,
   ) {
     const existing = await this.prisma.service.findUnique({ where: { id } });
@@ -150,6 +169,7 @@ export class AdminServicesService {
       input,
       existing,
     );
+    const inputType = inputTypeFor(route, input.inputType, existing.inputType);
 
     const price =
       input.price !== undefined ? Number(input.price) : existing.price;
@@ -204,6 +224,7 @@ export class AdminServicesService {
             ? { fulfillmentChannel: input.fulfillmentChannel }
             : {}),
           ...route,
+          inputType,
         },
         include: SERVICE_INCLUDE,
       });

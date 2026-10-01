@@ -44,6 +44,7 @@ export function serializeService(
     estimate: service.estimate,
     active: service.active,
     via: service.fulfillmentChannel === "supplier" ? "supplier" : "manual",
+    inputType: service.inputType,
   };
 }
 

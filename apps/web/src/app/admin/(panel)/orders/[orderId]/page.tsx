@@ -22,6 +22,7 @@ import { AdminCancelOrder } from "@/components/domain/admin-cancel-order";
 import { AdminOrderReason } from "@/components/domain/admin-order-reason";
 import { Avatar } from "@/components/shell/user-chip";
 import { ORDER_STATUS } from "@/lib/status";
+import { INPUT_TYPE_LABEL } from "@/lib/imei-list";
 import { ApiError } from "@/lib/api";
 import { serverApi } from "@/lib/server-api";
 import { formatDateTime, formatRupiah } from "@/lib/format";
@@ -90,7 +91,7 @@ export default async function AdminOrderDetailPage({
 
               <dl className="mt-3 divide-y divide-hairline border-t border-hairline">
                 <DetailRow label="Layanan">{order.service.name}</DetailRow>
-                <DetailRow label="IMEI">
+                <DetailRow label={INPUT_TYPE_LABEL[order.service.inputType ?? "imei"]}>
                   <DataValue>{order.imei}</DataValue>
                 </DetailRow>
                 <DetailRow label="Harga dibebankan">

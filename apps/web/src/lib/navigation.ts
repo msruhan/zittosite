@@ -3,6 +3,7 @@ import {
   ClipboardText,
   ClockCounterClockwise,
   Code,
+  DeviceMobile,
   FileText,
   Gauge,
   Gear,
@@ -32,6 +33,7 @@ export interface NavItem {
 export const userNav: NavItem[] = [
   { href: "/app/dashboard", label: "Dashboard", icon: SquaresFour },
   { href: "/app/order", label: "Order", icon: Package, nested: true },
+  { href: "/app/ceir/order", label: "Order Ceir", icon: DeviceMobile },
   { href: "/app/riwayat", label: "Riwayat Order", icon: ClockCounterClockwise },
   { href: "/app/topup", label: "Topup Saldo", icon: Wallet, nested: true },
   { href: "/app/api", label: "API Access", icon: Code },

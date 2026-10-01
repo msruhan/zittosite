@@ -21,6 +21,7 @@ import { CancelOrderButton } from "@/components/domain/cancel-order-button";
 import { ApiError } from "@/lib/api";
 import { serverApi } from "@/lib/server-api";
 import { orderMenu } from "@/lib/order-routes";
+import { INPUT_TYPE_LABEL } from "@/lib/imei-list";
 import { formatDateTime, formatRupiah } from "@/lib/format";
 import { ORDER_CHANNEL_LABEL, type OrderDetail } from "@/lib/types";
 
@@ -66,7 +67,7 @@ export default async function OrderDetailPage({
         <CardBody className="pt-3">
           <dl className="divide-y divide-hairline">
             <DetailRow label="Layanan">{order.service.name}</DetailRow>
-            <DetailRow label="IMEI">
+            <DetailRow label={INPUT_TYPE_LABEL[order.service.inputType ?? "imei"]}>
               <DataValue>{order.imei}</DataValue>
             </DetailRow>
             <DetailRow label="Harga">

@@ -85,6 +85,8 @@ export interface Service {
   active: boolean;
   /** "supplier" services belong to Order Ceir; the rest to the regular Order menu. */
   via?: "supplier" | "manual";
+  /** What the user enters per order; SN/ECID only for Layanan Spesial. */
+  inputType?: "imei" | "sn" | "ecid";
   /** Admin panel only: where paid orders are processed. */
   fulfillmentChannel?: FulfillmentChannel;
   /** Admin panel only: upstream supplier route when fulfillmentChannel is "supplier". */

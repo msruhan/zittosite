@@ -58,6 +58,16 @@ function text(value: unknown): string {
   return value === null || value === undefined ? "" : String(value).trim();
 }
 
+/** Dhru carries SN/ECID in their own fields; IMEI already travels as `IMEI`. */
+export function supplierInputFields(
+  inputType: "imei" | "sn" | "ecid",
+  value: string,
+): Record<string, string> {
+  if (inputType === "sn") return { SN: value };
+  if (inputType === "ecid") return { ECID: value };
+  return {};
+}
+
 export function parseServiceList(list: unknown): RemoteService[] {
   if (!list || typeof list !== "object") return [];
   const out: RemoteService[] = [];

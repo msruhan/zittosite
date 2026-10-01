@@ -24,6 +24,7 @@ import {
 import { SupplierImportPanel } from "@/components/domain/supplier-import-panel";
 import { formatRupiah } from "@/lib/format";
 import { ApiError, api } from "@/lib/api";
+import { isSpecialSupplierService, type InputType } from "@/lib/imei-list";
 import { cn } from "@/lib/utils";
 import type {
   Admin,
@@ -115,6 +116,7 @@ export function ServiceManagement({
             assignedAdminIds: next.assignedAdminIds,
             supplierId: next.supplierId ?? null,
             supplierServiceId: next.supplierServiceId ?? null,
+            inputType: next.inputType ?? "imei",
           }),
         });
       } else {
@@ -131,6 +133,7 @@ export function ServiceManagement({
             assignedAdminIds: next.assignedAdminIds,
             supplierId: next.supplierId ?? null,
             supplierServiceId: next.supplierServiceId ?? null,
+            inputType: next.inputType ?? "imei",
           }),
         });
       }
@@ -905,6 +908,30 @@ function ServiceFormDialog({
               }))
             }
           />
+        ) : null}
+        {draft.fulfillmentChannel === "supplier" &&
+        isSpecialSupplierService(draft.supplierServiceId) ? (
+          <Field
+            label="Field yang diisi user"
+            htmlFor="inputType"
+            hint="Khusus Layanan Spesial. User hanya mengisi satu jenis data ini saat order."
+          >
+            <Select
+              id="inputType"
+              value={draft.inputType ?? "imei"}
+              onValueChange={(value) =>
+                setDraft((current) => ({
+                  ...current,
+                  inputType: value as InputType,
+                }))
+              }
+              options={[
+                { value: "imei", label: "IMEI (15 digit)" },
+                { value: "sn", label: "SN (Serial Number)" },
+                { value: "ecid", label: "ECID" },
+              ]}
+            />
+          </Field>
         ) : null}
         {draft.fulfillmentChannel === "telegram" ||
         !draft.fulfillmentChannel ? (

@@ -21,6 +21,12 @@ export function orderViaWhere(via?: OrderVia): Prisma.OrderWhereInput {
   return {};
 }
 
+/** CeirBot's Layanan Ceir checks use `ceir-<code>` ids; every other supplier service is Layanan Spesial. */
+export function isSpecialSupplierService(supplierServiceId: string | null | undefined): boolean {
+  const id = supplierServiceId?.trim().toLowerCase();
+  return Boolean(id) && !id!.startsWith("ceir-");
+}
+
 export function serviceViaWhere(via?: OrderVia): Prisma.ServiceWhereInput {
   if (via === "supplier") return { fulfillmentChannel: "supplier" };
   if (via === "manual") return { fulfillmentChannel: { not: "supplier" } };

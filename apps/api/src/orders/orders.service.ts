@@ -209,9 +209,6 @@ export class OrdersService {
       if (byCode) serviceId = byCode.id;
     }
     if (!serviceId) throw new BadRequestException("Pilih layanan.");
-    const parsed = parseImeiList(input.imeis ?? String(input.imei ?? ""));
-    if (!parsed.ok) throw new BadRequestException(parsed.errors.join(" "));
-    const imeis = parsed.imeis;
 
     const balanceOnly = input.balanceOnly === true;
     const existing = balanceOnly ? null : await this.pendingOrder(userId);
@@ -232,6 +229,9 @@ export class OrdersService {
     if (!service || !service.active) {
       throw new BadRequestException("Layanan tidak tersedia.");
     }
+    const parsed = parseImeiList(input.imeis ?? String(input.imei ?? ""), service.inputType);
+    if (!parsed.ok) throw new BadRequestException(parsed.errors.join(" "));
+    const imeis = parsed.imeis;
     const groupPrice = user.groupId
       ? await this.prisma.userGroupPrice.findUnique({
           where: { groupId_serviceId: { groupId: user.groupId, serviceId } },

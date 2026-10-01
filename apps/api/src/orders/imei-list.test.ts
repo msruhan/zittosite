@@ -48,3 +48,21 @@ test("more than 6 rejected", () => {
     errors: ["Maksimal 6 IMEI per order (saat ini 7)."],
   });
 });
+
+test("SN keeps letters, uppercased, separators dropped", () => {
+  assert.deepEqual(parseImeiList("f2lx-12ab 9q0d\nC02XK0ABJG5H", "sn"), {
+    ok: true,
+    imeis: ["F2LX12AB9Q0D", "C02XK0ABJG5H"],
+  });
+});
+
+test("ECID length is bounded and labelled", () => {
+  assert.deepEqual(parseImeiList("abc", "ecid"), {
+    ok: false,
+    errors: ["Baris 1: ECID harus 4–40 huruf/angka (saat ini 3)."],
+  });
+  assert.deepEqual(parseImeiList("", "ecid"), {
+    ok: false,
+    errors: ["Masukkan minimal 1 ECID."],
+  });
+});

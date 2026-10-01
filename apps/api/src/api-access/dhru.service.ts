@@ -2,7 +2,7 @@ import { HttpException, Injectable, Logger } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service";
 import { OrdersService } from "../orders/orders.service";
 import { InsufficientBalanceException } from "../orders/balance";
-import { parseImeiList } from "../orders/imei-list";
+import { INPUT_TYPE_LABEL, type InputType, parseImeiList } from "../orders/imei-list";
 import { ApiKeysService, type ApiCaller } from "./api-keys.service";
 import { RateWindow } from "./rate-window";
 import {
@@ -24,7 +24,15 @@ const PLACEMENTS_PER_MINUTE = 20;
 const AUTH_FAILURES_PER_10_MIN = 20;
 
 type Form = Record<string, unknown>;
-type ServiceRow = { id: string; code: string; name: string; price: number; estimate: string; description: string };
+type ServiceRow = {
+  id: string;
+  code: string;
+  name: string;
+  price: number;
+  estimate: string;
+  description: string;
+  inputType: InputType;
+};
 
 class DhruFailure extends Error {}
 
@@ -126,7 +134,8 @@ export class DhruService {
               "Requires.KBH": "None",
               "Requires.MEP": "None",
               "Requires.PRD": "None",
-              "Requires.SN": "None",
+              "Requires.SN": service.inputType === "sn" ? "Required" : "None",
+              "Requires.ECID": service.inputType === "ecid" ? "Required" : "None",
             },
           ]),
         ),
@@ -140,8 +149,15 @@ export class DhruService {
     const ref = params.ID || params.SERVICEID || "";
     const service = services.find((s) => s.code === ref.toLowerCase() || s.id === ref);
     if (!service) throw new DhruFailure("Service not found");
-    const parsed = parseImeiList([params.IMEI ?? ""]);
-    if (!parsed.ok) throw new DhruFailure("Invalid IMEI");
+    const type = service.inputType;
+    const raw =
+      type === "sn"
+        ? params.SN || params.SERIALNUMBER || params.IMEI
+        : type === "ecid"
+          ? params.ECID || params.IMEI
+          : params.IMEI;
+    const parsed = parseImeiList([raw ?? ""], type);
+    if (!parsed.ok) throw new DhruFailure(`Invalid ${INPUT_TYPE_LABEL[type]}`);
     return { service, imei: parsed.imeis[0]! };
   }
 

@@ -9,6 +9,7 @@ import { CancelOrderButton } from "@/components/domain/cancel-order-button";
 import { ApiError } from "@/lib/api";
 import { serverApi } from "@/lib/server-api";
 import { orderMenu } from "@/lib/order-routes";
+import { INPUT_TYPE_LABEL } from "@/lib/imei-list";
 import { formatDateTime, formatRupiah } from "@/lib/format";
 import type { OrderDetail } from "@/lib/types";
 
@@ -81,7 +82,7 @@ export default async function PaymentPage({
               </div>
               <div className="py-2.5">
                 <dt className="text-body text-ink-soft">
-                  IMEI ({bulk.length} order, 1 QRIS)
+                  {INPUT_TYPE_LABEL[order.service.inputType ?? "imei"]} ({bulk.length} order, 1 QRIS)
                 </dt>
                 <dd className="mt-2">
                   <ul className="space-y-1.5">
@@ -102,7 +103,9 @@ export default async function PaymentPage({
             </>
           ) : (
             <div className="flex items-baseline justify-between gap-4 py-2.5">
-              <dt className="text-body text-ink-soft">IMEI</dt>
+              <dt className="text-body text-ink-soft">
+                {INPUT_TYPE_LABEL[order.service.inputType ?? "imei"]}
+              </dt>
               <dd>
                 <DataValue>{order.imei}</DataValue>
               </dd>

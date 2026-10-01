@@ -12,6 +12,7 @@ import { OrderStepper } from "@/components/domain/order-stepper";
 import { ORDER_STATUS } from "@/lib/status";
 import { ApiError } from "@/lib/api";
 import { serverApi } from "@/lib/server-api";
+import { INPUT_TYPE_LABEL } from "@/lib/imei-list";
 import { orderMenu } from "@/lib/order-routes";
 import type { OrderDetail } from "@/lib/types";
 
@@ -68,7 +69,9 @@ export default async function OrderStatusPage({
                 </dd>
               </div>
               <div>
-                <dt className="text-label uppercase text-ink-soft">IMEI</dt>
+                <dt className="text-label uppercase text-ink-soft">
+                  {INPUT_TYPE_LABEL[order.service.inputType ?? "imei"]}
+                </dt>
                 <dd className="mt-0.5">
                   <DataValue>{order.imei}</DataValue>
                 </dd>

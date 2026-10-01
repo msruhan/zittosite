@@ -75,6 +75,12 @@ enum FulfillmentChannel {
   supplier
 }
 
+enum ServiceInputType {
+  imei
+  sn
+  ecid
+}
+
 enum InvoicePurpose {
   order
   topup
@@ -324,6 +330,8 @@ model Service {
   supplierId         String?             @map("supplier_id")
   /// Remote Dhru SERVICEID at the supplier.
   supplierServiceId  String?             @map("supplier_service_id")
+  /// What the user enters per order. Only Layanan Spesial (non-Ceir supplier services) may use SN/ECID.
+  inputType          ServiceInputType    @default(imei) @map("input_type")
   createdAt          DateTime            @default(now()) @map("created_at")
   updatedAt          DateTime            @updatedAt @map("updated_at")
   supplier           Supplier?           @relation(fields: [supplierId], references: [id], onDelete: SetNull)
