@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/status-badge";
 import { OrderStepper } from "@/components/domain/order-stepper";
 import { CancelOrderButton } from "@/components/domain/cancel-order-button";
+import { CeirOrderDetail } from "@/components/domain/ceir-order-detail";
 import { ApiError } from "@/lib/api";
 import { serverApi } from "@/lib/server-api";
 import { orderMenu } from "@/lib/order-routes";
@@ -44,6 +45,21 @@ export default async function OrderDetailPage({
     throw err;
   }
   const menu = orderMenu(order.service);
+
+  if (order.service.via === "supplier") {
+    return (
+      <div className="mx-auto w-full max-w-3xl space-y-4">
+        <Link
+          href={menu.listHref}
+          className="inline-flex items-center gap-1.5 text-body font-medium text-ink-soft underline-offset-4 transition-colors duration-150 ease-out-strong hover:text-ink hover:underline"
+        >
+          <ArrowLeft className="size-4" aria-hidden="true" />
+          {menu.listLabel}
+        </Link>
+        <CeirOrderDetail order={order} />
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto w-full max-w-3xl space-y-4">

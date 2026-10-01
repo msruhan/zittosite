@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Eye, MagnifyingGlass, PencilSimple, X } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -59,6 +59,11 @@ const CANCEL_FLOW_FROM: OrderStatus[] = [
   "in_process",
 ];
 
+export type OrderHandler = { id: string; fullName: string; username: string };
+
+/** Admin and order-date filters run on the server: the list is capped at the newest 200. */
+type ServerFilters = { admin: string; from: string; to: string; handlers: OrderHandler[] };
+
 export function AdminOrderManagement({
   orders,
   fetchedAt,
@@ -66,6 +71,7 @@ export function AdminOrderManagement({
   showCustomerIdentity = true,
   canEditStatus = false,
   supplierView = false,
+  serverFilters,
 }: {
   orders: OrderDetail[];
   fetchedAt: string;
@@ -74,9 +80,27 @@ export function AdminOrderManagement({
   canEditStatus?: boolean;
   /** Swap the Admin column for service and supplier forwarding details. */
   supplierView?: boolean;
+  serverFilters?: ServerFilters;
 }) {
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const [filtering, startFiltering] = React.useTransition();
   const [query, setQuery] = React.useState(initialQuery);
+
+  function setServerFilter(next: Partial<Record<"admin" | "from" | "to", string>>) {
+    const params = new URLSearchParams(searchParams.toString());
+    for (const [key, value] of Object.entries(next)) {
+      if (value) params.set(key, value);
+      else params.delete(key);
+    }
+    const qs = params.toString();
+    startFiltering(() => router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false }));
+  }
+
+  const hasServerFilter = Boolean(
+    serverFilters && (serverFilters.admin || serverFilters.from || serverFilters.to),
+  );
   const [status, setStatus] = React.useState<OrderStatus | "all">("all");
   const [editingId, setEditingId] = React.useState<string | null>(null);
   const [savingId, setSavingId] = React.useState<string | null>(null);
@@ -168,6 +192,60 @@ export function AdminOrderManagement({
           className="lg:w-52"
         />
       </div>
+
+      {serverFilters ? (
+        <div
+          className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center"
+          aria-busy={filtering || undefined}
+        >
+          <Select
+            ariaLabel="Filter admin"
+            value={serverFilters.admin || "all"}
+            onValueChange={(value) => setServerFilter({ admin: value === "all" ? "" : value })}
+            options={[
+              { value: "all", label: "Semua admin" },
+              { value: "none", label: "Tanpa admin" },
+              ...serverFilters.handlers.map((admin) => ({
+                value: admin.id,
+                label: admin.fullName,
+              })),
+            ]}
+            className="sm:w-52"
+          />
+          <label className="flex items-center gap-2 text-body text-ink-soft">
+            <span className="w-14 shrink-0 sm:w-auto">Dari</span>
+            <Input
+              type="date"
+              aria-label="Tanggal order dari"
+              value={serverFilters.from}
+              max={serverFilters.to || undefined}
+              onChange={(event) => setServerFilter({ from: event.target.value })}
+              className="font-data tabular sm:w-44"
+            />
+          </label>
+          <label className="flex items-center gap-2 text-body text-ink-soft">
+            <span className="w-14 shrink-0 sm:w-auto">Sampai</span>
+            <Input
+              type="date"
+              aria-label="Tanggal order sampai"
+              value={serverFilters.to}
+              min={serverFilters.from || undefined}
+              onChange={(event) => setServerFilter({ to: event.target.value })}
+              className="font-data tabular sm:w-44"
+            />
+          </label>
+          {hasServerFilter ? (
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => setServerFilter({ admin: "", from: "", to: "" })}
+            >
+              <X className="size-4" aria-hidden="true" />
+              Hapus filter
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
 
       <Card>
         {filtered.length > 0 ? (
@@ -319,13 +397,14 @@ export function AdminOrderManagement({
         ) : (
           <EmptyState
             title="Tidak ada order sesuai filter"
-            description="Coba ubah kata kunci atau reset filter status."
+            description="Coba ubah kata kunci atau reset filter."
             action={
               <Button
                 variant="outline"
                 onClick={() => {
                   setQuery("");
                   setStatus("all");
+                  if (hasServerFilter) setServerFilter({ admin: "", from: "", to: "" });
                 }}
               >
                 Reset filter

@@ -300,8 +300,20 @@ export class AdminOpsController {
     @Query("q") q?: string,
     @Query("status") status?: string,
     @Query("via") via?: string,
+    @Query("admin") adminId?: string,
+    @Query("from") from?: string,
+    @Query("to") to?: string,
   ) {
-    return this.orders.list(req.admin.sub, q, status, via === "supplier");
+    return this.orders.list(req.admin.sub, q, status, via === "supplier", {
+      adminId,
+      from,
+      to,
+    });
+  }
+
+  @Get("orders-handlers")
+  listOrderHandlers() {
+    return this.orders.handlers();
   }
 
   @Get("orders/:orderId")

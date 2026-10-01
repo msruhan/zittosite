@@ -19,6 +19,16 @@ import { AdminNotifyService } from "../telegram/admin-notify.service";
 import { userOrderNoticeHtml } from "../telegram/telegram-messages";
 import { processDurationLabel } from "../orders/process-duration";
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** `YYYY-MM-DD` as midnight in Asia/Jakarta (UTC+7, no DST); null when absent or malformed. */
+export function jakartaDayStart(value?: string): Date | null {
+  const day = String(value ?? "").trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return null;
+  const date = new Date(`${day}T00:00:00+07:00`);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
 const orderInclude = {
   service: true,
   user: true,
@@ -62,8 +72,18 @@ export class AdminOrdersService {
     return viewer?.role !== "super_admin";
   }
 
-  async list(viewerAdminId: string, q?: string, status?: string, supplierOnly = false) {
+  async list(
+    viewerAdminId: string,
+    q?: string,
+    status?: string,
+    supplierOnly = false,
+    filters: { adminId?: string; from?: string; to?: string } = {},
+  ) {
     const redactUser = await this.redactFor(viewerAdminId);
+    const adminId = String(filters.adminId ?? "").trim();
+    const from = jakartaDayStart(filters.from);
+    const toStart = jakartaDayStart(filters.to);
+    const until = toStart ? new Date(toStart.getTime() + DAY_MS) : null;
     const needle = String(q ?? "").trim();
     const statusFilter =
       status && ALL_STATUSES.includes(status as OrderStatus)
@@ -88,6 +108,10 @@ export class AdminOrdersService {
       where: {
         ...(statusFilter ? { status: statusFilter } : {}),
         ...(supplierOnly ? { AND: [SUPPLIER_ROUTED_ORDER] } : {}),
+        ...(adminId ? { assignedAdminId: adminId === "none" ? null : adminId } : {}),
+        ...(from || until
+          ? { createdAt: { ...(from ? { gte: from } : {}), ...(until ? { lt: until } : {}) } }
+          : {}),
         ...(needle
           ? {
               OR: [
@@ -103,6 +127,15 @@ export class AdminOrdersService {
       take: 200,
     });
     return rows.map((row) => serializeOrderListItem(row, { redactUser }));
+  }
+
+  /** Admins who have handled at least one order, for the Orders filter. */
+  async handlers() {
+    return this.prisma.admin.findMany({
+      where: { assignedOrders: { some: {} } },
+      select: { id: true, fullName: true, username: true },
+      orderBy: { fullName: "asc" },
+    });
   }
 
   async get(viewerAdminId: string, publicOrderId: string) {
