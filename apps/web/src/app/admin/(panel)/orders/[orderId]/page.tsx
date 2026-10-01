@@ -242,7 +242,7 @@ export default async function AdminOrderDetailPage({
                 <ResultBadge status={order.result.resultStatus} />
               </CardHeader>
               <CardBody className="pt-4">
-                <p className="max-w-[70ch] text-body text-ink">
+                <p className="max-w-[70ch] whitespace-pre-line text-body text-ink">
                   {order.result.resultNote}
                 </p>
                 <p className="mt-3 border-t border-hairline pt-3 text-body text-ink-soft">
@@ -335,7 +335,7 @@ export default async function AdminOrderDetailPage({
                         {formatDateTime(log.createdAt)}
                       </time>
                     </div>
-                    <p className="text-body text-ink-soft">{log.note}</p>
+                    <p className="whitespace-pre-line text-body text-ink-soft">{log.note}</p>
                     <p className="text-body text-ink-faint">Oleh {log.actor}</p>
                   </li>
                 ))}

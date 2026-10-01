@@ -10,6 +10,18 @@ export interface SelectOption {
   label: string;
   hint?: string;
   disabled?: boolean;
+  /** Consecutive options sharing a group render under one heading. */
+  group?: string;
+}
+
+function groupOptions(options: SelectOption[]) {
+  const groups: { label?: string; options: SelectOption[] }[] = [];
+  for (const option of options) {
+    const last = groups[groups.length - 1];
+    if (last && last.label === option.group) last.options.push(option);
+    else groups.push({ label: option.group, options: [option] });
+  }
+  return groups;
 }
 
 /**
@@ -75,30 +87,39 @@ export function Select({
           )}
         >
           <SelectPrimitive.Viewport className="p-1">
-            {options.map((option) => (
-              <SelectPrimitive.Item
-                key={option.value}
-                value={option.value}
-                disabled={option.disabled}
-                className={cn(
-                  "relative flex cursor-pointer select-none items-center gap-2 rounded-sm py-2 pl-8 pr-3",
-                  "text-body text-ink outline-none",
-                  "data-[highlighted]:bg-action-wash data-[highlighted]:text-action",
-                  "data-[disabled]:pointer-events-none data-[disabled]:text-ink-faint",
-                )}
-              >
-                <SelectPrimitive.ItemIndicator className="absolute left-2.5 inline-flex">
-                  <Check className="size-3.5" aria-hidden="true" />
-                </SelectPrimitive.ItemIndicator>
-                <SelectPrimitive.ItemText>
-                  {option.label}
-                </SelectPrimitive.ItemText>
-                {option.hint ? (
-                  <span className="ml-auto font-data tabular text-body text-ink-soft">
-                    {option.hint}
-                  </span>
+            {groupOptions(options).map((group, index) => (
+              <SelectPrimitive.Group key={`${group.label ?? ""}-${index}`}>
+                {group.label ? (
+                  <SelectPrimitive.Label className="px-3 pb-1 pt-2 text-label text-ink-faint">
+                    {group.label}
+                  </SelectPrimitive.Label>
                 ) : null}
-              </SelectPrimitive.Item>
+                {group.options.map((option) => (
+                  <SelectPrimitive.Item
+                    key={option.value}
+                    value={option.value}
+                    disabled={option.disabled}
+                    className={cn(
+                      "relative flex cursor-pointer select-none items-center gap-2 rounded-sm py-2 pl-8 pr-3",
+                      "text-body text-ink outline-none",
+                      "data-[highlighted]:bg-action-wash data-[highlighted]:text-action",
+                      "data-[disabled]:pointer-events-none data-[disabled]:text-ink-faint",
+                    )}
+                  >
+                    <SelectPrimitive.ItemIndicator className="absolute left-2.5 inline-flex">
+                      <Check className="size-3.5" aria-hidden="true" />
+                    </SelectPrimitive.ItemIndicator>
+                    <SelectPrimitive.ItemText>
+                      {option.label}
+                    </SelectPrimitive.ItemText>
+                    {option.hint ? (
+                      <span className="ml-auto font-data tabular text-body text-ink-soft">
+                        {option.hint}
+                      </span>
+                    ) : null}
+                  </SelectPrimitive.Item>
+                ))}
+              </SelectPrimitive.Group>
             ))}
           </SelectPrimitive.Viewport>
         </SelectPrimitive.Content>

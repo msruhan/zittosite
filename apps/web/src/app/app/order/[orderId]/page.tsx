@@ -131,7 +131,7 @@ export default async function OrderDetailPage({
             <ResultBadge status={order.result.resultStatus} />
           </CardHeader>
           <CardBody className="pt-3">
-            <p className="text-body text-ink">{order.result.resultNote}</p>
+            <p className="whitespace-pre-line text-body text-ink">{order.result.resultNote}</p>
             {order.result.resultData ? (
               <dl className="mt-4 divide-y divide-hairline border-t border-hairline">
                 {Object.entries(order.result.resultData).map(([key, value]) => (

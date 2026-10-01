@@ -9,7 +9,7 @@ import { DataValue } from "@/components/ui/data-value";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Field, Input, Textarea } from "@/components/ui/field";
-import { Select } from "@/components/ui/select";
+import { Select, type SelectOption } from "@/components/ui/select";
 import { Tag } from "@/components/ui/status-badge";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -789,9 +789,10 @@ function SupplierPicker({
   }
 
   const selected = remote?.find((svc) => svc.id === supplierServiceId);
-  const options = (remote ?? []).map((svc) => ({
+  const options: SelectOption[] = (remote ?? []).map((svc) => ({
     value: svc.id,
     label: `${svc.name} — ${formatRupiah(Math.round(svc.credit))}`,
+    group: svc.group,
   }));
   if (supplierServiceId && !selected) {
     options.unshift({ value: supplierServiceId, label: `ID ${supplierServiceId}` });
