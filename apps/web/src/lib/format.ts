@@ -58,6 +58,18 @@ export function formatRelative(iso: string): string {
   });
 }
 
+/** `55 menit`, `1 jam 22 menit`, `2 hari 3 jam`; under a minute is `< 1 menit`. */
+export function formatProcessDuration(ms: number): string {
+  const totalMinutes = Math.floor(Math.max(0, ms) / 60_000);
+  if (totalMinutes < 1) return "< 1 menit";
+  const days = Math.floor(totalMinutes / 1440);
+  const hours = Math.floor((totalMinutes % 1440) / 60);
+  const minutes = totalMinutes % 60;
+  if (days > 0) return hours > 0 ? `${days} hari ${hours} jam` : `${days} hari`;
+  if (hours > 0) return minutes > 0 ? `${hours} jam ${minutes} menit` : `${hours} jam`;
+  return `${minutes} menit`;
+}
+
 export function formatCountdown(totalSeconds: number): string {
   const safe = Math.max(0, totalSeconds);
   const minutes = Math.floor(safe / 60);

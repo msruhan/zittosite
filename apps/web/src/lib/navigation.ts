@@ -13,6 +13,7 @@ import {
   SquaresFour,
   User,
   Users,
+  UsersThree,
   Wallet,
 } from "@phosphor-icons/react";
 import type { Icon } from "@phosphor-icons/react";
@@ -39,6 +40,7 @@ export const adminNav: NavItem[] = [
   { href: "/admin/dashboard", label: "Dashboard", icon: Gauge },
   { href: "/admin/orders", label: "Orders", icon: ClipboardText, nested: true },
   { href: "/admin/users", label: "Users", icon: Users },
+  { href: "/admin/groups", label: "Groups", icon: UsersThree },
   { href: "/admin/admins", label: "Admins", icon: ShieldCheck },
   { href: "/admin/services", label: "Services", icon: Package },
   { href: "/admin/running-ads", label: "Ads Runner", icon: Megaphone },

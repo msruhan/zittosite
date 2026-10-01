@@ -16,6 +16,7 @@ import {
 import { AuditLogService } from "../security/audit-log.service";
 import { AdminNotifyService } from "../telegram/admin-notify.service";
 import { userOrderNoticeHtml } from "../telegram/telegram-messages";
+import { processDurationLabel } from "../orders/process-duration";
 
 const orderInclude = {
   service: true,
@@ -197,7 +198,15 @@ export class AdminOrdersService {
 
   /** Telegram fan-out for a website override: admin order cards, Super Admins, and the customer. */
   private notifyClosed(
-    order: { id: string; orderId: string; userId: string; statusReason: string | null },
+    order: {
+      id: string;
+      orderId: string;
+      userId: string;
+      statusReason: string | null;
+      createdAt: Date;
+      invoice: { paidAt: Date | null } | null;
+      activity: Array<{ status: string; createdAt: Date }>;
+    },
     next: "rejected" | "cancel",
     admin: { id: string; username: string; fullName: string },
     refunded: number,
@@ -220,6 +229,7 @@ export class AdminOrdersService {
             orderId: order.orderId,
             reason,
             refund: refunded,
+            duration: processDurationLabel(order),
           })
         : userOrderNoticeHtml({
             kind: "cancelled",
@@ -286,15 +296,15 @@ export class AdminOrdersService {
       paidToday,
       recent,
     ] = await Promise.all([
-      this.prisma.order.count(),
-      this.prisma.order.count({ where: { status: "waiting_action" } }),
-      this.prisma.order.count({ where: { status: "in_process" } }),
-      this.prisma.order.count({ where: { status: "done" } }),
-      this.prisma.order.count({ where: { createdAt: { gte: start } } }),
-      this.prisma.user.count(),
+      this.prisma.order.count({ where: { isTest: false } }),
+      this.prisma.order.count({ where: { status: "waiting_action", isTest: false } }),
+      this.prisma.order.count({ where: { status: "in_process", isTest: false } }),
+      this.prisma.order.count({ where: { status: "done", isTest: false } }),
+      this.prisma.order.count({ where: { createdAt: { gte: start }, isTest: false } }),
+      this.prisma.user.count({ where: { role: "customer" } }),
       this.prisma.service.count({ where: { active: true } }),
       this.prisma.paymentInvoice.aggregate({
-        where: { purpose: "order", paymentStatus: "paid", paidAt: { gte: start } },
+        where: { purpose: "order", isTest: false, paymentStatus: "paid", paidAt: { gte: start } },
         _sum: { amount: true },
       }),
       this.prisma.order.findMany({

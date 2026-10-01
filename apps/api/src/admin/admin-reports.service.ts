@@ -89,42 +89,43 @@ export class AdminReportsService {
       services,
     ] = await Promise.all([
       this.prisma.paymentInvoice.aggregate({
-        where: { purpose: "order", paymentStatus: "paid" },
+        where: { purpose: "order", isTest: false, paymentStatus: "paid" },
         _sum: { amount: true, balanceUsed: true },
       }),
       this.prisma.paymentInvoice.aggregate({
         where: {
-          purpose: "order",
+          purpose: "order", isTest: false,
           paymentStatus: "paid",
           paidAt: { gte: todayStart, lt: tomorrowStart },
         },
         _sum: { amount: true, balanceUsed: true },
       }),
       this.prisma.order.count({
-        where: { createdAt: { gte: todayStart, lt: tomorrowStart } },
+        where: { createdAt: { gte: todayStart, lt: tomorrowStart }, isTest: false },
       }),
-      this.prisma.user.count(),
-      this.prisma.user.count({ where: { status: "active" } }),
-      this.prisma.order.count({ where: { status: "done" } }),
-      this.prisma.order.count({ where: { status: "waiting_action" } }),
+      this.prisma.user.count({ where: { role: "customer" } }),
+      this.prisma.user.count({ where: { status: "active", role: "customer" } }),
+      this.prisma.order.count({ where: { status: "done", isTest: false } }),
+      this.prisma.order.count({ where: { status: "waiting_action", isTest: false } }),
       this.prisma.order.groupBy({
         by: ["status"],
+        where: { isTest: false },
         _count: { _all: true },
       }),
       this.prisma.order.findMany({
-        where: { createdAt: { gte: windowStart, lt: tomorrowStart } },
+        where: { createdAt: { gte: windowStart, lt: tomorrowStart }, isTest: false },
         select: { createdAt: true, channel: true },
       }),
       this.prisma.paymentInvoice.findMany({
         where: {
-          purpose: "order",
+          purpose: "order", isTest: false,
           paymentStatus: "paid",
           paidAt: { gte: windowStart, lt: tomorrowStart },
         },
         select: { paidAt: true, amount: true, balanceUsed: true },
       }),
       this.prisma.paymentInvoice.findMany({
-        where: { purpose: "order", paymentStatus: "paid" },
+        where: { purpose: "order", isTest: false, paymentStatus: "paid" },
         select: {
           amount: true,
           orders: {
@@ -134,7 +135,9 @@ export class AdminReportsService {
         },
       }),
       this.prisma.admin.findMany({
-        include: { _count: { select: { assignedOrders: true } } },
+        include: {
+          _count: { select: { assignedOrders: { where: { isTest: false } } } },
+        },
         orderBy: { fullName: "asc" },
       }),
       this.prisma.service.findMany({

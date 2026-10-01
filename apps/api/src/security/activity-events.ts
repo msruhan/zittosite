@@ -244,6 +244,7 @@ export const ACTIVITY_EVENTS = {
       const extra = [
         fields.passwordReset ? "reset password" : "",
         fields.status ? `status ${fields.status}` : "",
+        fields.role ? `role ${fields.role === "testing" ? "Testing" : "User"}` : "",
       ].filter(Boolean);
       return `Memperbarui data user ${target ?? ""}${extra.length ? ` (${extra.join(", ")})` : ""}`;
     },
@@ -271,6 +272,28 @@ export const ACTIVITY_EVENTS = {
     category: "admin",
     label: "Admin dihapus",
     summary: ({ target, fields }) => `Menghapus akun admin ${target ?? fields.adminId ?? ""}`,
+  },
+  "admin.group.created": {
+    category: "user",
+    label: "Group dibuat",
+    summary: ({ fields }) => `Membuat group ${fields.groupName ?? ""}`,
+  },
+  "admin.group.updated": {
+    category: "user",
+    label: "Group diperbarui",
+    summary: ({ fields }) =>
+      `Memperbarui group ${fields.groupName ?? ""}${fields.pricesChanged ? " (harga)" : ""}`,
+  },
+  "admin.group.members_updated": {
+    category: "user",
+    label: "Member group diubah",
+    summary: ({ fields }) =>
+      `Mengatur member group ${fields.groupName ?? ""} (${fields.members ?? 0} user)`,
+  },
+  "admin.group.deleted": {
+    category: "user",
+    label: "Group dihapus",
+    summary: ({ fields }) => `Menghapus group ${fields.groupName ?? ""}`,
   },
   "admin.running_ad.created": {
     category: "admin",

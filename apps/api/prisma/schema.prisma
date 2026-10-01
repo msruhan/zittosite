@@ -13,6 +13,12 @@ enum UserStatus {
   suspended
 }
 
+/// `testing` accounts order like customers, but their orders are left out of statistics.
+enum UserRole {
+  customer
+  testing
+}
+
 enum AdminRole {
   super_admin
   admin
@@ -92,6 +98,10 @@ model User {
   fullName       String          @map("full_name")
   telegramHandle String?         @map("telegram_handle")
   creditBalance  Int             @default(0) @map("credit_balance")
+  role           UserRole        @default(customer)
+  /// Pricing group; while set, group prices apply and personal prices are not used.
+  groupId        String?         @map("group_id")
+  group          UserGroup?      @relation(fields: [groupId], references: [id], onDelete: SetNull)
   status         UserStatus      @default(active)
   botAccess      Boolean         @default(true) @map("bot_access")
   createdAt      DateTime        @default(now()) @map("created_at")
@@ -301,8 +311,35 @@ model Service {
   orders      Order[]
   assignments ServiceAssignment[]
   userPrices  UserServicePrice[]
+  groupPrices UserGroupPrice[]
 
   @@map("services")
+}
+
+/// Pricing group of users; services without a group price use Service.price.
+model UserGroup {
+  id          String           @id @default(cuid())
+  name        String           @unique
+  description String           @default("")
+  createdAt   DateTime         @default(now()) @map("created_at")
+  updatedAt   DateTime         @updatedAt @map("updated_at")
+  users       User[]
+  prices      UserGroupPrice[]
+
+  @@map("user_groups")
+}
+
+model UserGroupPrice {
+  groupId   String    @map("group_id")
+  serviceId String    @map("service_id")
+  price     Int
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  group     UserGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  service   Service   @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+
+  @@id([groupId, serviceId])
+  @@map("user_group_prices")
 }
 
 model ServiceAssignment {
@@ -326,6 +363,8 @@ model Order {
   imei             String
   notes            String?
   status           OrderStatus        @default(waiting_payment)
+  /// Snapshot of the user's testing role at creation; excluded from statistics.
+  isTest           Boolean            @default(false) @map("is_test")
   /// Keterangan for rejected/cancelled orders; null means "tidak ada keterangan".
   statusReason     String?            @map("status_reason")
   price            Int
@@ -372,6 +411,7 @@ model PaymentInvoice {
   id               String        @id @default(cuid())
   invoiceId        String        @unique @map("invoice_id")
   purpose          InvoicePurpose @default(order)
+  isTest           Boolean       @default(false) @map("is_test")
   /// Owner of a topup invoice (topups have no orders).
   userId           String?       @map("user_id")
   /// Bulk total: one invoice pays for every order in `orders`.

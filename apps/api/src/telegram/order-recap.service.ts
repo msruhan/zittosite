@@ -75,10 +75,14 @@ export class OrderRecapService {
 
   private activityWhere(range: { gte: Date; lt: Date }) {
     return {
-      taken: { startedAt: range } satisfies Prisma.OrderWhereInput,
-      done: { status: "done", completedAt: range } satisfies Prisma.OrderWhereInput,
-      rejected: { status: "rejected", updatedAt: range } satisfies Prisma.OrderWhereInput,
-      inProcess: { status: "in_process" } satisfies Prisma.OrderWhereInput,
+      taken: { startedAt: range, isTest: false } satisfies Prisma.OrderWhereInput,
+      done: { status: "done", completedAt: range, isTest: false } satisfies Prisma.OrderWhereInput,
+      rejected: {
+        status: "rejected",
+        updatedAt: range,
+        isTest: false,
+      } satisfies Prisma.OrderWhereInput,
+      inProcess: { status: "in_process", isTest: false } satisfies Prisma.OrderWhereInput,
     };
   }
 
@@ -96,16 +100,16 @@ export class OrderRecapService {
       await Promise.all([
         this.prisma.order.groupBy({
           by: ["status"],
-          where: { createdAt: range },
+          where: { createdAt: range, isTest: false },
           _count: { _all: true },
         }),
         this.prisma.order.groupBy({
           by: ["channel"],
-          where: { createdAt: range },
+          where: { createdAt: range, isTest: false },
           _count: { _all: true },
         }),
         this.prisma.paymentInvoice.aggregate({
-          where: { purpose: "order", paymentStatus: "paid", paidAt: range },
+          where: { purpose: "order", isTest: false, paymentStatus: "paid", paidAt: range },
           _sum: { amount: true },
           _count: { _all: true },
         }),
@@ -137,7 +141,9 @@ export class OrderRecapService {
       this.prisma.order.count({ where: { ...w, ...processorOrder } });
     const [viaWhatsapp, waTaken, waDone, waRejected, waInProcess, waQueue, waOrders] =
       await Promise.all([
-        this.prisma.order.count({ where: { createdAt: range, ...viaWhatsappService } }),
+        this.prisma.order.count({
+          where: { createdAt: range, isTest: false, ...viaWhatsappService },
+        }),
         countProcessor(where.taken),
         countProcessor(where.done),
         countProcessor(where.rejected),

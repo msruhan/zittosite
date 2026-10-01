@@ -11,13 +11,16 @@ import { AdminOrdersService } from "./admin-orders.service";
 import { AdminAdminsService } from "./admin-admins.service";
 import { AdminReportsService } from "./admin-reports.service";
 import { SuperAdminGuard } from "./super-admin.guard";
+import { AdminGroupsController } from "./admin-groups.controller";
+import { AdminGroupsService } from "./admin-groups.service";
 import { OrdersModule } from "../orders/orders.module";
 import { AdminNotifyModule } from "../telegram/admin-notify.module";
 
 @Module({
   imports: [PrismaModule, OrdersModule, AdminNotifyModule],
-  controllers: [AdminAuthController, AdminOpsController],
+  controllers: [AdminAuthController, AdminOpsController, AdminGroupsController],
   providers: [
+    AdminGroupsService,
     AdminAuthService,
     AdminAuthGuard,
     SuperAdminGuard,

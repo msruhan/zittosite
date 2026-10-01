@@ -1,5 +1,5 @@
-import { Check, Minus, X } from "@phosphor-icons/react/dist/ssr";
-import { formatDateTime } from "@/lib/format";
+import { Check, Minus, Timer, X } from "@phosphor-icons/react/dist/ssr";
+import { formatDateTime, formatProcessDuration } from "@/lib/format";
 import { ORDER_STATUS, ORDER_STATUS_FLOW, type FlowStatus } from "@/lib/status";
 import type { OrderDetail, OrderStatus } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -29,7 +29,13 @@ const STEP_COPY: Record<FlowStatus, { title: string; pending: string }> = {
 
 type StepState = "complete" | "current" | "pending";
 
-function Disc({ state, failure }: { state: StepState; failure?: "rejected" | "cancel" }) {
+function Disc({
+  state,
+  failure,
+}: {
+  state: StepState;
+  failure?: "rejected" | "cancel";
+}) {
   if (failure) {
     const Icon = failure === "rejected" ? X : Minus;
     return (
@@ -123,85 +129,115 @@ export function OrderStepper({ order }: { order: OrderDetail }) {
     ? order.activity.find((log) => log.status === failure)
     : null;
 
+  const processStart =
+    order.activity.find((log) => log.status === "paid")?.createdAt ??
+    order.createdAt;
+  const processEnd = order.activity
+    .filter((log) => log.status === "done" || log.status === "rejected")
+    .at(-1)?.createdAt;
+  const processDuration =
+    processEnd && (order.status === "done" || order.status === "rejected")
+      ? formatProcessDuration(
+          new Date(processEnd).getTime() - new Date(processStart).getTime(),
+        )
+      : null;
+
   return (
-    <ol className="relative">
-      {steps.map((step, index) => {
-        const copy = STEP_COPY[step.status];
-        const timestamp = timestampFor(step.status);
-        const isLast = index === steps.length - 1 && !failure;
-        const nextComplete = steps[index + 1]?.state === "complete";
+    <>
+      <ol className="relative">
+        {steps.map((step, index) => {
+          const copy = STEP_COPY[step.status];
+          const timestamp = timestampFor(step.status);
+          const isLast = index === steps.length - 1 && !failure;
+          const nextComplete = steps[index + 1]?.state === "complete";
 
-        return (
-          <li
-            key={step.status}
-            className="relative flex gap-3 pb-5 last:pb-0"
-          >
-            {!isLast ? (
-              <span
-                aria-hidden="true"
-                className={cn(
-                  "absolute left-[11px] top-6 h-[calc(100%-1.5rem)] w-0.5 rounded-full",
-                  nextComplete || (failure && step.state === "complete")
-                    ? "bg-cleared-edge"
-                    : "bg-hairline",
-                )}
-              />
-            ) : null}
+          return (
+            <li
+              key={step.status}
+              className="relative flex gap-3 pb-5 last:pb-0"
+            >
+              {!isLast ? (
+                <span
+                  aria-hidden="true"
+                  className={cn(
+                    "absolute left-[11px] top-6 h-[calc(100%-1.5rem)] w-0.5 rounded-full",
+                    nextComplete || (failure && step.state === "complete")
+                      ? "bg-cleared-edge"
+                      : "bg-hairline",
+                  )}
+                />
+              ) : null}
 
-            <Disc state={step.state} />
+              <Disc state={step.state} />
 
+              <div className="min-w-0 flex-1 pt-0.5">
+                <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
+                  <p
+                    className={cn(
+                      "text-body",
+                      step.state === "current"
+                        ? "font-semibold text-action"
+                        : step.state === "complete"
+                          ? "font-medium text-ink"
+                          : "text-ink-soft",
+                    )}
+                  >
+                    {step.state === "pending" ? copy.pending : copy.title}
+                  </p>
+                  {timestamp ? (
+                    <time
+                      dateTime={timestamp}
+                      className="font-data tabular text-body text-ink-soft"
+                    >
+                      {formatDateTime(timestamp)}
+                    </time>
+                  ) : null}
+                </div>
+              </div>
+            </li>
+          );
+        })}
+
+        {failure && failureLog ? (
+          <li className="relative flex gap-3">
+            <Disc state="complete" failure={failure} />
             <div className="min-w-0 flex-1 pt-0.5">
               <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
                 <p
                   className={cn(
-                    "text-body",
-                    step.state === "current"
-                      ? "font-semibold text-action"
-                      : step.state === "complete"
-                        ? "font-medium text-ink"
-                        : "text-ink-soft",
+                    "text-body font-semibold",
+                    failure === "rejected"
+                      ? "text-refused-ink"
+                      : "text-void-ink",
                   )}
                 >
-                  {step.state === "pending" ? copy.pending : copy.title}
+                  {ORDER_STATUS[failure].label}
                 </p>
-                {timestamp ? (
-                  <time
-                    dateTime={timestamp}
-                    className="font-data tabular text-body text-ink-soft"
-                  >
-                    {formatDateTime(timestamp)}
-                  </time>
-                ) : null}
+                <time
+                  dateTime={failureLog.createdAt}
+                  className="font-data tabular text-body text-ink-soft"
+                >
+                  {formatDateTime(failureLog.createdAt)}
+                </time>
               </div>
+              <p className="mt-0.5 text-body text-ink-soft">
+                {failureLog.note}
+              </p>
             </div>
           </li>
-        );
-      })}
-
-      {failure && failureLog ? (
-        <li className="relative flex gap-3">
-          <Disc state="complete" failure={failure} />
-          <div className="min-w-0 flex-1 pt-0.5">
-            <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
-              <p
-                className={cn(
-                  "text-body font-semibold",
-                  failure === "rejected" ? "text-refused-ink" : "text-void-ink",
-                )}
-              >
-                {ORDER_STATUS[failure].label}
-              </p>
-              <time
-                dateTime={failureLog.createdAt}
-                className="font-data tabular text-body text-ink-soft"
-              >
-                {formatDateTime(failureLog.createdAt)}
-              </time>
-            </div>
-            <p className="mt-0.5 text-body text-ink-soft">{failureLog.note}</p>
-          </div>
-        </li>
+        ) : null}
+      </ol>
+      {processDuration ? (
+        <div className="mt-4 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 border-t border-hairline pt-3">
+          <p className="inline-flex items-center gap-1.5 text-body font-medium text-ink">
+            <Timer className="size-4 text-ink-soft" aria-hidden="true" />
+            Total waktu proses
+          </p>
+          <p className="font-data tabular text-body font-semibold text-ink">
+            {processDuration}
+          </p>
+        </div>
       ) : null}
-    </ol>
+    </>
   );
 }

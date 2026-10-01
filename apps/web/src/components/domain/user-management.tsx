@@ -29,14 +29,18 @@ import {
 import { formatDate, formatRupiah } from "@/lib/format";
 import { ApiError, api } from "@/lib/api";
 import { passwordPolicyError } from "@/lib/password";
-import type { Service, User } from "@/lib/types";
+import type { Service, User, UserGroup } from "@/lib/types";
+
+const NO_GROUP = "__none";
 
 export function UserManagement({
   initialUsers,
   services,
+  groups,
 }: {
   initialUsers: User[];
   services: Service[];
+  groups: UserGroup[];
 }) {
   const [users, setUsers] = React.useState(initialUsers);
   const [query, setQuery] = React.useState("");
@@ -78,6 +82,8 @@ export function UserManagement({
             password: next.password,
             telegramHandle: next.telegramHandle,
             customPrices: next.customPrices ?? [],
+            groupId: next.groupId ?? null,
+            role: next.role ?? "customer",
             botAccess: next.botAccess,
           }),
         });
@@ -88,6 +94,8 @@ export function UserManagement({
             fullName: next.fullName,
             telegramHandle: next.telegramHandle,
             customPrices: next.customPrices ?? [],
+            groupId: next.groupId ?? null,
+            role: next.role ?? "customer",
             status: next.status,
             botAccess: next.botAccess,
             ...(next.password ? { password: next.password } : {}),
@@ -162,6 +170,8 @@ export function UserManagement({
               fullName: "",
               telegramHandle: null,
               customPrices: [],
+              groupId: null,
+              role: "customer",
               status: "active",
               botAccess: true,
               createdAt: new Date().toISOString(),
@@ -183,7 +193,7 @@ export function UserManagement({
                     <TH>No</TH>
                     <TH>User</TH>
                     <TH>Telegram</TH>
-                    <TH>Harga khusus</TH>
+                    <TH>Harga</TH>
                     <TH>Saldo</TH>
                     <TH>Status</TH>
                     <TH>Bot</TH>
@@ -201,7 +211,12 @@ export function UserManagement({
                       </TD>
                       <TD>
                         <div>
-                          <p className="font-medium text-ink">{user.fullName}</p>
+                          <p className="flex flex-wrap items-center gap-1.5 font-medium text-ink">
+                            {user.fullName}
+                            {user.role === "testing" ? (
+                              <Tag className="border-working-edge bg-working-wash text-working-ink">🧪 Testing</Tag>
+                            ) : null}
+                          </p>
                           <p className="font-data text-body text-ink-soft">
                             @{user.username}
                           </p>
@@ -239,7 +254,13 @@ export function UserManagement({
                         )}
                       </TD>
                       <TD>
-                        <CustomPriceSummary user={user} services={services} />
+                        {user.groupName ? (
+                          <Tag className="border-action bg-action-wash text-action-deep">
+                            {user.groupName}
+                          </Tag>
+                        ) : (
+                          <CustomPriceSummary user={user} services={services} />
+                        )}
                       </TD>
                       <TD className="whitespace-nowrap">
                         <div className="flex items-center gap-1">
@@ -345,6 +366,7 @@ export function UserManagement({
           <UserFormDialog
             user={editing}
             services={services}
+            groups={groups}
             creating={creating}
             onCancel={() => {
               setEditing(null);
@@ -523,12 +545,14 @@ function CustomPriceSummary({
 function UserFormDialog({
   user,
   services,
+  groups,
   creating,
   onCancel,
   onSave,
 }: {
   user: User;
   services: Service[];
+  groups: UserGroup[];
   creating: boolean;
   onCancel: () => void;
   onSave: (user: User & { password?: string }) => void | Promise<void>;
@@ -541,6 +565,8 @@ function UserFormDialog({
     ),
   );
   const [saving, setSaving] = React.useState(false);
+  const selectedGroup = groups.find((group) => group.id === draft.groupId) ?? null;
+  const hadCustomPrices = (user.customPrices ?? []).length > 0;
   const [errors, setErrors] = React.useState<{
     fullName?: string;
     username?: string;
@@ -569,9 +595,12 @@ function UserFormDialog({
         fullName: draft.fullName.trim(),
         username: draft.username.trim(),
         telegramHandle: draft.telegramHandle?.trim() || null,
-        customPrices: Object.entries(prices)
-          .filter(([, value]) => value !== "")
-          .map(([serviceId, value]) => ({ serviceId, price: Number(value) })),
+        groupId: draft.groupId || null,
+        customPrices: draft.groupId
+          ? []
+          : Object.entries(prices)
+              .filter(([, value]) => value !== "")
+              .map(([serviceId, value]) => ({ serviceId, price: Number(value) })),
         ...(password ? { password } : {}),
       });
     } finally {
@@ -661,7 +690,55 @@ function UserFormDialog({
             }
           />
         </Field>
-        {services.length > 0 ? (
+        <Field
+          label="Group"
+          htmlFor="groupId"
+          hint={
+            groups.length
+              ? "Member group memakai harga group; harga khusus pribadi tidak berlaku."
+              : "Belum ada group. Buat di menu Groups."
+          }
+        >
+          <Select
+            id="groupId"
+            value={draft.groupId ?? NO_GROUP}
+            onValueChange={(value) =>
+              setDraft((current) => ({
+                ...current,
+                groupId: value === NO_GROUP ? null : value,
+              }))
+            }
+            options={[
+              { value: NO_GROUP, label: "Tanpa group" },
+              ...groups.map((group) => ({ value: group.id, label: group.name })),
+            ]}
+          />
+        </Field>
+        {selectedGroup ? (
+          <div className="space-y-2 rounded-md border border-action/30 bg-action-wash px-3.5 py-3">
+            <p className="text-body font-medium text-ink">
+              Harga mengikuti {selectedGroup.name}
+            </p>
+            <ul className="space-y-0.5">
+              {services.map((service) => {
+                const groupPrice = selectedGroup.prices.find(
+                  (p) => p.serviceId === service.id,
+                )?.price;
+                return (
+                  <li key={service.id} className="flex justify-between gap-3 text-body">
+                    <span className="text-ink-soft">{service.name}</span>
+                    <DataValue>{formatRupiah(groupPrice ?? service.price)}</DataValue>
+                  </li>
+                );
+              })}
+            </ul>
+            {hadCustomPrices ? (
+              <p className="text-body text-working-ink">
+                Harga khusus pribadi user ini akan dihapus saat disimpan.
+              </p>
+            ) : null}
+          </div>
+        ) : services.length > 0 ? (
           <fieldset className="space-y-3 rounded-md border border-hairline p-3.5">
             <legend className="px-1 text-body font-medium text-ink">
               Harga khusus per layanan
@@ -691,6 +768,30 @@ function UserFormDialog({
             ))}
           </fieldset>
         ) : null}
+        <Field
+          label="Role"
+          htmlFor="role"
+          hint={
+            draft.role === "testing"
+              ? "Order akun ini tetap diproses & dibayar seperti biasa, tapi tidak dihitung di statistik dan pendapatan."
+              : undefined
+          }
+        >
+          <Select
+            id="role"
+            value={draft.role ?? "customer"}
+            onValueChange={(value) =>
+              setDraft((current) => ({
+                ...current,
+                role: value === "testing" ? "testing" : "customer",
+              }))
+            }
+            options={[
+              { value: "customer", label: "User" },
+              { value: "testing", label: "Testing" },
+            ]}
+          />
+        </Field>
         <Field label="Status" htmlFor="status">
           <Select
             id="status"

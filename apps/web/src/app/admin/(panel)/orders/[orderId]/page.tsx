@@ -75,7 +75,12 @@ export default async function AdminOrderDetailPage({
                 <p className="text-label uppercase text-ink-soft">Order ID</p>
                 <TicketId className="mt-1 block">{order.orderId}</TicketId>
               </div>
-              <StatusBadge status={order.status} />
+              <div className="flex flex-wrap items-center justify-end gap-1.5">
+                {order.isTest ? (
+                  <Tag className="border-working-edge bg-working-wash text-working-ink">🧪 Testing</Tag>
+                ) : null}
+                <StatusBadge status={order.status} />
+              </div>
             </CardHeader>
 
             <CardBody className="pt-3">

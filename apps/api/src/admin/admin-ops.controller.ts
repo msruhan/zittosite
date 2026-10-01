@@ -40,6 +40,7 @@ type Json = Record<string, unknown>;
 
 const TOTP_HEADER = "x-totp-code";
 const FULFILLMENT_CHANNELS = ["telegram", "whatsapp"] as const;
+const USER_ROLES = ["customer", "testing"] as const;
 const WIB_OFFSET_MS = 7 * 60 * 60 * 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -116,6 +117,8 @@ export class AdminOpsController {
       password: optString(body.password, "Password", 200),
       telegramHandle: optNullableString(body.telegramHandle, "Telegram", 64),
       customPrices: optServicePrices(body.customPrices, "Harga khusus"),
+      groupId: optNullableString(body.groupId, "Group", 64),
+      role: optEnum(body.role, USER_ROLES, "Role"),
       botAccess: optBoolean(body.botAccess, "Akses bot"),
     });
     this.audit.record("admin.user.created", {
@@ -136,6 +139,8 @@ export class AdminOpsController {
       fullName: optString(body.fullName, "Nama lengkap", 120),
       telegramHandle: optNullableString(body.telegramHandle, "Telegram", 64),
       customPrices: optServicePrices(body.customPrices, "Harga khusus"),
+      groupId: optNullableString(body.groupId, "Group", 64),
+      role: optEnum(body.role, USER_ROLES, "Role"),
       status: optEnum(body.status, ["active", "suspended"] as const, "Status"),
       botAccess: optBoolean(body.botAccess, "Akses bot"),
       password: optString(body.password, "Password", 200),
@@ -146,6 +151,8 @@ export class AdminOpsController {
       userId: id,
       status: input.status,
       passwordReset: Boolean(input.password),
+      groupId: input.groupId,
+      role: input.role,
     });
     return user;
   }

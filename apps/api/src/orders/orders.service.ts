@@ -13,6 +13,8 @@ import {
   type OrderStatus,
   type ResultStatus,
 } from "@prisma/client";
+import { processDurationLabel } from "./process-duration";
+import { resolveUserPrice } from "./user-price";
 import { userOrderNoticeHtml } from "../telegram/telegram-messages";
 import { PrismaService } from "../prisma/prisma.service";
 import { paymentSimulationEnabled, webPublicUrl } from "../config/env";
@@ -82,13 +84,29 @@ export class OrdersService {
   ) {}
 
   async listServices(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { groupId: true },
+    });
+    const groupId = user?.groupId ?? null;
     const services = await this.prisma.service.findMany({
       where: { active: true },
       orderBy: { name: "asc" },
-      include: { userPrices: { where: { userId }, select: { price: true } } },
+      include: {
+        userPrices: { where: { userId }, select: { price: true } },
+        groupPrices: { where: { groupId: groupId ?? "" }, select: { price: true } },
+      },
     });
-    return services.map(({ userPrices, ...service }) =>
-      serializeService(service, userPrices[0]?.price ?? service.price),
+    return services.map(({ userPrices, groupPrices, ...service }) =>
+      serializeService(
+        service,
+        resolveUserPrice({
+          defaultPrice: service.price,
+          groupId,
+          groupPrice: groupPrices[0]?.price,
+          personalPrice: userPrices[0]?.price,
+        }),
+      ),
     );
   }
 
@@ -202,8 +220,19 @@ export class OrdersService {
     if (!service || !service.active) {
       throw new BadRequestException("Layanan tidak tersedia.");
     }
+    const groupPrice = user.groupId
+      ? await this.prisma.userGroupPrice.findUnique({
+          where: { groupId_serviceId: { groupId: user.groupId, serviceId } },
+          select: { price: true },
+        })
+      : null;
 
-    const price = override?.price ?? service.price;
+    const price = resolveUserPrice({
+      defaultPrice: service.price,
+      groupId: user.groupId,
+      groupPrice: groupPrice?.price,
+      personalPrice: override?.price,
+    });
     const total = price * imeis.length;
     const orderIds = await this.nextOrderIds(imeis.length);
     const invoiceId = `INV-${orderIds[0]}`;
@@ -249,6 +278,7 @@ export class OrdersService {
           invoiceId,
           amount: total,
           balanceUsed,
+          isTest: user.role === "testing",
           paymentStatus: "pending",
           expiredAt,
           ...(gateway
@@ -291,6 +321,7 @@ export class OrdersService {
             notes,
             status: "waiting_payment",
             price,
+            isTest: user.role === "testing",
             activity: {
               create: {
                 status: "waiting_payment",
@@ -775,6 +806,7 @@ export class OrdersService {
         orderId: updated.orderId,
         reason: note,
         refund: refunded,
+        duration: processDurationLabel(updated),
       }),
     );
     return serializeOrderListItem(updated);
@@ -865,6 +897,7 @@ export class OrdersService {
         resultStatus: input.resultStatus,
         note: typedNote,
         refund: refunded,
+        duration: processDurationLabel(updated),
       }),
     );
     return serializeOrderListItem(updated);
@@ -984,6 +1017,7 @@ export class OrdersService {
           orderId: updated.orderId,
           resultStatus: "success",
           note: "",
+          duration: processDurationLabel(updated),
         }),
       );
     } else {
@@ -996,6 +1030,7 @@ export class OrdersService {
           orderId: updated.orderId,
           reason: note,
           refund: updated.refunded,
+          duration: processDurationLabel(updated),
         }),
       );
     }

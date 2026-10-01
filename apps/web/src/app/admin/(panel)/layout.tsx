@@ -32,6 +32,7 @@ export default async function AdminPanelLayout({
           ? undefined
           : [
               "/admin/users",
+              "/admin/groups",
               "/admin/services",
               "/admin/running-ads",
               "/admin/admins",

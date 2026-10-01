@@ -76,7 +76,12 @@ export interface User {
   telegramLinked?: { label: string; chatReady: boolean } | null;
   /** Admin Users page only: per-service overrides; missing services use the service price. */
   customPrices?: UserServicePrice[];
+  /** Admin Users page only: pricing group; while set, personal prices do not apply. */
+  groupId?: string | null;
+  groupName?: string | null;
   creditBalance?: number;
+  /** `testing` accounts order normally but are left out of statistics. */
+  role?: "customer" | "testing";
   status: UserStatus;
   botAccess: boolean;
   createdAt: string;
@@ -156,12 +161,24 @@ export interface Order {
   status: OrderStatus;
   /** Keterangan for rejected/cancelled orders; null means none. */
   statusReason?: string | null;
+  /** Placed by a testing account; excluded from statistics. */
+  isTest?: boolean;
   price: number;
   assignedAdminId: string | null;
   startedAt: string | null;
   completedAt: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+/** Pricing group managed by Super Admin; services without a price use the default. */
+export interface UserGroup {
+  id: string;
+  name: string;
+  description: string;
+  prices: UserServicePrice[];
+  members: Array<{ id: string; username: string; fullName: string }>;
+  createdAt: string;
 }
 
 export type RunningAdColor = "yellow" | "red" | "green" | "blue" | "white";

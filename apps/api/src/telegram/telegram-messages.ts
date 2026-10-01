@@ -507,6 +507,10 @@ export function newOrderAdminHtml(input: {
   ].join("\n");
 }
 
+function durationLines(duration?: string): string[] {
+  return duration ? [row("⏱️", "Waktu proses", duration)] : [];
+}
+
 const FOLLOW_UP_TITLE = {
   taken: "🛠️ <b>Order diambil admin</b>",
   rejected: "❌ <b>Order ditolak admin</b>",
@@ -523,6 +527,7 @@ export function superAdminFollowUpHtml(input: {
   adminUsername: string;
   adminFullName: string;
   note?: string;
+  duration?: string;
 }): string {
   return [
     FOLLOW_UP_TITLE[input.kind],
@@ -540,6 +545,7 @@ export function superAdminFollowUpHtml(input: {
     ...(input.note
       ? [row("📝", input.kind === "done" ? "Hasil" : "Alasan", input.note)]
       : []),
+    ...durationLines(input.duration),
   ].join("\n");
 }
 
@@ -568,6 +574,7 @@ export function orderCardRejectedHtml(input: {
   customer?: CardCustomer;
   actorName: string;
   reason?: string;
+  duration?: string;
 }): string {
   return [
     "❌ <b>REJECTED</b>",
@@ -578,6 +585,7 @@ export function orderCardRejectedHtml(input: {
     row("📦", "Layanan", input.serviceName),
     row("👷", "Oleh", input.actorName),
     ...(input.reason ? [row("📝", "Alasan", input.reason)] : []),
+    ...durationLines(input.duration),
   ].join("\n");
 }
 
@@ -608,6 +616,7 @@ export function orderCardDoneHtml(input: {
   customer?: CardCustomer;
   actorName: string;
   note: string;
+  duration?: string;
 }): string {
   return [
     "✅ <b>DONE</b>",
@@ -618,6 +627,7 @@ export function orderCardDoneHtml(input: {
     row("📦", "Layanan", input.serviceName),
     row("👷", "Oleh", input.actorName),
     row("📝", "Hasil", input.note),
+    ...durationLines(input.duration),
   ].join("\n");
 }
 
@@ -748,13 +758,20 @@ const RESULT_LABEL: Record<string, string> = {
 type UserOrderNotice =
   | { kind: "paid"; orderId: string; imei: string; serviceName: string }
   | { kind: "taken"; orderId: string }
-  | { kind: "rejected"; orderId: string; reason?: string; refund?: number }
+  | {
+      kind: "rejected";
+      orderId: string;
+      reason?: string;
+      refund?: number;
+      duration?: string;
+    }
   | {
       kind: "done";
       orderId: string;
       resultStatus: string;
       note: string;
       refund?: number;
+      duration?: string;
     }
   | {
       kind: "cancelled";
@@ -800,6 +817,7 @@ export function userOrderNoticeHtml(notice: UserOrderNotice): string {
         "",
         id,
         ...(notice.reason ? [row("📝", "Alasan", notice.reason)] : []),
+        ...durationLines(notice.duration),
         ...refundLines(notice.refund),
       ].join("\n");
     case "done":
@@ -809,6 +827,7 @@ export function userOrderNoticeHtml(notice: UserOrderNotice): string {
         id,
         row("📊", "Hasil", RESULT_LABEL[notice.resultStatus] ?? notice.resultStatus),
         ...(notice.note ? [row("📝", "Catatan", notice.note)] : []),
+        ...durationLines(notice.duration),
         ...refundLines(notice.refund),
       ].join("\n");
     case "cancelled":

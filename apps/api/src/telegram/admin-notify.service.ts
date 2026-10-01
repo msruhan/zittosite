@@ -11,11 +11,25 @@ import {
   userOrderNoticeHtml,
   type CardCustomer,
 } from "./telegram-messages";
+import { processDurationLabel } from "../orders/process-duration";
+
+const DURATION_INCLUDE = {
+  invoice: { select: { paidAt: true } },
+  activity: {
+    select: { status: true, createdAt: true },
+    orderBy: { createdAt: "asc" as const },
+  },
+};
 
 /**
  * Customer username and price go only to a Super Admin's private chat, never to
  * operators or group chats (Telegram group/supergroup chat ids are negative).
  */
+/** Test-account orders carry a banner so admins know they are excluded from statistics. */
+function withTestBanner(isTest: boolean, html: string): string {
+  return isTest ? `🧪 <b>TESTING</b> · tidak dihitung statistik\n${html}` : html;
+}
+
 function showsCustomer(dest: { role: string; chatId: string }): boolean {
   return dest.role === "super_admin" && !dest.chatId.startsWith("-");
 }
@@ -113,17 +127,23 @@ export class AdminNotifyService {
       imei: order.imei,
       serviceName: order.service.name,
     };
-    const operatorHtml = newOrderAdminHtml({ ...cardInput, viaWhatsapp });
-    const superAdminHtml = newOrderAdminHtml({
-      ...cardInput,
-      customer: {
-        username: order.user.username,
-        channel: order.channel,
-        price: order.price,
-      },
-      assignedAdmins: assignedNames,
-      viaWhatsapp,
-    });
+    const operatorHtml = withTestBanner(
+      order.isTest,
+      newOrderAdminHtml({ ...cardInput, viaWhatsapp }),
+    );
+    const superAdminHtml = withTestBanner(
+      order.isTest,
+      newOrderAdminHtml({
+        ...cardInput,
+        customer: {
+          username: order.user.username,
+          channel: order.channel,
+          price: order.price,
+        },
+        assignedAdmins: assignedNames,
+        viaWhatsapp,
+      }),
+    );
     const replyMarkup = {
       inline_keyboard: [
         [
@@ -218,9 +238,12 @@ export class AdminNotifyService {
         telegramNotifications: {
           include: { admin: { select: { role: true } } },
         },
+        ...DURATION_INCLUDE,
       },
     });
     if (!order) return;
+    const duration =
+      kind === "done" || kind === "rejected" ? processDurationLabel(order) : undefined;
 
     const render = (customer?: CardCustomer): string => {
       const base = {
@@ -235,16 +258,16 @@ export class AdminNotifyService {
         return orderCardCancelledHtml({ ...base, reason: meta.note ?? "—" });
       }
       if (kind === "rejected") {
-        return orderCardRejectedHtml({ ...base, reason: meta.note });
+        return orderCardRejectedHtml({ ...base, reason: meta.note, duration });
       }
-      return orderCardDoneHtml({ ...base, note: meta.note ?? "—" });
+      return orderCardDoneHtml({ ...base, note: meta.note ?? "—", duration });
     };
-    const operatorHtml = render();
-    const superAdminHtml = render({
+    const operatorHtml = withTestBanner(order.isTest, render());
+    const superAdminHtml = withTestBanner(order.isTest, render({
       username: order.user.username,
       channel: order.channel,
       price: order.price,
-    });
+    }));
 
     let keyboard: { text: string; callback_data: string }[][] = [];
     if (kind === "taken") {
@@ -293,8 +316,8 @@ export class AdminNotifyService {
     }
   }
 
-  /** Fresh (audible) message to super admins, skipping the acting admin. Never throws. */
   /**
+   * Fresh (audible) message to super admins, skipping the acting admin. Never throws.
    * `includeActor` also messages the acting Super Admin, for actions taken on
    * the website where the bot chat shows no confirmation of its own.
    */
@@ -310,7 +333,11 @@ export class AdminNotifyService {
     try {
       const order = await this.prisma.order.findUnique({
         where: { id: internalOrderId },
-        include: { service: true, user: { select: { username: true } } },
+        include: {
+          service: true,
+          user: { select: { username: true } },
+          ...DURATION_INCLUDE,
+        },
       });
       if (!order) return;
 
@@ -329,12 +356,14 @@ export class AdminNotifyService {
         adminUsername: actor.username,
         adminFullName: actor.fullName,
         note,
+        duration:
+          kind === "done" || kind === "rejected" ? processDurationLabel(order) : undefined,
       };
-      const withCustomer = superAdminFollowUpHtml({
+      const withCustomer = withTestBanner(order.isTest, superAdminFollowUpHtml({
         ...base,
         customer: { username: order.user.username, price: order.price },
-      });
-      const withoutCustomer = superAdminFollowUpHtml(base);
+      }));
+      const withoutCustomer = withTestBanner(order.isTest, superAdminFollowUpHtml(base));
       for (const dest of recipients) {
         await this.sendMessage(
           token,

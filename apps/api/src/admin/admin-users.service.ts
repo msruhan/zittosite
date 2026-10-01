@@ -21,12 +21,14 @@ import type { ServicePriceInput } from "../security/input";
 const managedUserInclude = {
   servicePrices: true,
   identities: { where: { provider: "telegram" } },
+  group: { select: { id: true, name: true } },
 } satisfies Prisma.UserInclude;
 
 function serializeManagedUser(
   user: User & {
     servicePrices: UserServicePrice[];
     identities: UserIdentity[];
+    group: { id: string; name: string } | null;
   },
 ) {
   const telegram = user.identities[0];
@@ -42,6 +44,8 @@ function serializeManagedUser(
       serviceId,
       price,
     })),
+    groupId: user.groupId,
+    groupName: user.group?.name ?? null,
   };
 }
 
@@ -81,6 +85,8 @@ export class AdminUsersService {
     password?: string;
     telegramHandle?: string | null;
     customPrices?: ServicePriceInput[];
+    groupId?: string | null;
+    role?: "customer" | "testing";
     botAccess?: boolean;
   }) {
     const username = String(input.username ?? "")
@@ -96,6 +102,7 @@ export class AdminUsersService {
     const exists = await this.prisma.user.findUnique({ where: { username } });
     if (exists) throw new ConflictException("Username sudah dipakai.");
     await this.assertServicesExist(input.customPrices);
+    await this.assertGroupExists(input.groupId);
 
     const user = await this.prisma.$transaction(async (tx) => {
       const created = await tx.user.create({
@@ -106,9 +113,15 @@ export class AdminUsersService {
           telegramHandle: input.telegramHandle?.trim() || null,
           botAccess: input.botAccess !== false,
           status: "active",
+          groupId: input.groupId || null,
+          role: input.role ?? "customer",
         },
       });
-      await this.replacePrices(tx, created.id, input.customPrices);
+      await this.replacePrices(
+        tx,
+        created.id,
+        input.groupId ? [] : input.customPrices,
+      );
       return tx.user.findUniqueOrThrow({
         where: { id: created.id },
         include: managedUserInclude,
@@ -123,6 +136,8 @@ export class AdminUsersService {
       fullName?: string;
       telegramHandle?: string | null;
       customPrices?: ServicePriceInput[];
+      groupId?: string | null;
+      role?: "customer" | "testing";
       status?: "active" | "suspended";
       botAccess?: boolean;
       password?: string;
@@ -135,6 +150,9 @@ export class AdminUsersService {
     const policyError = password ? passwordPolicyError(password) : null;
     if (policyError) throw new BadRequestException(policyError);
     await this.assertServicesExist(input.customPrices);
+    await this.assertGroupExists(input.groupId);
+    const nextGroupId =
+      input.groupId === undefined ? existing.groupId : input.groupId || null;
     const passwordHash = password ? await bcrypt.hash(password, 10) : null;
 
     const user = await this.prisma.$transaction(async (tx) => {
@@ -148,13 +166,15 @@ export class AdminUsersService {
             ? { telegramHandle: input.telegramHandle?.trim() || null }
             : {}),
           ...(input.status ? { status: input.status } : {}),
+          ...(input.role ? { role: input.role } : {}),
           ...(typeof input.botAccess === "boolean"
             ? { botAccess: input.botAccess }
             : {}),
           ...(passwordHash ? { passwordHash } : {}),
+          ...(input.groupId !== undefined ? { groupId: nextGroupId } : {}),
         },
       });
-      await this.replacePrices(tx, id, input.customPrices);
+      await this.replacePrices(tx, id, nextGroupId ? [] : input.customPrices);
       return tx.user.findUniqueOrThrow({
         where: { id },
         include: managedUserInclude,
@@ -223,6 +243,12 @@ export class AdminUsersService {
     }
     await this.prisma.user.delete({ where: { id } });
     return { deleted: true, suspended: false };
+  }
+
+  private async assertGroupExists(groupId?: string | null) {
+    if (!groupId) return;
+    const group = await this.prisma.userGroup.findUnique({ where: { id: groupId } });
+    if (!group) throw new BadRequestException("Group tidak ditemukan.");
   }
 
   private async assertServicesExist(prices?: ServicePriceInput[]) {

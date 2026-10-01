@@ -62,6 +62,11 @@ export function AdminOrderTable({
                 >
                   {order.orderId}
                 </Link>
+                {order.isTest ? (
+                  <span className="mt-1 block">
+                    <Tag className="border-working-edge bg-working-wash text-working-ink">🧪 Testing</Tag>
+                  </span>
+                ) : null}
               </TD>
               <TD className="py-2.5">
                 {order.user ? (
