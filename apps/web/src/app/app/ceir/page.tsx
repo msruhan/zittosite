@@ -23,7 +23,7 @@ export default async function OrderCeirPage() {
     <>
       <PageHeader
         title="Order Ceir"
-        description="Order Anda untuk layanan Ceir yang diproses otomatis oleh CeirBot."
+        description="Order Anda untuk layanan Ceir yang diproses otomatis oleh Supplier API."
       />
       <OrderHistory
         orders={orders}

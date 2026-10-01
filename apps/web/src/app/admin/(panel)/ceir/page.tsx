@@ -26,7 +26,7 @@ export default async function AdminOrderCeirPage() {
     <>
       <PageHeader
         title="Order Ceir"
-        description="Semua order yang diteruskan ke supplier CeirBot lewat API key, lengkap dengan referensi dan error dari supplier."
+        description="Semua order yang diteruskan ke Supplier API lewat API key, lengkap dengan referensi dan error dari supplier."
       />
       <AdminOrderManagement
         orders={orders}

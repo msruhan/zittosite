@@ -314,7 +314,7 @@ export function AdminOrderManagement({
         ) : supplierView && orders.length === 0 ? (
           <EmptyState
             title="Belum ada order Ceir"
-            description="Order layanan yang diteruskan ke supplier CeirBot akan muncul di sini."
+            description="Order layanan yang diteruskan ke Supplier API akan muncul di sini."
           />
         ) : (
           <EmptyState

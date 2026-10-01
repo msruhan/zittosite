@@ -21,8 +21,10 @@ import {
   Table,
   TableScroll,
 } from "@/components/ui/table";
+import { SupplierImportPanel } from "@/components/domain/supplier-import-panel";
 import { formatRupiah } from "@/lib/format";
 import { ApiError, api } from "@/lib/api";
+import { cn } from "@/lib/utils";
 import type {
   Admin,
   FulfillmentChannel,
@@ -360,11 +362,17 @@ export function ServiceManagement({
             operators={operators}
             suppliers={suppliers}
             creating={creating}
+            existingServices={services}
             onCancel={() => {
               setEditing(null);
               setCreating(false);
             }}
             onSave={handleSave}
+            onImported={async () => {
+              await reload();
+              setEditing(null);
+              setCreating(false);
+            }}
           />
         ) : null}
       </Dialog>
@@ -464,21 +472,58 @@ function OperatorPicker({
   );
 }
 
+type CreateTab = "manual" | "api";
+
+function CreateTabs({ value, onChange }: { value: CreateTab; onChange: (tab: CreateTab) => void }) {
+  const tabs: Array<{ id: CreateTab; label: string }> = [
+    { id: "manual", label: "Tambah manual" },
+    { id: "api", label: "Tambah dari API" },
+  ];
+  return (
+    <div role="tablist" aria-label="Cara menambah layanan" className="mb-5 grid grid-cols-2 gap-1 rounded-lg bg-mist p-1">
+      {tabs.map((tab) => (
+        <button
+          key={tab.id}
+          type="button"
+          role="tab"
+          aria-selected={value === tab.id}
+          onClick={() => onChange(tab.id)}
+          className={cn(
+            "h-9 rounded-md text-body font-bold transition-[background-color,color,box-shadow] duration-150 ease-out-strong",
+            value === tab.id
+              ? "bg-surface text-ink shadow-resting"
+              : "text-ink-soft hover:text-ink",
+          )}
+        >
+          {tab.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function ServiceFormDialog({
   service,
   operators,
   suppliers,
   creating,
+  existingServices,
   onCancel,
   onSave,
+  onImported,
 }: {
   service: ServiceDraft;
   operators: Admin[];
   suppliers: Supplier[];
   creating: boolean;
+  existingServices: Service[];
   onCancel: () => void;
   onSave: (service: ServiceDraft) => void | Promise<void>;
+  onImported: () => void | Promise<void>;
 }) {
+  const [tab, setTab] = React.useState<CreateTab>("manual");
+  const [importBusy, setImportBusy] = React.useState(false);
+  const [importCount, setImportCount] = React.useState(0);
   const [draft, setDraft] = React.useState(() => {
     const operatorIds = new Set(operators.map((operator) => operator.id));
     return {
@@ -541,26 +586,56 @@ function ServiceFormDialog({
     }
   }
 
+  const importing = creating && tab === "api";
+
   return (
     <DialogContent
+      className={creating ? "max-w-2xl" : undefined}
       title={creating ? "Tambah layanan" : "Edit layanan"}
-      description="Layanan nonaktif tidak muncul saat user membuat order."
+      description={
+        importing
+          ? "Pilih layanan dari supplier API. Harga modal diisi dari harga supplier."
+          : "Layanan nonaktif tidak muncul saat user membuat order."
+      }
       footer={
         <>
           <Button type="button" variant="ghost" onClick={onCancel}>
             Batal
           </Button>
-          <Button
-            type="submit"
-            form="service-form"
-            loading={saving}
-            loadingLabel="Menyimpan"
-          >
-            Simpan
-          </Button>
+          {importing ? (
+            <Button
+              type="submit"
+              form="supplier-import-form"
+              disabled={importCount === 0}
+              loading={importBusy}
+              loadingLabel="Menambahkan"
+            >
+              {importCount ? `Tambahkan ${importCount} layanan` : "Pilih layanan"}
+            </Button>
+          ) : (
+            <Button
+              type="submit"
+              form="service-form"
+              loading={saving}
+              loadingLabel="Menyimpan"
+            >
+              Simpan
+            </Button>
+          )}
         </>
       }
     >
+      {creating ? <CreateTabs value={tab} onChange={setTab} /> : null}
+      {importing ? (
+        <SupplierImportPanel
+          formId="supplier-import-form"
+          suppliers={suppliers}
+          existingServices={existingServices}
+          onBusyChange={setImportBusy}
+          onSelectionChange={setImportCount}
+          onImported={onImported}
+        />
+      ) : (
       <form
         id="service-form"
         onSubmit={handleSubmit}
@@ -729,6 +804,7 @@ function ServiceFormDialog({
           />
         ) : null}
       </form>
+      )}
     </DialogContent>
   );
 }
