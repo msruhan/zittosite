@@ -18,8 +18,8 @@ export class OrdersController {
   constructor(private readonly orders: OrdersService) {}
 
   @Get()
-  list(@Req() req: any, @Query("q") q?: string) {
-    return this.orders.listOrders(req.user.sub, q);
+  list(@Req() req: any, @Query("q") q?: string, @Query("via") via?: string) {
+    return this.orders.listOrders(req.user.sub, q, via === "supplier");
   }
 
   @Post()

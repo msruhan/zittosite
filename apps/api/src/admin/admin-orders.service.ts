@@ -6,6 +6,7 @@ import {
 import { Prisma, type OrderStatus } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
 import { serializeOrderListItem } from "../orders/orders.serializer";
+import { SUPPLIER_ROUTED_ORDER } from "../orders/supplier-routed";
 import {
   refundNote,
   refundOrderToBalance,
@@ -61,7 +62,7 @@ export class AdminOrdersService {
     return viewer?.role !== "super_admin";
   }
 
-  async list(viewerAdminId: string, q?: string, status?: string) {
+  async list(viewerAdminId: string, q?: string, status?: string, supplierOnly = false) {
     const redactUser = await this.redactFor(viewerAdminId);
     const needle = String(q ?? "").trim();
     const statusFilter =
@@ -86,6 +87,7 @@ export class AdminOrdersService {
     const rows = await this.prisma.order.findMany({
       where: {
         ...(statusFilter ? { status: statusFilter } : {}),
+        ...(supplierOnly ? { AND: [SUPPLIER_ROUTED_ORDER] } : {}),
         ...(needle
           ? {
               OR: [

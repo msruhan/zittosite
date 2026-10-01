@@ -16,9 +16,13 @@ import type { OrderDetail, OrderStatus } from "@/lib/types";
 export function OrderHistory({
   orders,
   fetchedAt,
+  emptyTitle = "Belum ada order",
+  emptyDescription = "Mulai buat order pertamamu.",
 }: {
   orders: OrderDetail[];
   fetchedAt: string;
+  emptyTitle?: string;
+  emptyDescription?: string;
 }) {
   const [query, setQuery] = React.useState("");
   const [status, setStatus] = React.useState<OrderStatus | "all">("all");
@@ -77,8 +81,8 @@ export function OrderHistory({
         ) : orders.length === 0 ? (
           <EmptyState
             icon={<Package weight="regular" />}
-            title="Belum ada order"
-            description="Mulai buat order pertamamu."
+            title={emptyTitle}
+            description={emptyDescription}
             action={
               <Button asChild>
                 <Link href="/app/order">Buat Order</Link>

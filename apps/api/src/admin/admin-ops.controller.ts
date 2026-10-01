@@ -283,8 +283,9 @@ export class AdminOpsController {
     @Req() req: AdminReq,
     @Query("q") q?: string,
     @Query("status") status?: string,
+    @Query("via") via?: string,
   ) {
-    return this.orders.list(req.admin.sub, q, status);
+    return this.orders.list(req.admin.sub, q, status, via === "supplier");
   }
 
   @Get("orders/:orderId")

@@ -31,6 +31,26 @@ const STATUS_CHOICES = ORDER_STATUS_OPTIONS.filter(
   (o): o is { value: OrderStatus; label: string } => o.value !== "all",
 );
 
+function SupplierCell({ order }: { order: OrderDetail }) {
+  const supplier = order.supplier;
+  if (!supplier) return <span className="text-ink-faint">Belum diteruskan</span>;
+  return (
+    <div className="max-w-56">
+      <p className="font-medium text-ink">{supplier.name}</p>
+      {supplier.error ? (
+        <p className="truncate text-body text-refused-ink" title={supplier.error}>
+          {supplier.error}
+          {supplier.attempts > 1 ? ` · ${supplier.attempts}x` : ""}
+        </p>
+      ) : (
+        <p className="font-data text-body text-ink-soft">
+          {supplier.reference ? `Ref ${supplier.reference}` : "Menunggu dikirim"}
+        </p>
+      )}
+    </div>
+  );
+}
+
 /** Cancelling these goes through the cancel flow so the invoice closes and everyone is notified. */
 const CANCEL_FLOW_FROM: OrderStatus[] = [
   "waiting_payment",
@@ -45,12 +65,15 @@ export function AdminOrderManagement({
   initialQuery = "",
   showCustomerIdentity = true,
   canEditStatus = false,
+  supplierView = false,
 }: {
   orders: OrderDetail[];
   fetchedAt: string;
   initialQuery?: string;
   showCustomerIdentity?: boolean;
   canEditStatus?: boolean;
+  /** Swap the Admin column for service and supplier forwarding details. */
+  supplierView?: boolean;
 }) {
   const router = useRouter();
   const [query, setQuery] = React.useState(initialQuery);
@@ -101,7 +124,10 @@ export function AdminOrderManagement({
       if (!needle) return true;
       const matchesIdOrImei =
         order.orderId.toLowerCase().includes(needle) ||
-        order.imei.toLowerCase().includes(needle);
+        order.imei.toLowerCase().includes(needle) ||
+        (supplierView &&
+          (order.service.name.toLowerCase().includes(needle) ||
+            Boolean(order.supplier?.reference?.toLowerCase().includes(needle))));
       if (!showCustomerIdentity || !order.user) return matchesIdOrImei;
       return (
         matchesIdOrImei ||
@@ -109,7 +135,7 @@ export function AdminOrderManagement({
         order.user.username.toLowerCase().includes(needle)
       );
     });
-  }, [orders, query, status, showCustomerIdentity]);
+  }, [orders, query, status, showCustomerIdentity, supplierView]);
 
   return (
     <div className="space-y-4">
@@ -125,9 +151,11 @@ export function AdminOrderManagement({
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder={
-              showCustomerIdentity
-                ? "Cari Order ID, IMEI, atau nama user"
-                : "Cari Order ID atau IMEI"
+              supplierView
+                ? "Cari Order ID, IMEI, layanan, ref supplier, atau user"
+                : showCustomerIdentity
+                  ? "Cari Order ID, IMEI, atau nama user"
+                  : "Cari Order ID atau IMEI"
             }
             className="pl-9"
           />
@@ -151,8 +179,9 @@ export function AdminOrderManagement({
                     <TH>Order ID</TH>
                     {showCustomerIdentity ? <TH>User</TH> : null}
                     <TH>IMEI</TH>
+                    {supplierView ? <TH>Layanan</TH> : null}
                     <TH>Harga</TH>
-                    <TH>Admin</TH>
+                    <TH>{supplierView ? "Supplier" : "Admin"}</TH>
                     <TH>Status</TH>
                     <TH>Dibuat</TH>
                     <TH className={canEditStatus ? "w-24" : "w-16"}>Aksi</TH>
@@ -185,11 +214,16 @@ export function AdminOrderManagement({
                           {order.imei}
                         </DataValue>
                       </TD>
+                      {supplierView ? (
+                        <TD className="text-ink">{order.service.name}</TD>
+                      ) : null}
                       <TD>
                         <DataValue>{formatRupiah(order.price)}</DataValue>
                       </TD>
                       <TD className="whitespace-nowrap">
-                        {order.assignedAdmin ? (
+                        {supplierView ? (
+                          <SupplierCell order={order} />
+                        ) : order.assignedAdmin ? (
                           <span className="font-medium text-ink">
                             {order.assignedAdmin.fullName}
                           </span>
@@ -277,6 +311,11 @@ export function AdminOrderManagement({
               <AutoRefreshStatus fetchedAt={fetchedAt} refreshing={refreshing} />
             </div>
           </>
+        ) : supplierView && orders.length === 0 ? (
+          <EmptyState
+            title="Belum ada order Ceir"
+            description="Order layanan yang diteruskan ke supplier CeirBot akan muncul di sini."
+          />
         ) : (
           <EmptyState
             title="Tidak ada order sesuai filter"

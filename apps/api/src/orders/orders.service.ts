@@ -27,6 +27,7 @@ import {
 } from "../payments/sayabayar.client";
 import { serializeOrderListItem, serializeService } from "./orders.serializer";
 import { parseImeiList } from "./imei-list";
+import { SUPPLIER_ROUTED_ORDER } from "./supplier-routed";
 import { TopupService } from "./topup.service";
 import {
   applyBalance,
@@ -111,11 +112,12 @@ export class OrdersService {
     );
   }
 
-  async listOrders(userId: string, q?: string) {
+  async listOrders(userId: string, q?: string, supplierOnly = false) {
     const needle = String(q ?? "").trim();
     const rows = await this.prisma.order.findMany({
       where: {
         userId,
+        ...(supplierOnly ? { AND: [SUPPLIER_ROUTED_ORDER] } : {}),
         ...(needle
           ? {
               OR: [
