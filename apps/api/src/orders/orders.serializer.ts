@@ -23,6 +23,8 @@ type OrderWithRelations = Order & {
       })
     | null;
   activity: OrderActivityLog[];
+  /** Admin queries only. */
+  supplier?: { name: string } | null;
 };
 
 function iso(value: Date | null | undefined): string | null {
@@ -54,6 +56,7 @@ export function serializeUser(user: User) {
     role: user.role,
     status: user.status,
     botAccess: user.botAccess,
+    apiEnabled: user.apiEnabled,
     createdAt: user.createdAt.toISOString(),
   };
 }
@@ -161,6 +164,18 @@ export function serializeOrderListItem(
       ? { ...serializeInvoice(order.invoice)!, orderId: order.orderId }
       : null,
     result: serializeResult(order.result, order.orderId),
+    ...(order.supplier !== undefined
+      ? {
+          supplier: order.supplier
+            ? {
+                name: order.supplier.name,
+                reference: order.supplierRef,
+                error: order.supplierError,
+                attempts: order.supplierAttempts,
+              }
+            : null,
+        }
+      : {}),
     activity: order.activity.map((log) => {
       const entry = serializeActivity(log, order.orderId);
       const actorIsCustomer =

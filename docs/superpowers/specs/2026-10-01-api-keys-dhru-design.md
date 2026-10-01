@@ -61,23 +61,31 @@ Responses always use HTTP 200:
 - Error: `{"ERROR":[{"MESSAGE":"…","FULL_DESCRIPTION":"…"}],"apiversion":"8.2"}`
 
 Status mapping: `waiting_payment`, `paid`, `waiting_action` → 0;
-`in_process` → 1; `rejected`, `cancel` → 3; `done` → 4.
+`in_process` → 1; `rejected`, `cancel` → 3; `done` → 4, except a done order
+whose result failed (it was refunded) → 3.
+
+`CODE` is what Dhru panels show the end customer: the result note for done
+orders, the reason for rejected/cancelled ones. `COMMENTS` carries the reason.
 
 | Action (aliases) | Behaviour |
 |---|---|
 | `accountinfo` | `AccoutInfo`: `credit` (formatted IDR), `creditraw`, `currency: "IDR"`, `username` |
-| `imeiservicelist` (`getservices`) | `LIST` grouped by category; each service has `SERVICEID`, `SERVICENAME`, `CREDIT` (user's price via `resolveUserPrice`), `TIME`, `INFO`. Active services only |
-| `placeimeiorder` (`placeorder`) | Validate IMEI with the existing validator, create the order paid by balance, return `REFERENCEID` (order id) and `MESSAGE` |
-| `placeimeiorderbulk` | Up to 50 items. Balance must cover the whole batch or nothing is created. Per-item `REFERENCEID` or `ERROR` |
-| `orderstatus` (`getimeiorder`, `getserverorder`) | `STATUS`, `CODE` (result), `COMMENTS` (reason). Looked up by `id` **and** `userId` |
-| `orderstatusbulk` | Up to 100 ids, each scoped to the user |
+| `imeiservicelist` (`servicelist`, `getservices`) | `LIST` with one group "IMEI Services" (services have no categories); each service has `SERVICEID` (service code), `SERVICENAME`, `CREDIT` (user's price via `resolveUserPrice`), `TIME`, `INFO`. Active services only |
+| `placeimeiorder` (`placeorder`) | `ID` is the service code (service id also accepted). Validate IMEI with the existing validator, create the order paid by balance, return `REFERENCEID` (public order id) and `MESSAGE` |
+| `placeimeiorderbulk` (`placeorderbulk`) | `parameters` is a JSON array `[{"ID","IMEI"}]` (or an object of such objects), up to 50. Balance must cover the whole batch or nothing is created. Per-item `REFERENCEID` or `ERROR` |
+| `orderstatus` (`getimeiorder`, `getserverorder`) | `orderid` (or `ID`/`REFERENCEID` in parameters). `STATUS`, `CODE`, `COMMENTS`, `MESSAGE`. Looked up by order id **and** `userId` |
+| `orderstatusbulk` (`getimeiorderbulk`, `getserverorderbulk`) | Up to 100 ids (comma list or JSON array), each scoped to the user |
 
 Standard messages: `Authentication failed`, `API access disabled`,
 `Insufficient balance`, `Invalid IMEI`, `Service not found`, `Order not found`,
 `Unsupported action`, `Too many requests`, `Internal error`. Internal errors are
 logged; clients never see stack traces.
 
-Rate limits per key: 60 requests/minute overall, 20 order placements/minute.
+Rate limits (in memory; the API is a single process): 120 requests/minute and
+20 order placements/minute per key; 20 failed logins per IP per 10 minutes
+blocks that IP for the rest of the window. The endpoint skips the global IP
+throttler. Multipart bodies (PHP curl with an array) are parsed as well as
+urlencoded.
 
 ## Webhooks
 
@@ -85,11 +93,12 @@ Rate limits per key: 60 requests/minute overall, 20 order placements/minute.
   whose owner has an active endpoint and no delivery for that event get a
   `pending` delivery. Final states are set from several paths (Telegram
   operator, Roamercheck, admin web, cancel); scanning covers all of them.
-- Events: `order.completed`, `order.rejected`, `order.cancelled`.
+- Events: `order.completed`, `order.rejected` (also a done order with a failed
+  result), `order.cancelled`. A later status change sends the new event.
 - Payload: `event`, `referenceId`, `imei`, `service`, `status` (Dhru code),
   `code`, `comments`, `completedAt`.
-- Headers: `X-Timestamp`, `X-Signature: sha256=<HMAC-SHA256(secret,
-  timestamp + "." + body)>`.
+- Headers: `X-Webhook-Id`, `X-Webhook-Event`, `X-Timestamp`,
+  `X-Signature: sha256=<HMAC-SHA256(secret, timestamp + "." + body)>`.
 - Delivery: 10 s timeout, no redirects. 2xx = success. Retries at 1 m, 5 m,
   15 m, 1 h, 6 h, then `failed`. 10 consecutive failures pause the endpoint
   (`is_active = false`); the portal shows the status.

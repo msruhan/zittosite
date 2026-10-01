@@ -1,11 +1,50 @@
 import { Injectable } from "@nestjs/common";
-import type { OrderStatus } from "@prisma/client";
+import type { OrderChannel, OrderStatus, Prisma } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
+
+/** Orders whose sale stands: done and not refunded through a failed result. */
+const EARNED_ORDER: Prisma.OrderWhereInput = {
+  isTest: false,
+  status: "done",
+  NOT: { result: { is: { resultStatus: "failed" } } },
+};
+
+const CHANNELS: { key: OrderChannel; name: string }[] = [
+  { key: "web", name: "Website" },
+  { key: "telegram", name: "Telegram" },
+  { key: "api", name: "API" },
+];
+
+type Money = { revenue: number; cost: number; profit: number; orders: number };
+
+function emptyMoney(): Money {
+  return { revenue: 0, cost: 0, profit: 0, orders: 0 };
+}
+
+function addSale(target: Money, sale: { price: number; costPrice: number }) {
+  target.revenue += sale.price;
+  target.cost += sale.costPrice;
+  target.profit += sale.price - sale.costPrice;
+  target.orders += 1;
+}
+
+/** Index of the day bucket containing `at`, or -1 when before the first day. */
+function dayIndexOf(dayStarts: Date[], at: Date): number {
+  for (let i = dayStarts.length - 1; i >= 0; i -= 1) {
+    if (at >= dayStarts[i]!) return i;
+  }
+  return -1;
+}
+
+function jakartaMonthStart(date: Date): Date {
+  return new Date(`${jakartaYmd(date).slice(0, 7)}-01T00:00:00+07:00`);
+}
 
 const TZ = "Asia/Jakarta";
 const CHANNEL_COLORS: Record<string, string> = {
-  Website: "#2563EB",
-  Telegram: "#18BFFF",
+  Website: "#1E63FF",
+  Telegram: "#0E2F7D",
+  API: "#A78BFA",
 };
 const SERVICE_PALETTE = [
   "#2563EB",
@@ -178,13 +217,16 @@ export class AdminReportsService {
 
     let web = 0;
     let telegram = 0;
+    let apiCount = 0;
     for (const o of ordersInWindow) {
       if (o.channel === "telegram") telegram += 1;
+      else if (o.channel === "api") apiCount += 1;
       else web += 1;
     }
     const channelMix = [
       { name: "Website", amount: web, color: CHANNEL_COLORS.Website! },
       { name: "Telegram", amount: telegram, color: CHANNEL_COLORS.Telegram! },
+      { name: "API", amount: apiCount, color: CHANNEL_COLORS.API! },
     ].filter((item) => item.amount > 0);
 
     const serviceTotals = new Map<string, number>();
@@ -238,6 +280,137 @@ export class AdminReportsService {
       })),
       adminPerformance,
       services,
+    };
+  }
+
+  /** Super Admin dashboard: cost/profit and channel breakdowns (WIB calendar). */
+  async insights() {
+    const now = new Date();
+    const todayStart = jakartaDayStart(now);
+    const dailyStart = addJakartaDays(todayStart, -13);
+    const mixStart = addJakartaDays(todayStart, -29);
+    const monthStart = jakartaMonthStart(now);
+    const prevMonthStart = jakartaMonthStart(addJakartaDays(monthStart, -1));
+    const earnedFrom = prevMonthStart < mixStart ? prevMonthStart : mixStart;
+
+    const [allTime, earned, created, services] = await Promise.all([
+      this.prisma.order.aggregate({
+        where: EARNED_ORDER,
+        _sum: { price: true, costPrice: true },
+        _count: { _all: true },
+      }),
+      this.prisma.order.findMany({
+        where: { ...EARNED_ORDER, completedAt: { gte: earnedFrom } },
+        select: {
+          price: true,
+          costPrice: true,
+          completedAt: true,
+          channel: true,
+          serviceId: true,
+          userId: true,
+        },
+      }),
+      this.prisma.order.findMany({
+        where: { isTest: false, createdAt: { gte: mixStart } },
+        select: { createdAt: true, channel: true },
+      }),
+      this.prisma.service.findMany({
+        select: { id: true, name: true, price: true, costPrice: true, active: true },
+        orderBy: { name: "asc" },
+      }),
+    ]);
+
+    const today = emptyMoney();
+    const month = emptyMoney();
+    const prevMonth = emptyMoney();
+    const dayStarts = Array.from({ length: 14 }, (_, i) => addJakartaDays(dailyStart, i));
+    const daily = dayStarts.map(() => emptyMoney());
+    const byChannel = new Map<OrderChannel, Money>(CHANNELS.map((c) => [c.key, emptyMoney()]));
+    const byService = new Map<string, Money>();
+    const byUser = new Map<string, Money>();
+
+    for (const sale of earned) {
+      const at = sale.completedAt!;
+      if (at >= todayStart) addSale(today, sale);
+      if (at >= monthStart) addSale(month, sale);
+      else if (at >= prevMonthStart) addSale(prevMonth, sale);
+      const dayIndex = dayIndexOf(dayStarts, at);
+      if (dayIndex >= 0) addSale(daily[dayIndex]!, sale);
+      if (at >= mixStart) {
+        addSale(byChannel.get(sale.channel)!, sale);
+        if (!byService.has(sale.serviceId)) byService.set(sale.serviceId, emptyMoney());
+        addSale(byService.get(sale.serviceId)!, sale);
+        if (!byUser.has(sale.userId)) byUser.set(sale.userId, emptyMoney());
+        addSale(byUser.get(sale.userId)!, sale);
+      }
+    }
+
+    const createdByChannel = new Map<OrderChannel, number>();
+    const channelDaily = dayStarts.map((day) => ({
+      label: formatDayLabel(day),
+      web: 0,
+      telegram: 0,
+      api: 0,
+    }));
+    for (const order of created) {
+      createdByChannel.set(order.channel, (createdByChannel.get(order.channel) ?? 0) + 1);
+      const dayIndex = dayIndexOf(dayStarts, order.createdAt);
+      if (dayIndex >= 0) channelDaily[dayIndex]![order.channel] += 1;
+    }
+
+    const topUserIds = [...byUser.entries()]
+      .sort((a, b) => b[1].revenue - a[1].revenue)
+      .slice(0, 5);
+    const topUserRows = await this.prisma.user.findMany({
+      where: { id: { in: topUserIds.map(([id]) => id) } },
+      select: { id: true, fullName: true, username: true },
+    });
+    const userById = new Map(topUserRows.map((u) => [u.id, u]));
+    const serviceById = new Map(services.map((s) => [s.id, s]));
+
+    const allRevenue = allTime._sum.price ?? 0;
+    const allCost = allTime._sum.costPrice ?? 0;
+
+    return {
+      finance: {
+        today,
+        month,
+        prevMonth,
+        allTime: {
+          revenue: allRevenue,
+          cost: allCost,
+          profit: allRevenue - allCost,
+          orders: allTime._count._all,
+        },
+      },
+      servicesWithoutCost: services
+        .filter((s) => s.active && s.costPrice === 0)
+        .map((s) => s.name),
+      profitSeries: dayStarts.map((day, i) => ({
+        label: formatDayLabel(day),
+        ...daily[i]!,
+      })),
+      channelDaily,
+      channels: CHANNELS.map((c) => ({
+        key: c.key,
+        name: c.name,
+        color: CHANNEL_COLORS[c.name]!,
+        created: createdByChannel.get(c.key) ?? 0,
+        ...byChannel.get(c.key)!,
+      })),
+      serviceProfit: [...byService.entries()]
+        .map(([id, money]) => ({
+          id,
+          name: serviceById.get(id)?.name ?? "Layanan dihapus",
+          ...money,
+        }))
+        .sort((a, b) => b.profit - a.profit),
+      topUsers: topUserIds.map(([id, money]) => ({
+        id,
+        fullName: userById.get(id)?.fullName ?? "User dihapus",
+        username: userById.get(id)?.username ?? null,
+        ...money,
+      })),
     };
   }
 }

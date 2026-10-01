@@ -44,6 +44,7 @@ export default async function UserPortalLayout({
   return (
     <AppShell
       variant="user"
+      hideHrefs={user.apiEnabled ? undefined : ["/app/api"]}
       banner={<AdsRunnerTicker items={ads} />}
       topbarRight={
         <>

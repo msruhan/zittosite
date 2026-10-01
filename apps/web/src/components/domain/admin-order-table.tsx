@@ -114,9 +114,13 @@ export function AdminOrderTable({
                   >
                     {formatDateTime(order.createdAt)}
                   </time>
-                  <Tag className="hidden xl:inline-flex">
-                    {order.channel === "telegram" ? "TG" : "Web"}
-                  </Tag>
+                  {order.channel === "api" ? (
+                    <Tag className="border-action bg-action-wash text-action-deep">API</Tag>
+                  ) : (
+                    <Tag className="hidden xl:inline-flex">
+                      {order.channel === "telegram" ? "TG" : "Web"}
+                    </Tag>
+                  )}
                 </span>
               </TD>
               <TD className="py-2.5 text-right">

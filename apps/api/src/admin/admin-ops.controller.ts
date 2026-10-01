@@ -39,7 +39,7 @@ type AdminReq = { admin: { sub: string } };
 type Json = Record<string, unknown>;
 
 const TOTP_HEADER = "x-totp-code";
-const FULFILLMENT_CHANNELS = ["telegram", "whatsapp"] as const;
+const FULFILLMENT_CHANNELS = ["telegram", "whatsapp", "supplier"] as const;
 const USER_ROLES = ["customer", "testing"] as const;
 const WIB_OFFSET_MS = 7 * 60 * 60 * 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -77,6 +77,12 @@ export class AdminOpsController {
   @Get("dashboard/stats")
   dashboard(@Req() req: AdminReq) {
     return this.orders.dashboardStats(req.admin.sub);
+  }
+
+  @Get("dashboard/insights")
+  @UseGuards(SuperAdminGuard)
+  dashboardInsights() {
+    return this.reports.insights();
   }
 
   @Get("reports/summary")
@@ -120,11 +126,19 @@ export class AdminOpsController {
       groupId: optNullableString(body.groupId, "Group", 64),
       role: optEnum(body.role, USER_ROLES, "Role"),
       botAccess: optBoolean(body.botAccess, "Akses bot"),
+      apiEnabled: optBoolean(body.apiEnabled, "Akses API"),
     });
     this.audit.record("admin.user.created", {
       actorId: req.admin.sub,
       userId: user.id,
     });
+    if (user.apiEnabled) {
+      this.audit.record("api.access.toggled", {
+        actorId: req.admin.sub,
+        userId: user.id,
+        enabled: true,
+      });
+    }
     return user;
   }
 
@@ -143,9 +157,10 @@ export class AdminOpsController {
       role: optEnum(body.role, USER_ROLES, "Role"),
       status: optEnum(body.status, ["active", "suspended"] as const, "Status"),
       botAccess: optBoolean(body.botAccess, "Akses bot"),
+      apiEnabled: optBoolean(body.apiEnabled, "Akses API"),
       password: optString(body.password, "Password", 200),
     };
-    const user = await this.users.update(id, input);
+    const { user, apiAccessChanged } = await this.users.update(id, input);
     this.audit.record("admin.user.updated", {
       actorId: req.admin.sub,
       userId: id,
@@ -154,6 +169,13 @@ export class AdminOpsController {
       groupId: input.groupId,
       role: input.role,
     });
+    if (apiAccessChanged) {
+      this.audit.record("api.access.toggled", {
+        actorId: req.admin.sub,
+        userId: id,
+        enabled: user.apiEnabled,
+      });
+    }
     return user;
   }
 
@@ -206,10 +228,13 @@ export class AdminOpsController {
       name: optString(body.name, "Nama", 120),
       description: optString(body.description, "Deskripsi", 1000),
       price: optNonNegativeInt(body.price, "Harga"),
+      costPrice: optNonNegativeInt(body.costPrice, "Harga modal"),
       estimate: optString(body.estimate, "Estimasi", 60),
       active: optBoolean(body.active, "Aktif"),
       fulfillmentChannel: optEnum(body.fulfillmentChannel, FULFILLMENT_CHANNELS, "Jalur proses"),
       assignedAdminIds: optIdList(body.assignedAdminIds, "Assign admin"),
+      supplierId: optNullableString(body.supplierId, "Supplier", 40),
+      supplierServiceId: optNullableString(body.supplierServiceId, "Layanan supplier", 120),
     });
     this.audit.record("admin.service.created", {
       actorId: req.admin.sub,
@@ -231,10 +256,13 @@ export class AdminOpsController {
       name: optString(body.name, "Nama", 120),
       description: optString(body.description, "Deskripsi", 1000),
       price: optNonNegativeInt(body.price, "Harga"),
+      costPrice: optNonNegativeInt(body.costPrice, "Harga modal"),
       estimate: optString(body.estimate, "Estimasi", 60),
       active: optBoolean(body.active, "Aktif"),
       fulfillmentChannel: optEnum(body.fulfillmentChannel, FULFILLMENT_CHANNELS, "Jalur proses"),
       assignedAdminIds: optIdList(body.assignedAdminIds, "Assign admin"),
+      supplierId: optNullableString(body.supplierId, "Supplier", 40),
+      supplierServiceId: optNullableString(body.supplierServiceId, "Layanan supplier", 120),
     };
     const service = await this.services.update(id, input);
     this.audit.record("admin.service.updated", {
@@ -242,6 +270,7 @@ export class AdminOpsController {
       serviceId: id,
       serviceName: service.name,
       price: input.price,
+      costPrice: input.costPrice,
       active: input.active,
       fulfillmentChannel: input.fulfillmentChannel,
       assignedAdmins: input.assignedAdminIds?.join(","),

@@ -85,6 +85,7 @@ export function UserManagement({
             groupId: next.groupId ?? null,
             role: next.role ?? "customer",
             botAccess: next.botAccess,
+            apiEnabled: next.apiEnabled ?? false,
           }),
         });
       } else {
@@ -98,6 +99,7 @@ export function UserManagement({
             role: next.role ?? "customer",
             status: next.status,
             botAccess: next.botAccess,
+            apiEnabled: next.apiEnabled ?? false,
             ...(next.password ? { password: next.password } : {}),
           }),
         });
@@ -174,6 +176,7 @@ export function UserManagement({
               role: "customer",
               status: "active",
               botAccess: true,
+              apiEnabled: false,
               createdAt: new Date().toISOString(),
             });
           }}
@@ -193,10 +196,11 @@ export function UserManagement({
                     <TH>No</TH>
                     <TH>User</TH>
                     <TH>Telegram</TH>
-                    <TH>Harga</TH>
+                    <TH>Group</TH>
                     <TH>Saldo</TH>
                     <TH>Status</TH>
                     <TH>Bot</TH>
+                    <TH>Akses API</TH>
                     <TH>Bergabung</TH>
                     <TH className="w-24">Aksi</TH>
                   </TR>
@@ -259,7 +263,14 @@ export function UserManagement({
                             {user.groupName}
                           </Tag>
                         ) : (
-                          <CustomPriceSummary user={user} services={services} />
+                          <div className="whitespace-nowrap">
+                            <p className="text-ink-soft">Tanpa group</p>
+                            {(user.customPrices ?? []).length > 0 ? (
+                              <p className="text-label text-hold-ink">
+                                Harga khusus
+                              </p>
+                            ) : null}
+                          </div>
                         )}
                       </TD>
                       <TD className="whitespace-nowrap">
@@ -296,6 +307,15 @@ export function UserManagement({
                       </TD>
                       <TD>
                         <Tag>{user.botAccess ? "Aktif" : "Nonaktif"}</Tag>
+                      </TD>
+                      <TD>
+                        {user.apiEnabled ? (
+                          <Tag className="border-action bg-action-wash text-action-deep">
+                            Aktif
+                          </Tag>
+                        ) : (
+                          <Tag>Nonaktif</Tag>
+                        )}
                       </TD>
                       <TD>
                         <DataValue className="text-ink-soft">
@@ -511,34 +531,6 @@ function BalanceDialog({
         </Field>
       </form>
     </DialogContent>
-  );
-}
-
-function CustomPriceSummary({
-  user,
-  services,
-}: {
-  user: User;
-  services: Service[];
-}) {
-  const overrides = (user.customPrices ?? [])
-    .map((p) => ({
-      ...p,
-      service: services.find((s) => s.id === p.serviceId),
-    }))
-    .filter((p) => p.service);
-  if (overrides.length === 0) {
-    return <span className="text-ink-soft">Default</span>;
-  }
-  return (
-    <ul className="space-y-0.5">
-      {overrides.map((p) => (
-        <li key={p.serviceId} className="whitespace-nowrap text-body">
-          <span className="text-ink-soft">{p.service!.name}: </span>
-          <DataValue>{formatRupiah(p.price)}</DataValue>
-        </li>
-      ))}
-    </ul>
   );
 }
 
@@ -821,6 +813,26 @@ function UserFormDialog({
             options={[
               { value: "1", label: "Aktif" },
               { value: "0", label: "Nonaktif" },
+            ]}
+          />
+        </Field>
+        <Field
+          label="Akses API"
+          htmlFor="apiEnabled"
+          hint="User dapat membuat API key dan menerima order dari website / panel Dhru miliknya. Order API dibayar dari saldo."
+        >
+          <Select
+            id="apiEnabled"
+            value={draft.apiEnabled ? "1" : "0"}
+            onValueChange={(value) =>
+              setDraft((current) => ({
+                ...current,
+                apiEnabled: value === "1",
+              }))
+            }
+            options={[
+              { value: "0", label: "Nonaktif" },
+              { value: "1", label: "Aktif" },
             ]}
           />
         </Field>

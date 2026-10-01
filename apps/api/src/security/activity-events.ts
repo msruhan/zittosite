@@ -26,7 +26,13 @@ type EventInfo = {
 const rp = (n: unknown) =>
   typeof n === "number" ? `Rp${n.toLocaleString("id-ID")}` : "";
 const via = (f: Fields) =>
-  f.channel === "telegram" ? "Telegram" : f.channel === "web" ? "website" : "";
+  f.channel === "telegram"
+    ? "Telegram"
+    : f.channel === "web"
+      ? "website"
+      : f.channel === "api"
+        ? "API"
+        : "";
 const withReason = (base: string, reason: unknown) =>
   reason ? `${base} — alasan: ${String(reason)}` : base;
 const orderLine = (f: Fields) =>
@@ -325,6 +331,48 @@ export const ACTIVITY_EVENTS = {
       typeof fields.active === "boolean"
         ? `Mengubah layanan ${fields.serviceName ?? ""} menjadi ${fields.active ? "online" : "offline"}`
         : `Memperbarui layanan ${fields.serviceName ?? fields.serviceId ?? ""}`,
+  },
+  "admin.supplier.created": {
+    category: "service",
+    label: "Supplier API ditambahkan",
+    summary: ({ fields }) => `Menambahkan supplier ${fields.supplierName ?? ""} (${fields.baseUrl ?? ""})`,
+  },
+  "admin.supplier.updated": {
+    category: "service",
+    label: "Supplier API diperbarui",
+    summary: ({ fields }) =>
+      typeof fields.active === "boolean"
+        ? `${fields.active ? "Mengaktifkan" : "Menonaktifkan"} supplier ${fields.supplierName ?? ""}`
+        : `Memperbarui supplier ${fields.supplierName ?? ""}${fields.keyRotated ? " (API key diganti)" : ""}`,
+  },
+  "admin.supplier.deleted": {
+    category: "service",
+    label: "Supplier API dihapus",
+    summary: ({ fields }) => `Menghapus supplier ${fields.supplierName ?? ""}`,
+  },
+  "api.key.created": {
+    category: "security",
+    label: "API key dibuat",
+    summary: ({ fields }) => `Membuat API key "${fields.keyName ?? ""}"`,
+  },
+  "api.key.revoked": {
+    category: "security",
+    label: "API key dicabut",
+    summary: ({ fields }) => `Mencabut API key "${fields.keyName ?? ""}"`,
+  },
+  "api.access.toggled": {
+    category: "user",
+    label: "Akses API diubah",
+    summary: ({ fields, target }) =>
+      `${fields.enabled ? "Mengaktifkan" : "Menonaktifkan"} akses API untuk ${target ?? "user"}`,
+  },
+  "api.webhook.updated": {
+    category: "security",
+    label: "Webhook API diubah",
+    summary: ({ fields }) =>
+      fields.secretRotated
+        ? "Membuat ulang secret webhook API"
+        : `Mengatur webhook API ke ${fields.url ?? "-"}${fields.active === false ? " (nonaktif)" : ""}`,
   },
   "admin.telegram.invite_created": {
     category: "telegram",

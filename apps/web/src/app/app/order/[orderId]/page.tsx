@@ -21,7 +21,7 @@ import { CancelOrderButton } from "@/components/domain/cancel-order-button";
 import { ApiError } from "@/lib/api";
 import { serverApi } from "@/lib/server-api";
 import { formatDateTime, formatRupiah } from "@/lib/format";
-import type { OrderDetail } from "@/lib/types";
+import { ORDER_CHANNEL_LABEL, type OrderDetail } from "@/lib/types";
 
 export const metadata: Metadata = {
   title: "Detail Order",
@@ -72,7 +72,7 @@ export default async function OrderDetailPage({
             </DetailRow>
             <DetailRow label="Dibuat dari">
               <Tag>
-                {order.channel === "telegram" ? "Telegram" : "Website"}
+                {ORDER_CHANNEL_LABEL[order.channel]}
               </Tag>
             </DetailRow>
             <DetailRow label="Dibuat">

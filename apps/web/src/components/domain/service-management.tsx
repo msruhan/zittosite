@@ -23,7 +23,20 @@ import {
 } from "@/components/ui/table";
 import { formatRupiah } from "@/lib/format";
 import { ApiError, api } from "@/lib/api";
-import type { Admin, Service, ServiceAssignee } from "@/lib/types";
+import type {
+  Admin,
+  FulfillmentChannel,
+  Service,
+  ServiceAssignee,
+  Supplier,
+  SupplierRemoteService,
+} from "@/lib/types";
+
+const CHANNEL_LABEL: Record<FulfillmentChannel, string> = {
+  telegram: "Telegram",
+  whatsapp: "WhatsApp",
+  supplier: "API Supplier",
+};
 
 type ServiceDraft = Service & { assignedAdminIds: string[] };
 
@@ -37,9 +50,11 @@ function toDraft(service: Service): ServiceDraft {
 export function ServiceManagement({
   initialServices,
   operators,
+  suppliers,
 }: {
   initialServices: Service[];
   operators: Admin[];
+  suppliers: Supplier[];
 }) {
   const [services, setServices] = React.useState(initialServices);
   const [query, setQuery] = React.useState("");
@@ -78,10 +93,13 @@ export function ServiceManagement({
             name: next.name,
             description: next.description,
             price: next.price,
+            costPrice: next.costPrice ?? 0,
             estimate: next.estimate,
             active: next.active,
             fulfillmentChannel: next.fulfillmentChannel ?? "telegram",
             assignedAdminIds: next.assignedAdminIds,
+            supplierId: next.supplierId ?? null,
+            supplierServiceId: next.supplierServiceId ?? null,
           }),
         });
       } else {
@@ -91,10 +109,13 @@ export function ServiceManagement({
             name: next.name,
             description: next.description,
             price: next.price,
+            costPrice: next.costPrice ?? 0,
             estimate: next.estimate,
             active: next.active,
             fulfillmentChannel: next.fulfillmentChannel ?? "telegram",
             assignedAdminIds: next.assignedAdminIds,
+            supplierId: next.supplierId ?? null,
+            supplierServiceId: next.supplierServiceId ?? null,
           }),
         });
       }
@@ -148,6 +169,7 @@ export function ServiceManagement({
       name: "",
       description: "",
       price: 150_000,
+      costPrice: 0,
       estimate: "1–3 jam",
       active: true,
       fulfillmentChannel: "telegram",
@@ -209,6 +231,24 @@ export function ServiceManagement({
                         <DataValue emphasis>
                           {formatRupiah(service.price)}
                         </DataValue>
+                        <p className="mt-0.5 whitespace-nowrap text-label text-ink-soft">
+                          {service.costPrice ? (
+                            <>
+                              Modal {formatRupiah(service.costPrice)} ·{" "}
+                              <span
+                                className={
+                                  service.price - service.costPrice < 0
+                                    ? "text-refused-ink"
+                                    : "text-cleared-ink"
+                                }
+                              >
+                                Untung {formatRupiah(service.price - service.costPrice)}
+                              </span>
+                            </>
+                          ) : (
+                            <span className="text-hold-ink">Modal belum diisi</span>
+                          )}
+                        </p>
                       </TD>
                       <TD>
                         <DataValue className="text-ink-soft">
@@ -217,15 +257,18 @@ export function ServiceManagement({
                       </TD>
                       <TD>
                         <Tag className="border-hairline bg-mist text-ink">
-                          {service.fulfillmentChannel === "whatsapp"
-                            ? "WhatsApp"
-                            : "Telegram"}
+                          {CHANNEL_LABEL[service.fulfillmentChannel ?? "telegram"]}
                         </Tag>
                       </TD>
                       <TD>
                         {service.fulfillmentChannel === "whatsapp" ? (
                           <span className="text-body text-ink-soft">
                             Grup WA (Roamercheck)
+                          </span>
+                        ) : service.fulfillmentChannel === "supplier" ? (
+                          <span className="text-body text-ink-soft">
+                            {service.supplierName ?? "Supplier"} ·{" "}
+                            <span className="font-data">#{service.supplierServiceId}</span>
                           </span>
                         ) : (
                           <AssigneeList assignees={service.assignedAdmins ?? []} />
@@ -315,6 +358,7 @@ export function ServiceManagement({
           <ServiceFormDialog
             service={editing}
             operators={operators}
+            suppliers={suppliers}
             creating={creating}
             onCancel={() => {
               setEditing(null);
@@ -423,12 +467,14 @@ function OperatorPicker({
 function ServiceFormDialog({
   service,
   operators,
+  suppliers,
   creating,
   onCancel,
   onSave,
 }: {
   service: ServiceDraft;
   operators: Admin[];
+  suppliers: Supplier[];
   creating: boolean;
   onCancel: () => void;
   onSave: (service: ServiceDraft) => void | Promise<void>;
@@ -447,8 +493,12 @@ function ServiceFormDialog({
     name?: string;
     code?: string;
     price?: string;
+    costPrice?: string;
     estimate?: string;
+    supplier?: string;
   }>({});
+  const costPrice = draft.costPrice ?? 0;
+  const margin = draft.price - costPrice;
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -461,6 +511,15 @@ function ServiceFormDialog({
     }
     if (!draft.price || draft.price < 1) {
       nextErrors.price = "Harga harus lebih dari Rp0.";
+    }
+    if (costPrice > draft.price) {
+      nextErrors.costPrice = "Harga modal melebihi harga jual.";
+    }
+    if (
+      draft.fulfillmentChannel === "supplier" &&
+      (!draft.supplierId || !draft.supplierServiceId)
+    ) {
+      nextErrors.supplier = "Pilih supplier dan layanan supplier.";
     }
     if (!draft.estimate.trim()) {
       nextErrors.estimate = "Masukkan estimasi pengerjaan.";
@@ -564,6 +623,32 @@ function ServiceFormDialog({
           />
         </Field>
         <Field
+          label="Harga modal"
+          htmlFor="costPrice"
+          error={errors.costPrice}
+          hint={
+            costPrice > 0 && draft.price > 0
+              ? `Untung per order ${formatRupiah(margin)} (${Math.round((margin / draft.price) * 100)}% dari harga default). Tidak terlihat oleh user.`
+              : "Biaya per order ke penyedia. Dipakai untuk menghitung untung di dashboard; tidak terlihat oleh user."
+          }
+        >
+          <Input
+            id="costPrice"
+            inputMode="numeric"
+            className="font-data tabular"
+            value={costPrice || ""}
+            placeholder="0"
+            invalid={Boolean(errors.costPrice)}
+            onChange={(event) => {
+              const raw = event.target.value.replace(/\D/g, "");
+              setDraft((current) => ({
+                ...current,
+                costPrice: raw ? Number(raw) : 0,
+              }));
+            }}
+          />
+        </Field>
+        <Field
           label="Estimasi pengerjaan"
           htmlFor="estimate"
           required
@@ -605,16 +690,36 @@ function ServiceFormDialog({
             onValueChange={(value) =>
               setDraft((current) => ({
                 ...current,
-                fulfillmentChannel: value === "whatsapp" ? "whatsapp" : "telegram",
+                fulfillmentChannel: value as FulfillmentChannel,
               }))
             }
             options={[
-              { value: "telegram", label: "Telegram" },
-              { value: "whatsapp", label: "WhatsApp" },
+              { value: "telegram", label: "Telegram (operator)" },
+              { value: "whatsapp", label: "WhatsApp (Roamercheck)" },
+              { value: "supplier", label: "API Supplier (otomatis)" },
             ]}
           />
         </Field>
-        {draft.fulfillmentChannel !== "whatsapp" ? (
+        {draft.fulfillmentChannel === "supplier" ? (
+          <SupplierPicker
+            suppliers={suppliers}
+            supplierId={draft.supplierId ?? null}
+            supplierServiceId={draft.supplierServiceId ?? null}
+            error={errors.supplier}
+            onChange={(next) =>
+              setDraft((current) => ({
+                ...current,
+                supplierId: next.supplierId,
+                supplierServiceId: next.supplierServiceId,
+                ...(next.credit !== undefined
+                  ? { costPrice: Math.round(next.credit) }
+                  : {}),
+              }))
+            }
+          />
+        ) : null}
+        {draft.fulfillmentChannel === "telegram" ||
+        !draft.fulfillmentChannel ? (
           <OperatorPicker
             operators={operators}
             selected={draft.assignedAdminIds}
@@ -625,5 +730,119 @@ function ServiceFormDialog({
         ) : null}
       </form>
     </DialogContent>
+  );
+}
+
+function SupplierPicker({
+  suppliers,
+  supplierId,
+  supplierServiceId,
+  error,
+  onChange,
+}: {
+  suppliers: Supplier[];
+  supplierId: string | null;
+  supplierServiceId: string | null;
+  error?: string;
+  onChange: (next: {
+    supplierId: string | null;
+    supplierServiceId: string | null;
+    credit?: number;
+  }) => void;
+}) {
+  const [loaded, setLoaded] = React.useState<{
+    supplierId: string;
+    rows: SupplierRemoteService[] | null;
+    error: string | null;
+  } | null>(null);
+  const current = loaded && loaded.supplierId === supplierId ? loaded : null;
+  const remote = current?.rows ?? null;
+  const loadError = current?.error ?? null;
+
+  React.useEffect(() => {
+    if (!supplierId) return;
+    let cancelled = false;
+    api<SupplierRemoteService[]>(`/admin/suppliers/${supplierId}/services`)
+      .then((rows) => {
+        if (!cancelled) setLoaded({ supplierId, rows, error: null });
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) {
+          setLoaded({
+            supplierId,
+            rows: null,
+            error: err instanceof ApiError ? err.message : "Gagal memuat layanan supplier.",
+          });
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [supplierId]);
+
+  if (suppliers.length === 0) {
+    return (
+      <p className="rounded-md border border-dashed border-hairline px-3.5 py-3 text-body text-ink-soft">
+        Belum ada supplier. Tambahkan di halaman Supplier API.
+      </p>
+    );
+  }
+
+  const selected = remote?.find((svc) => svc.id === supplierServiceId);
+  const options = (remote ?? []).map((svc) => ({
+    value: svc.id,
+    label: `${svc.name} — ${formatRupiah(Math.round(svc.credit))}`,
+  }));
+  if (supplierServiceId && !selected) {
+    options.unshift({ value: supplierServiceId, label: `ID ${supplierServiceId}` });
+  }
+
+  return (
+    <div className="space-y-4 rounded-md border border-hairline bg-mist/40 p-3.5">
+      <Field label="Supplier" htmlFor="supplierId" error={error}>
+        <Select
+          id="supplierId"
+          value={supplierId ?? undefined}
+          placeholder="Pilih supplier"
+          invalid={Boolean(error) && !supplierId}
+          onValueChange={(value) => onChange({ supplierId: value, supplierServiceId: null })}
+          options={suppliers.map((supplier) => ({
+            value: supplier.id,
+            label: supplier.isActive ? supplier.name : `${supplier.name} (nonaktif)`,
+          }))}
+        />
+      </Field>
+      {supplierId ? (
+        <Field
+          label="Layanan di supplier"
+          htmlFor="supplierServiceId"
+          hint={
+            loadError
+              ? undefined
+              : selected
+                ? `${selected.group} · ID ${selected.id}${selected.time ? ` · ${selected.time}` : ""}. Harga modal diisi dari harga supplier.`
+                : remote === null
+                  ? "Memuat daftar layanan supplier…"
+                  : "Order lunas akan diteruskan otomatis ke layanan ini."
+          }
+          error={loadError ?? undefined}
+        >
+          <Select
+            id="supplierServiceId"
+            value={supplierServiceId ?? undefined}
+            placeholder={remote === null && !loadError ? "Memuat…" : "Pilih layanan supplier"}
+            invalid={Boolean(error) && !supplierServiceId}
+            onValueChange={(value) =>
+              onChange({
+                supplierId,
+                supplierServiceId: value,
+                credit: remote?.find((svc) => svc.id === value)?.credit,
+              })
+            }
+            options={options}
+          />
+        </Field>
+      ) : null}
+    </div>
   );
 }

@@ -30,6 +30,7 @@ import { parseImeiList } from "./imei-list";
 import { TopupService } from "./topup.service";
 import {
   applyBalance,
+  InsufficientBalanceException,
   refundNote,
   refundOrderToBalance,
   type BalanceReason,
@@ -174,6 +175,10 @@ export class OrdersService {
   /**
    * Creates one order per IMEI (up to MAX_BULK_IMEIS), all paid by a single
    * invoice for `imeis.length × price`. Returns the first order.
+   *
+   * `balanceOnly` (Dhru API) never issues QRIS: the balance must cover the
+   * total, else InsufficientBalanceException. It also ignores the user's
+   * unpaid web order, which cannot block a balance payment.
    */
   async createOrder(
     userId: string,
@@ -184,6 +189,8 @@ export class OrdersService {
       imeis?: string[] | string;
       notes?: string;
       channel?: OrderChannel;
+      apiKeyId?: string;
+      balanceOnly?: boolean;
     },
   ) {
     let serviceId = String(input.serviceId ?? "").trim();
@@ -202,7 +209,8 @@ export class OrdersService {
     if (!parsed.ok) throw new BadRequestException(parsed.errors.join(" "));
     const imeis = parsed.imeis;
 
-    const existing = await this.pendingOrder(userId);
+    const balanceOnly = input.balanceOnly === true;
+    const existing = balanceOnly ? null : await this.pendingOrder(userId);
     if (existing) {
       throw new ConflictException(
         `Selesaikan atau batalkan order ${existing.orderId} yang masih menunggu pembayaran.`,
@@ -234,9 +242,13 @@ export class OrdersService {
       personalPrice: override?.price,
     });
     const total = price * imeis.length;
+    if (balanceOnly && user.creditBalance < total) {
+      throw new InsufficientBalanceException();
+    }
     const orderIds = await this.nextOrderIds(imeis.length);
     const invoiceId = `INV-${orderIds[0]}`;
-    const via = channel === "telegram" ? "Telegram" : "website";
+    const via =
+      channel === "telegram" ? "Telegram" : channel === "api" ? "API" : "website";
     const bulkNote =
       imeis.length > 1 ? ` Bulk ${imeis.length} IMEI, 1 QRIS.` : "";
     const balanceUsed = Math.min(Math.max(user.creditBalance, 0), total);
@@ -304,7 +316,9 @@ export class OrdersService {
           note: `Pembayaran invoice ${invoiceId}.`,
         }).catch((err) => {
           if (err instanceof ConflictException) {
-            throw new ConflictException("Saldo berubah. Silakan buat order lagi.");
+            throw balanceOnly
+              ? new InsufficientBalanceException()
+              : new ConflictException("Saldo berubah. Silakan buat order lagi.");
           }
           throw err;
         });
@@ -316,11 +330,13 @@ export class OrdersService {
             userId,
             serviceId: service.id,
             invoiceId: invoice.id,
+            apiKeyId: input.apiKeyId ?? null,
             channel,
             imei,
             notes,
             status: "waiting_payment",
             price,
+            costPrice: service.costPrice,
             isTest: user.role === "testing",
             activity: {
               create: {
@@ -913,7 +929,7 @@ export class OrdersService {
     internalOrderId: string,
     update:
       | { kind: "processing" }
-      | { kind: "done" }
+      | { kind: "done"; note?: string }
       | { kind: "rejected"; reason: string },
     actor: { username: string; fullName: string },
   ): Promise<"applied" | "noop"> {
@@ -932,7 +948,7 @@ export class OrdersService {
       update.kind === "processing"
         ? `Diproses oleh ${actorLabel}.`
         : update.kind === "done"
-          ? "IMEI berhasil diproses."
+          ? update.note?.trim() || "IMEI berhasil diproses."
           : update.reason;
 
     const updated = await this.prisma.$transaction(async (tx) => {
@@ -1016,7 +1032,7 @@ export class OrdersService {
           kind: "done",
           orderId: updated.orderId,
           resultStatus: "success",
-          note: "",
+          note: update.note?.trim() ?? "",
           duration: processDurationLabel(updated),
         }),
       );

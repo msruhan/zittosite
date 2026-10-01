@@ -33,13 +33,42 @@ export interface Topup {
   createdAt: string;
 }
 
-export type OrderChannel = "web" | "telegram";
+export type OrderChannel = "web" | "telegram" | "api";
+
+export const ORDER_CHANNEL_LABEL: Record<OrderChannel, string> = {
+  web: "Website",
+  telegram: "Telegram",
+  api: "API",
+};
 
 export type UserStatus = "active" | "suspended";
 
 export type ResultStatus = "success" | "failed";
 
-export type FulfillmentChannel = "telegram" | "whatsapp";
+export type FulfillmentChannel = "telegram" | "whatsapp" | "supplier";
+
+export interface Supplier {
+  id: string;
+  name: string;
+  baseUrl: string;
+  username: string;
+  apiKeyHint: string;
+  isActive: boolean;
+  lastBalance: string | null;
+  lastCheckedAt: string | null;
+  lastError: string | null;
+  serviceCount: number;
+  createdAt: string;
+}
+
+export interface SupplierRemoteService {
+  id: string;
+  name: string;
+  group: string;
+  credit: number;
+  time: string;
+  info: string;
+}
 
 export interface Service {
   id: string;
@@ -47,10 +76,16 @@ export interface Service {
   name: string;
   description: string;
   price: number;
+  /** Admin panel only: harga modal per order. */
+  costPrice?: number;
   estimate: string;
   active: boolean;
   /** Admin panel only: where paid orders are processed. */
   fulfillmentChannel?: FulfillmentChannel;
+  /** Admin panel only: upstream supplier route when fulfillmentChannel is "supplier". */
+  supplierId?: string | null;
+  supplierServiceId?: string | null;
+  supplierName?: string | null;
   /** Admin panel only: operators who receive and may process this service's orders. */
   assignedAdmins?: ServiceAssignee[];
 }
@@ -84,7 +119,41 @@ export interface User {
   role?: "customer" | "testing";
   status: UserStatus;
   botAccess: boolean;
+  /** Granted by Super Admin: may create API keys and order through the Dhru API. */
+  apiEnabled?: boolean;
   createdAt: string;
+}
+
+export interface ApiKey {
+  id: string;
+  name: string;
+  /** First characters of the key, safe to display. */
+  prefix: string;
+  lastUsedAt: string | null;
+  revokedAt: string | null;
+  createdAt: string;
+}
+
+export interface WebhookEndpoint {
+  url: string;
+  isActive: boolean;
+  failureCount: number;
+  lastStatus: "success" | "failed" | null;
+  lastDeliveryAt: string | null;
+  createdAt: string;
+}
+
+export interface WebhookDelivery {
+  id: string;
+  orderId: string;
+  event: string;
+  status: "pending" | "success" | "failed";
+  attempts: number;
+  responseCode: number | null;
+  lastError: string | null;
+  nextAttemptAt: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface AdminTelegramInvite {
@@ -202,4 +271,11 @@ export interface OrderDetail extends Order {
   invoice: PaymentInvoice | null;
   result: OrderResult | null;
   activity: OrderActivityLog[];
+  /** Admin panel only: set when the order was forwarded to a supplier. */
+  supplier?: {
+    name: string;
+    reference: string | null;
+    error: string | null;
+    attempts: number;
+  } | null;
 }

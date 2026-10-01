@@ -25,7 +25,7 @@ import { ORDER_STATUS } from "@/lib/status";
 import { ApiError } from "@/lib/api";
 import { serverApi } from "@/lib/server-api";
 import { formatDateTime, formatRupiah } from "@/lib/format";
-import type { OrderDetail } from "@/lib/types";
+import { ORDER_CHANNEL_LABEL, type OrderDetail } from "@/lib/types";
 
 export async function generateMetadata({
   params,
@@ -103,9 +103,28 @@ export default async function AdminOrderDetailPage({
                 </DetailRow>
                 <DetailRow label="Kanal">
                   <Tag>
-                    {order.channel === "telegram" ? "Telegram" : "Website"}
+                    {ORDER_CHANNEL_LABEL[order.channel]}
                   </Tag>
                 </DetailRow>
+                {order.supplier ? (
+                  <DetailRow label="Supplier">
+                    <span className="text-ink">{order.supplier.name}</span>
+                    {order.supplier.reference ? (
+                      <DataValue className="ml-2 text-ink-soft">
+                        Ref {order.supplier.reference}
+                      </DataValue>
+                    ) : (
+                      <span className="ml-2 text-label text-ink-faint">
+                        Belum terkirim ({order.supplier.attempts}× dicoba)
+                      </span>
+                    )}
+                    {order.supplier.error ? (
+                      <p className="mt-1 text-label text-refused-ink">
+                        {order.supplier.error}
+                      </p>
+                    ) : null}
+                  </DetailRow>
+                ) : null}
                 <DetailRow label="Dibuat">
                   <DataValue className="text-ink-soft">
                     {formatDateTime(order.createdAt)}

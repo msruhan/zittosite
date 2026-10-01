@@ -92,6 +92,7 @@ export class UserAuthService {
         creditBalance: true,
         status: true,
         botAccess: true,
+        apiEnabled: true,
         createdAt: true,
       },
     });

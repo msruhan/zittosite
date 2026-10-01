@@ -84,7 +84,10 @@ export class AdminNotifyService {
 
     const order = await this.prisma.order.findUnique({
       where: { id: internalOrderId },
-      include: { service: true, user: { select: { username: true } } },
+      include: {
+        service: { include: { supplier: { select: { name: true } } } },
+        user: { select: { username: true } },
+      },
     });
     if (!order || order.status !== "waiting_action") return;
 
@@ -98,8 +101,13 @@ export class AdminNotifyService {
           serviceName: order.service.name,
         }),
       );
-    // WhatsApp-fulfilled services are processed in the WA group; only super admins get an info card.
+    // WhatsApp- and supplier-fulfilled services need no operator; only super admins get an info card.
     const viaWhatsapp = order.service.fulfillmentChannel === "whatsapp";
+    const viaSupplier =
+      order.service.fulfillmentChannel === "supplier"
+        ? order.service.supplier?.name ?? "Supplier"
+        : undefined;
+    const operatorFree = viaWhatsapp || Boolean(viaSupplier);
 
     const assignments = await this.prisma.serviceAssignment.findMany({
       where: { serviceId: order.serviceId },
@@ -114,7 +122,7 @@ export class AdminNotifyService {
       await this.adminTelegram.notificationDestinations()
     ).filter(
       (d) =>
-        d.role === "super_admin" || (!viaWhatsapp && assigned.has(d.adminId)),
+        d.role === "super_admin" || (!operatorFree && assigned.has(d.adminId)),
     );
     if (!destinations.length) {
       this.logger.warn("No linked admin chats for new order notify");
@@ -129,7 +137,7 @@ export class AdminNotifyService {
     };
     const operatorHtml = withTestBanner(
       order.isTest,
-      newOrderAdminHtml({ ...cardInput, viaWhatsapp }),
+      newOrderAdminHtml({ ...cardInput, viaWhatsapp, viaSupplier }),
     );
     const superAdminHtml = withTestBanner(
       order.isTest,
@@ -142,6 +150,7 @@ export class AdminNotifyService {
         },
         assignedAdmins: assignedNames,
         viaWhatsapp,
+        viaSupplier,
       }),
     );
     const replyMarkup = {

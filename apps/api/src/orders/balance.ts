@@ -12,6 +12,13 @@ export type BalanceReason =
   | "admin_adjust"
   | "topup";
 
+/** Raised when a balance-only order (Dhru API) is not fully covered by the balance. */
+export class InsufficientBalanceException extends ConflictException {
+  constructor() {
+    super("Saldo tidak cukup.");
+  }
+}
+
 /** Entries whose sum is an order's outstanding refund (credits minus reversals). */
 const ORDER_REFUND_REASONS: BalanceReason[] = [
   "order_rejected",

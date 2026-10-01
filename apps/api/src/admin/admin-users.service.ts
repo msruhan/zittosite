@@ -88,6 +88,7 @@ export class AdminUsersService {
     groupId?: string | null;
     role?: "customer" | "testing";
     botAccess?: boolean;
+    apiEnabled?: boolean;
   }) {
     const username = String(input.username ?? "")
       .trim()
@@ -112,6 +113,7 @@ export class AdminUsersService {
           passwordHash: await bcrypt.hash(password, 10),
           telegramHandle: input.telegramHandle?.trim() || null,
           botAccess: input.botAccess !== false,
+          apiEnabled: input.apiEnabled === true,
           status: "active",
           groupId: input.groupId || null,
           role: input.role ?? "customer",
@@ -140,6 +142,7 @@ export class AdminUsersService {
       role?: "customer" | "testing";
       status?: "active" | "suspended";
       botAccess?: boolean;
+      apiEnabled?: boolean;
       password?: string;
     },
   ) {
@@ -170,6 +173,9 @@ export class AdminUsersService {
           ...(typeof input.botAccess === "boolean"
             ? { botAccess: input.botAccess }
             : {}),
+          ...(typeof input.apiEnabled === "boolean"
+            ? { apiEnabled: input.apiEnabled }
+            : {}),
           ...(passwordHash ? { passwordHash } : {}),
           ...(input.groupId !== undefined ? { groupId: nextGroupId } : {}),
         },
@@ -188,7 +194,12 @@ export class AdminUsersService {
       });
     }
 
-    return serializeManagedUser(user);
+    return {
+      user: serializeManagedUser(user),
+      apiAccessChanged:
+        typeof input.apiEnabled === "boolean" &&
+        input.apiEnabled !== existing.apiEnabled,
+    };
   }
 
   /** Super Admin top-up (positive) or deduction (negative); a deduction cannot go below zero. */

@@ -17,7 +17,7 @@ import { ORDER_STATUS } from "@/lib/status";
 import { ApiError } from "@/lib/api";
 import { serverApi } from "@/lib/server-api";
 import { formatDateTime, formatRupiah, jakartaMonthKey } from "@/lib/format";
-import type { OrderDetail, User } from "@/lib/types";
+import { ORDER_CHANNEL_LABEL, type OrderDetail, type User } from "@/lib/types";
 
 export const metadata: Metadata = {
   title: "Dashboard",
@@ -202,11 +202,7 @@ export default async function UserDashboardPage({
                     <div className="flex items-baseline justify-between gap-4 py-2.5">
                       <dt className="text-body text-ink-soft">Dibuat dari</dt>
                       <dd>
-                        <Tag>
-                          {latest.channel === "telegram"
-                            ? "Telegram"
-                            : "Website"}
-                        </Tag>
+                        <Tag>{ORDER_CHANNEL_LABEL[latest.channel]}</Tag>
                       </dd>
                     </div>
                   </dl>

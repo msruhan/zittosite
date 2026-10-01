@@ -34,6 +34,7 @@ export default async function AdminPanelLayout({
               "/admin/users",
               "/admin/groups",
               "/admin/services",
+              "/admin/suppliers",
               "/admin/running-ads",
               "/admin/admins",
               "/admin/settings",

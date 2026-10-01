@@ -481,6 +481,8 @@ export function newOrderAdminHtml(input: {
   /** Super Admin card only: names of admins assigned to the service. */
   assignedAdmins?: string[];
   viaWhatsapp?: boolean;
+  /** Supplier name when the order is forwarded automatically. */
+  viaSupplier?: string;
 }): string {
   return [
     "🆕 <b>ORDER BARU</b>",
@@ -502,6 +504,9 @@ export function newOrderAdminHtml(input: {
       : []),
     ...(input.viaWhatsapp
       ? [row("🔀", "Jalur", "WhatsApp (Roamercheck)")]
+      : []),
+    ...(input.viaSupplier
+      ? [row("🔀", "Jalur", `API Supplier (${input.viaSupplier})`)]
       : []),
     row("🟢", "Status", "waiting_action"),
   ].join("\n");

@@ -32,6 +32,7 @@ const orderInclude = {
   },
   result: true,
   activity: { orderBy: { createdAt: "asc" as const } },
+  supplier: { select: { name: true } },
 } satisfies Prisma.OrderInclude;
 
 const ALL_STATUSES: OrderStatus[] = [

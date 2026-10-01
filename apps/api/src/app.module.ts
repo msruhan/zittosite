@@ -10,6 +10,8 @@ import { OrdersModule } from "./orders/orders.module";
 import { PaymentsModule } from "./payments/payments.module";
 import { WhatsappInboundModule } from "./whatsapp-inbound/whatsapp-inbound.module";
 import { RunningAdsModule } from "./running-ads/running-ads.module";
+import { ApiAccessModule } from "./api-access/api-access.module";
+import { SuppliersModule } from "./suppliers/suppliers.module";
 import { HealthController } from "./health/health.controller";
 
 @Module({
@@ -24,6 +26,8 @@ import { HealthController } from "./health/health.controller";
     PaymentsModule,
     WhatsappInboundModule,
     RunningAdsModule,
+    ApiAccessModule,
+    SuppliersModule,
   ],
   controllers: [HealthController],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
