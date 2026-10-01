@@ -83,6 +83,8 @@ export interface Service {
   costPrice?: number;
   estimate: string;
   active: boolean;
+  /** "supplier" services belong to Order Ceir; the rest to the regular Order menu. */
+  via?: "supplier" | "manual";
   /** Admin panel only: where paid orders are processed. */
   fulfillmentChannel?: FulfillmentChannel;
   /** Admin panel only: upstream supplier route when fulfillmentChannel is "supplier". */

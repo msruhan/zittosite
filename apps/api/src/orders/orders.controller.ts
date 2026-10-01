@@ -11,6 +11,7 @@ import {
 import { UserAuthGuard } from "../auth/user-auth.guard";
 import { OrdersService } from "./orders.service";
 import { optString, optStringList } from "../security/input";
+import { parseVia } from "./supplier-routed";
 
 @Controller("orders")
 @UseGuards(UserAuthGuard)
@@ -19,7 +20,7 @@ export class OrdersController {
 
   @Get()
   list(@Req() req: any, @Query("q") q?: string, @Query("via") via?: string) {
-    return this.orders.listOrders(req.user.sub, q, via === "supplier");
+    return this.orders.listOrders(req.user.sub, q, parseVia(via));
   }
 
   @Post()

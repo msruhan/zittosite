@@ -16,6 +16,7 @@ import { DataValue } from "@/components/ui/data-value";
 import { PaymentBadge } from "@/components/ui/status-badge";
 import { ApiError, api } from "@/lib/api";
 import { formatRupiah } from "@/lib/format";
+import { type OrderMenu, orderMenu } from "@/lib/order-routes";
 import type { OrderDetail, Topup } from "@/lib/types";
 
 const PAYMENT_SIMULATION = process.env.NEXT_PUBLIC_PAYMENT_SIMULATION === "1";
@@ -54,6 +55,8 @@ export function PaymentPanel({
   qrPayload,
   checkoutUrl = null,
   gateway = false,
+  menu = orderMenu(),
+  automated = false,
 }: {
   /** Order ID, or the topup invoice ID when `kind` is "topup". */
   orderId: string;
@@ -64,6 +67,10 @@ export function PaymentPanel({
   checkoutUrl?: string | null;
   /** Invoice issued by SayaBayar; the webhook settles it, so poll for the result. */
   gateway?: boolean;
+  /** Where the order belongs (regular Order or Order Ceir) once paid or expired. */
+  menu?: OrderMenu;
+  /** Supplier API orders run without an admin queue. */
+  automated?: boolean;
 }) {
   const router = useRouter();
   const [expired, setExpired] = React.useState(false);
@@ -76,11 +83,13 @@ export function PaymentPanel({
     toast.success(isTopup ? "Topup berhasil" : "Pembayaran diterima", {
       description: isTopup
         ? "Saldo sudah masuk ke akun Anda."
-        : "Order Anda masuk antrean admin.",
+        : automated
+          ? "Order Anda sedang diproses otomatis."
+          : "Order Anda masuk antrean admin.",
     });
-    router.push(isTopup ? "/app/topup" : "/app/riwayat");
+    router.push(isTopup ? "/app/topup" : menu.listHref);
     router.refresh();
-  }, [router, isTopup]);
+  }, [router, isTopup, automated, menu.listHref]);
 
   React.useEffect(() => {
     if (!gateway || expired) return;
@@ -145,7 +154,7 @@ export function PaymentPanel({
         </div>
         <Button
           onClick={() => {
-            router.push(isTopup ? "/app/topup" : "/app/order");
+            router.push(isTopup ? "/app/topup" : menu.createHref);
             router.refresh();
           }}
         >

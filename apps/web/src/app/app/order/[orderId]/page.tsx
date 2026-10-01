@@ -20,6 +20,7 @@ import { OrderStepper } from "@/components/domain/order-stepper";
 import { CancelOrderButton } from "@/components/domain/cancel-order-button";
 import { ApiError } from "@/lib/api";
 import { serverApi } from "@/lib/server-api";
+import { orderMenu } from "@/lib/order-routes";
 import { formatDateTime, formatRupiah } from "@/lib/format";
 import { ORDER_CHANNEL_LABEL, type OrderDetail } from "@/lib/types";
 
@@ -41,15 +42,16 @@ export default async function OrderDetailPage({
     if (err instanceof ApiError && err.status === 404) notFound();
     throw err;
   }
+  const menu = orderMenu(order.service);
 
   return (
     <div className="mx-auto w-full max-w-3xl space-y-4">
       <Link
-        href="/app/riwayat"
+        href={menu.listHref}
         className="inline-flex items-center gap-1.5 text-body font-medium text-ink-soft underline-offset-4 transition-colors duration-150 ease-out-strong hover:text-ink hover:underline"
       >
         <ArrowLeft className="size-4" aria-hidden="true" />
-        Riwayat order
+        {menu.listLabel}
       </Link>
 
       <Card>

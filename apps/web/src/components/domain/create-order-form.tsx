@@ -18,13 +18,17 @@ export function CreateOrderForm({
   services,
   priceFor,
   balance,
+  variant = "regular",
 }: {
   services: Service[];
   /** Resolved server-side so a negotiated price is never guessed here. */
   priceFor: Record<string, number>;
   /** Account balance; spent before QRIS at checkout. */
   balance: number;
+  /** "ceir" orders run automatically, so admin-facing notes and the UNKNOWN rule do not apply. */
+  variant?: "regular" | "ceir";
 }) {
+  const ceir = variant === "ceir";
   const router = useRouter();
   const [serviceId, setServiceId] = React.useState<string>("");
   const [imeis, setImeis] = React.useState<string[]>([]);
@@ -82,7 +86,9 @@ export function CreateOrderForm({
       const title = quantity > 1 ? `${quantity} order dibuat` : "Order dibuat";
       if (order.status !== "waiting_payment") {
         toast.success(title, {
-          description: "Lunas dengan saldo akun. Order langsung masuk antrean admin.",
+          description: ceir
+            ? "Lunas dengan saldo akun. Order langsung diproses otomatis."
+            : "Lunas dengan saldo akun. Order langsung masuk antrean admin.",
         });
         router.push(`/app/order/${order.orderId}`);
         router.refresh();
@@ -163,6 +169,7 @@ export function CreateOrderForm({
         />
       </Field>
 
+      {ceir ? null : (
       <div
         role="note"
         className="flex gap-2.5 rounded-md border border-hold-edge bg-hold-wash px-3.5 py-3"
@@ -189,20 +196,23 @@ export function CreateOrderForm({
           <span className="font-semibold">tidak ada refund</span>.
         </p>
       </div>
+      )}
 
-      <Field
-        label="Catatan"
-        htmlFor="notes"
-        hint="Opsional. Tuliskan hal yang perlu admin ketahui."
-      >
-        <Textarea
-          id="notes"
-          name="notes"
-          placeholder="Misalnya merek dan tipe perangkat, atau kebutuhan khusus."
-          value={notes}
-          onChange={(event) => setNotes(event.target.value)}
-        />
-      </Field>
+      {ceir ? null : (
+        <Field
+          label="Catatan"
+          htmlFor="notes"
+          hint="Opsional. Tuliskan hal yang perlu admin ketahui."
+        >
+          <Textarea
+            id="notes"
+            name="notes"
+            placeholder="Misalnya merek dan tipe perangkat, atau kebutuhan khusus."
+            value={notes}
+            onChange={(event) => setNotes(event.target.value)}
+          />
+        </Field>
+      )}
 
       <div className="space-y-2 border-t border-hairline pt-4">
         {balanceUsed > 0 && total !== null ? (

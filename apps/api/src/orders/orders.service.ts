@@ -27,7 +27,7 @@ import {
 } from "../payments/sayabayar.client";
 import { serializeOrderListItem, serializeService } from "./orders.serializer";
 import { parseImeiList } from "./imei-list";
-import { SUPPLIER_ROUTED_ORDER } from "./supplier-routed";
+import { type OrderVia, orderViaWhere, serviceViaWhere } from "./supplier-routed";
 import { TopupService } from "./topup.service";
 import {
   applyBalance,
@@ -85,14 +85,14 @@ export class OrdersService {
     private readonly topups: TopupService,
   ) {}
 
-  async listServices(userId: string) {
+  async listServices(userId: string, via?: OrderVia) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       select: { groupId: true },
     });
     const groupId = user?.groupId ?? null;
     const services = await this.prisma.service.findMany({
-      where: { active: true },
+      where: { active: true, ...serviceViaWhere(via) },
       orderBy: { name: "asc" },
       include: {
         userPrices: { where: { userId }, select: { price: true } },
@@ -112,12 +112,12 @@ export class OrdersService {
     );
   }
 
-  async listOrders(userId: string, q?: string, supplierOnly = false) {
+  async listOrders(userId: string, q?: string, via?: OrderVia) {
     const needle = String(q ?? "").trim();
     const rows = await this.prisma.order.findMany({
       where: {
         userId,
-        ...(supplierOnly ? { AND: [SUPPLIER_ROUTED_ORDER] } : {}),
+        ...orderViaWhere(via),
         ...(needle
           ? {
               OR: [

@@ -30,6 +30,7 @@ export default async function OrderCeirPage() {
         fetchedAt={new Date().toISOString()}
         emptyTitle="Belum ada order Ceir"
         emptyDescription="Order layanan Ceir yang Anda buat akan muncul di sini beserta status dan hasilnya."
+        createHref="/app/ceir/order"
       />
     </>
   );

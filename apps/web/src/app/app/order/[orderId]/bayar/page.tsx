@@ -8,6 +8,7 @@ import { PaymentPanel } from "@/components/domain/payment-panel";
 import { CancelOrderButton } from "@/components/domain/cancel-order-button";
 import { ApiError } from "@/lib/api";
 import { serverApi } from "@/lib/server-api";
+import { orderMenu } from "@/lib/order-routes";
 import { formatDateTime, formatRupiah } from "@/lib/format";
 import type { OrderDetail } from "@/lib/types";
 
@@ -37,8 +38,9 @@ export default async function PaymentPage({
   if (order.status === "cancel") {
     redirect(`/app/order/${order.orderId}`);
   }
+  const menu = orderMenu(order.service);
   if (order.status !== "waiting_payment") {
-    redirect("/app/riwayat");
+    redirect(menu.listHref);
   }
   if (!order.invoice) notFound();
   const bulk = order.invoice.orders ?? [];
@@ -157,6 +159,8 @@ export default async function PaymentPage({
           }
           checkoutUrl={order.invoice.checkoutUrl ?? null}
           gateway={order.invoice.paymentChannel === "sayabayar"}
+          menu={menu}
+          automated={order.service.via === "supplier"}
         />
         <div className="border-t border-hairline px-4 py-3 sm:px-5">
           <CancelOrderButton

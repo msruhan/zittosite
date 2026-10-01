@@ -43,6 +43,7 @@ export function serializeService(
     price: effectivePrice ?? service.price,
     estimate: service.estimate,
     active: service.active,
+    via: service.fulfillmentChannel === "supplier" ? "supplier" : "manual",
   };
 }
 

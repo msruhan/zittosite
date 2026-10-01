@@ -18,11 +18,13 @@ export function OrderHistory({
   fetchedAt,
   emptyTitle = "Belum ada order",
   emptyDescription = "Mulai buat order pertamamu.",
+  createHref = "/app/order",
 }: {
   orders: OrderDetail[];
   fetchedAt: string;
   emptyTitle?: string;
   emptyDescription?: string;
+  createHref?: string;
 }) {
   const [query, setQuery] = React.useState("");
   const [status, setStatus] = React.useState<OrderStatus | "all">("all");
@@ -85,7 +87,7 @@ export function OrderHistory({
             description={emptyDescription}
             action={
               <Button asChild>
-                <Link href="/app/order">Buat Order</Link>
+                <Link href={createHref}>Buat Order</Link>
               </Button>
             }
           />

@@ -12,6 +12,7 @@ import { OrderStepper } from "@/components/domain/order-stepper";
 import { ORDER_STATUS } from "@/lib/status";
 import { ApiError } from "@/lib/api";
 import { serverApi } from "@/lib/server-api";
+import { orderMenu } from "@/lib/order-routes";
 import type { OrderDetail } from "@/lib/types";
 
 export const metadata: Metadata = {
@@ -32,15 +33,16 @@ export default async function OrderStatusPage({
     if (err instanceof ApiError && err.status === 404) notFound();
     throw err;
   }
+  const menu = orderMenu(order.service);
 
   return (
     <div className="mx-auto w-full max-w-2xl">
       <Link
-        href="/app/riwayat"
+        href={menu.listHref}
         className="mb-4 inline-flex items-center gap-1.5 text-body font-medium text-ink-soft underline-offset-4 transition-colors duration-150 ease-out-strong hover:text-ink hover:underline"
       >
         <ArrowLeft className="size-4" aria-hidden="true" />
-        Riwayat order
+        {menu.listLabel}
       </Link>
 
       <Reveal as="article">
