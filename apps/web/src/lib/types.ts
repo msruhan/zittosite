@@ -57,7 +57,10 @@ export interface Supplier {
   lastBalance: string | null;
   lastCheckedAt: string | null;
   lastError: string | null;
+  /** Local services routed to this supplier. */
   serviceCount: number;
+  /** Services the supplier offered at the last sync; null before the first sync. */
+  remoteServiceCount: number | null;
   createdAt: string;
 }
 

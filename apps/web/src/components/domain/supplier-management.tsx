@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowsClockwise, PencilSimple, Plus, Trash } from "@phosphor-icons/react";
 import { toast } from "sonner";
@@ -65,7 +66,7 @@ export function SupplierManagement({ initialSuppliers }: { initialSuppliers: Sup
         toast.error("Koneksi gagal", { description: updated.lastError });
       } else {
         toast.success("Terhubung", {
-          description: `Saldo di ${updated.name}: ${updated.lastBalance ?? "-"}`,
+          description: `Saldo di ${updated.name}: ${updated.lastBalance ?? "-"} · ${updated.remoteServiceCount ?? 0} layanan tersedia`,
         });
       }
     } catch (err) {
@@ -139,8 +140,20 @@ export function SupplierManagement({ initialSuppliers }: { initialSuppliers: Sup
                           : "Belum dites"}
                       </p>
                     </TD>
-                    <TD>
-                      <DataValue>{supplier.serviceCount}</DataValue>
+                    <TD className="whitespace-nowrap">
+                      <p className="text-body text-ink">
+                        <DataValue emphasis>{supplier.remoteServiceCount ?? "—"}</DataValue>{" "}
+                        <span className="text-ink-soft">tersedia</span>
+                      </p>
+                      <p className="text-label text-ink-faint">
+                        {supplier.serviceCount > 0 ? (
+                          `${supplier.serviceCount} terhubung ke layanan`
+                        ) : (
+                          <Link href="/admin/services" className="text-action hover:underline">
+                            Belum terhubung · atur di Services
+                          </Link>
+                        )}
+                      </p>
                     </TD>
                     <TD>
                       {supplier.isActive ? (

@@ -48,6 +48,7 @@ function serializeSupplier(supplier: Supplier & { _count?: { services: number } 
     lastCheckedAt: supplier.lastCheckedAt?.toISOString() ?? null,
     lastError: supplier.lastError,
     serviceCount: supplier._count?.services ?? 0,
+    remoteServiceCount: supplier.remoteServiceCount,
     createdAt: supplier.createdAt.toISOString(),
   };
 }
@@ -119,15 +120,20 @@ export class SuppliersService {
     return supplier;
   }
 
-  /** accountinfo; stores the balance or the error on the supplier row. */
+  /** accountinfo + imeiservicelist; stores balance, offered service count, or the error. */
   async test(id: string) {
     const supplier = await this.find(id);
     let lastError: string | null = null;
     let lastBalance = supplier.lastBalance;
+    let remoteServiceCount = supplier.remoteServiceCount;
     try {
-      const reply = await supplierClient(supplier).accountInfo();
+      const client = supplierClient(supplier);
+      const reply = await client.accountInfo();
       if (reply.ok) {
         lastBalance = [reply.data.credit, reply.data.currency].filter(Boolean).join(" ");
+        const list = await client.serviceList();
+        if (list.ok) remoteServiceCount = list.data.length;
+        else lastError = `Saldo terbaca, tetapi daftar layanan gagal: ${list.message}`;
       } else {
         lastError = reply.message;
       }
@@ -136,7 +142,7 @@ export class SuppliersService {
     }
     const row = await this.prisma.supplier.update({
       where: { id },
-      data: { lastBalance, lastError, lastCheckedAt: new Date() },
+      data: { lastBalance, lastError, remoteServiceCount, lastCheckedAt: new Date() },
       include: { _count: { select: { services: true } } },
     });
     return serializeSupplier(row);

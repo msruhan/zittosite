@@ -426,20 +426,22 @@ model Order {
 
 /// Upstream Dhru Fusion panel that supplier-routed services forward orders to.
 model Supplier {
-  id            String    @id @default(cuid())
-  name          String
-  baseUrl       String    @map("base_url")
-  username      String
+  id                 String    @id @default(cuid())
+  name               String
+  baseUrl            String    @map("base_url")
+  username           String
   /// AES-256-GCM, see suppliers/supplier-secret.ts.
-  apiKeyEnc     String    @map("api_key_enc")
-  isActive      Boolean   @default(true) @map("is_active")
-  lastBalance   String?   @map("last_balance")
-  lastCheckedAt DateTime? @map("last_checked_at")
-  lastError     String?   @map("last_error")
-  createdAt     DateTime  @default(now()) @map("created_at")
-  updatedAt     DateTime  @updatedAt @map("updated_at")
-  services      Service[]
-  orders        Order[]
+  apiKeyEnc          String    @map("api_key_enc")
+  isActive           Boolean   @default(true) @map("is_active")
+  lastBalance        String?   @map("last_balance")
+  lastCheckedAt      DateTime? @map("last_checked_at")
+  lastError          String?   @map("last_error")
+  /// Services offered by the supplier at the last successful sync.
+  remoteServiceCount Int?      @map("remote_service_count")
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
+  services           Service[]
+  orders             Order[]
 
   @@map("suppliers")
 }
