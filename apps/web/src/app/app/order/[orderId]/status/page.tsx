@@ -52,7 +52,7 @@ export default async function OrderStatusPage({
               <p className="text-label uppercase text-ink-soft">Order ID</p>
               <TicketId className="mt-1 block">{order.orderId}</TicketId>
             </div>
-            <StatusBadge status={order.status} stampIn />
+            <StatusBadge status={order.status} via={order.service.via} stampIn />
           </CardHeader>
 
           <CardBody className="pt-3">

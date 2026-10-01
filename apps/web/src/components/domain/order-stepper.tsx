@@ -27,6 +27,23 @@ const STEP_COPY: Record<FlowStatus, { title: string; pending: string }> = {
   },
 };
 
+/** Supplier API orders never wait for an admin. */
+const SUPPLIER_STEP_COPY: Record<FlowStatus, { title: string; pending: string }> = {
+  ...STEP_COPY,
+  waiting_action: {
+    title: "Dikirim ke Supplier API",
+    pending: "Menunggu pembayaran terverifikasi",
+  },
+  in_process: {
+    title: "Diproses otomatis",
+    pending: "Menunggu diterima supplier",
+  },
+  done: {
+    title: "Selesai",
+    pending: "Menunggu hasil dari supplier",
+  },
+};
+
 type StepState = "complete" | "current" | "pending";
 
 function Disc({
@@ -146,7 +163,9 @@ export function OrderStepper({ order }: { order: OrderDetail }) {
     <>
       <ol className="relative">
         {steps.map((step, index) => {
-          const copy = STEP_COPY[step.status];
+          const copy = (order.service.via === "supplier" ? SUPPLIER_STEP_COPY : STEP_COPY)[
+            step.status
+          ];
           const timestamp = timestampFor(step.status);
           const isLast = index === steps.length - 1 && !failure;
           const nextComplete = steps[index + 1]?.state === "complete";

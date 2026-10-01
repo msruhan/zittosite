@@ -10,6 +10,7 @@ import { OrdersService } from "./orders.service";
 import { OrderExpiryService } from "./order-expiry.service";
 import { TopupController } from "./topup.controller";
 import { TopupService } from "./topup.service";
+import { SupplierDispatch } from "./supplier-dispatch";
 
 @Module({
   imports: [
@@ -20,7 +21,7 @@ import { TopupService } from "./topup.service";
     WhatsappModule,
   ],
   controllers: [OrdersController, ServicesController, TopupController],
-  providers: [OrdersService, OrderExpiryService, TopupService],
-  exports: [OrdersService, TopupService],
+  providers: [OrdersService, OrderExpiryService, TopupService, SupplierDispatch],
+  exports: [OrdersService, TopupService, SupplierDispatch],
 })
 export class OrdersModule {}

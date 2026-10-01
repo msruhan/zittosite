@@ -57,7 +57,7 @@ export function UserOrderTable({ orders }: { orders: OrderDetail[] }) {
                 </DataValue>
               </TD>
               <TD>
-                <StatusBadge status={order.status} />
+                <StatusBadge status={order.status} via={order.service.via} />
               </TD>
               <TD>
                 <time

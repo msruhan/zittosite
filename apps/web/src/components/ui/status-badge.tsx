@@ -10,19 +10,28 @@ const shell = [
   "transition-[background-color,color,border-color,transform] duration-200 ease-out-strong",
 ];
 
+/** Supplier API orders skip the admin queue, so admin-centric labels are renamed. */
+const SUPPLIER_LABEL: Partial<Record<OrderStatus, string>> = {
+  waiting_action: "Dikirim",
+  in_process: "Diproses",
+};
+
 export function StatusBadge({
   status,
+  via,
   className,
   stampIn = false,
 }: {
   status: OrderStatus;
+  via?: "supplier" | "manual";
   className?: string;
   stampIn?: boolean;
 }) {
   const meta = ORDER_STATUS[status];
+  const label = (via === "supplier" && SUPPLIER_LABEL[status]) || meta.label;
   return (
     <span className={cn(shell, meta.stamp, stampIn && "stamp-in", className)}>
-      {meta.label}
+      {label}
     </span>
   );
 }

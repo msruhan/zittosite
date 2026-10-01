@@ -205,6 +205,8 @@ export class AdminOrdersService {
       id: string;
       orderId: string;
       userId: string;
+      imei: string;
+      service: { name: string };
       statusReason: string | null;
       createdAt: Date;
       invoice: { paidAt: Date | null } | null;
@@ -230,6 +232,8 @@ export class AdminOrdersService {
         ? userOrderNoticeHtml({
             kind: "rejected",
             orderId: order.orderId,
+            imei: order.imei,
+            serviceName: order.service.name,
             reason,
             refund: refunded,
             duration: processDurationLabel(order),

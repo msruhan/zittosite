@@ -28,6 +28,7 @@ import {
 import { serializeOrderListItem, serializeService } from "./orders.serializer";
 import { parseImeiList } from "./imei-list";
 import { type OrderVia, orderViaWhere, serviceViaWhere } from "./supplier-routed";
+import { SupplierDispatch } from "./supplier-dispatch";
 import { TopupService } from "./topup.service";
 import {
   applyBalance,
@@ -83,6 +84,7 @@ export class OrdersService {
     private readonly audit: AuditLogService,
     private readonly whatsappNotify: WhatsappNotifyService,
     private readonly topups: TopupService,
+    private readonly supplierDispatch: SupplierDispatch,
   ) {}
 
   async listServices(userId: string, via?: OrderVia) {
@@ -822,6 +824,8 @@ export class OrdersService {
       userOrderNoticeHtml({
         kind: "rejected",
         orderId: updated.orderId,
+        imei: updated.imei,
+        serviceName: updated.service.name,
         reason: note,
         refund: refunded,
         duration: processDurationLabel(updated),
@@ -912,6 +916,8 @@ export class OrdersService {
       userOrderNoticeHtml({
         kind: "done",
         orderId: updated.orderId,
+        imei: updated.imei,
+        serviceName: updated.service.name,
         resultStatus: input.resultStatus,
         note: typedNote,
         refund: refunded,
@@ -930,7 +936,7 @@ export class OrdersService {
   async applyProcessorUpdate(
     internalOrderId: string,
     update:
-      | { kind: "processing" }
+      | { kind: "processing"; note?: string }
       | { kind: "done"; note?: string }
       | { kind: "rejected"; reason: string },
     actor: { username: string; fullName: string },
@@ -948,7 +954,7 @@ export class OrdersService {
           : "rejected";
     const note =
       update.kind === "processing"
-        ? `Diproses oleh ${actorLabel}.`
+        ? update.note ?? `Diproses oleh ${actorLabel}.`
         : update.kind === "done"
           ? update.note?.trim() || "IMEI berhasil diproses."
           : update.reason;
@@ -1033,6 +1039,8 @@ export class OrdersService {
         userOrderNoticeHtml({
           kind: "done",
           orderId: updated.orderId,
+          imei: updated.imei,
+          serviceName: updated.service.name,
           resultStatus: "success",
           note: update.note?.trim() ?? "",
           duration: processDurationLabel(updated),
@@ -1046,6 +1054,8 @@ export class OrdersService {
         userOrderNoticeHtml({
           kind: "rejected",
           orderId: updated.orderId,
+          imei: updated.imei,
+          serviceName: updated.service.name,
           reason: note,
           refund: updated.refunded,
           duration: processDurationLabel(updated),
@@ -1184,7 +1194,13 @@ export class OrdersService {
       if (claimed.count !== 1) return null;
       const orders = await tx.order.findMany({
         where: { invoiceId: invoiceRowId, status: "waiting_payment" },
-        select: { id: true, orderId: true, userId: true, price: true },
+        select: {
+          id: true,
+          orderId: true,
+          userId: true,
+          price: true,
+          service: { select: { fulfillmentChannel: true } },
+        },
         orderBy: { orderId: "asc" },
       });
       for (const order of orders) {
@@ -1203,7 +1219,10 @@ export class OrdersService {
             activity: {
               create: {
                 status: "waiting_action",
-                note: "Order masuk antrean dan siap diambil admin.",
+                note:
+                  order.service.fulfillmentChannel === "supplier"
+                    ? "Order diteruskan otomatis ke Supplier API."
+                    : "Order masuk antrean dan siap diambil admin.",
                 actor: "Sistem",
               },
             },
@@ -1225,6 +1244,9 @@ export class OrdersService {
         method: payment.channel,
       });
       void this.adminNotify.notifyNewOrder(order.id);
+    }
+    if (result.orders.some((order) => order.service.fulfillmentChannel === "supplier")) {
+      this.supplierDispatch.notifyPaid();
     }
     if (result.whatsappId) void this.whatsappNotify.deliver(result.whatsappId);
     return result.orders;

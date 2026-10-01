@@ -766,6 +766,8 @@ type UserOrderNotice =
   | {
       kind: "rejected";
       orderId: string;
+      imei: string;
+      serviceName?: string;
       reason?: string;
       refund?: number;
       duration?: string;
@@ -773,6 +775,8 @@ type UserOrderNotice =
   | {
       kind: "done";
       orderId: string;
+      imei: string;
+      serviceName?: string;
       resultStatus: string;
       note: string;
       refund?: number;
@@ -792,6 +796,13 @@ function refundLines(amount: number | undefined): string[] {
   return amount && amount > 0
     ? ["", `💳 Dana <b>${formatRp(amount)}</b> sudah dikembalikan ke saldo akun Anda.`]
     : [];
+}
+
+function orderSubjectLines(notice: { imei: string; serviceName?: string }): string[] {
+  return [
+    ...(notice.serviceName ? [row("📦", "Layanan", notice.serviceName)] : []),
+    row("📱", "IMEI", notice.imei, true),
+  ];
 }
 
 /** Status updates sent to the customer's own chat. */
@@ -821,6 +832,7 @@ export function userOrderNoticeHtml(notice: UserOrderNotice): string {
         "❌ <b>Order ditolak</b>",
         "",
         id,
+        ...orderSubjectLines(notice),
         ...(notice.reason ? [row("📝", "Alasan", notice.reason)] : []),
         ...durationLines(notice.duration),
         ...refundLines(notice.refund),
@@ -830,6 +842,7 @@ export function userOrderNoticeHtml(notice: UserOrderNotice): string {
         "🎉 <b>Order selesai</b>",
         "",
         id,
+        ...orderSubjectLines(notice),
         row("📊", "Hasil", RESULT_LABEL[notice.resultStatus] ?? notice.resultStatus),
         ...(notice.note ? [row("📝", "Catatan", notice.note)] : []),
         ...durationLines(notice.duration),

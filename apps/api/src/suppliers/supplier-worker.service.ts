@@ -2,15 +2,21 @@ import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from "@nestjs/commo
 import type { Supplier } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
 import { OrdersService } from "../orders/orders.service";
+import { SupplierDispatch } from "../orders/supplier-dispatch";
 import { SupplierRequestError } from "./dhru-supplier-client";
 import { supplierClient } from "./suppliers.service";
 
 export const MAX_SUBMIT_ATTEMPTS = 5;
-const DEFAULT_INTERVAL_MS = 30_000;
+const DEFAULT_INTERVAL_MS = 5_000;
 const SUBMIT_BATCH = 20;
 const POLL_BATCH = 50;
-/** In-process orders are re-checked at most this often. */
+/** In-process orders are re-checked at most this often... */
 const POLL_EVERY_MS = 60_000;
+/** ...except right after submission, when instant services usually finish. */
+const FRESH_WINDOW_MS = 10 * 60_000;
+const FRESH_POLL_EVERY_MS = 4_000;
+/** First status check after a successful submit. */
+const FIRST_CHECK_DELAY_MS = 2_000;
 
 /** Supplier refusals that are about our own account and worth retrying. */
 export function isRetryableSupplierError(message: string): boolean {
@@ -35,31 +41,49 @@ export class SupplierWorkerService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(SupplierWorkerService.name);
   private timer: NodeJS.Timeout | null = null;
   private running = false;
+  private rerun = false;
+  private unsubscribe: (() => void) | null = null;
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly orders: OrdersService,
+    private readonly dispatch: SupplierDispatch,
   ) {}
 
   onModuleInit() {
     if (process.env.SUPPLIER_WORKER === "0" || process.env.NODE_ENV === "test") return;
     const ms = Number(process.env.SUPPLIER_POLL_MS ?? DEFAULT_INTERVAL_MS);
-    const interval = Number.isFinite(ms) && ms >= 5_000 ? ms : DEFAULT_INTERVAL_MS;
+    const interval = Number.isFinite(ms) && ms >= 2_000 ? ms : DEFAULT_INTERVAL_MS;
     this.timer = setInterval(() => void this.tick(), interval);
     this.timer.unref();
+    this.unsubscribe = this.dispatch.onPaid(() => this.kick());
   }
 
   onModuleDestroy() {
     if (this.timer) clearInterval(this.timer);
     this.timer = null;
+    this.unsubscribe?.();
+    this.unsubscribe = null;
+  }
+
+  /** Runs a tick now, or right after the one in progress. */
+  kick(delayMs = 0) {
+    const timeout = setTimeout(() => void this.tick(), delayMs);
+    timeout.unref();
   }
 
   async tick() {
-    if (this.running) return;
+    if (this.running) {
+      this.rerun = true;
+      return;
+    }
     this.running = true;
     try {
-      await this.submitPending();
-      await this.pollInProcess();
+      do {
+        this.rerun = false;
+        await this.submitPending();
+        await this.pollInProcess();
+      } while (this.rerun);
     } catch (err) {
       this.logger.error(`Supplier worker tick failed: ${errorText(err)}`);
     } finally {
@@ -118,11 +142,16 @@ export class SupplierWorkerService implements OnModuleInit, OnModuleDestroy {
             data: {
               supplierRef: reply.data.referenceId,
               supplierSubmittedAt: new Date(),
-              supplierCheckedAt: new Date(),
+              supplierCheckedAt: null,
               supplierError: null,
             },
           });
-          await this.orders.applyProcessorUpdate(order.id, { kind: "processing" }, this.actor(supplier));
+          await this.orders.applyProcessorUpdate(
+            order.id,
+            { kind: "processing", note: "Diterima Supplier API, sedang diproses otomatis." },
+            this.actor(supplier),
+          );
+          this.kick(FIRST_CHECK_DELAY_MS);
           continue;
         }
         failure = reply.message;
@@ -153,13 +182,20 @@ export class SupplierWorkerService implements OnModuleInit, OnModuleDestroy {
   }
 
   async pollInProcess() {
-    const due = new Date(Date.now() - POLL_EVERY_MS);
+    const now = Date.now();
+    const due = new Date(now - POLL_EVERY_MS);
+    const freshDue = new Date(now - FRESH_POLL_EVERY_MS);
+    const freshSince = new Date(now - FRESH_WINDOW_MS);
     const orders = await this.prisma.order.findMany({
       where: {
         status: "in_process",
         supplierRef: { not: null },
         supplierId: { not: null },
-        OR: [{ supplierCheckedAt: null }, { supplierCheckedAt: { lt: due } }],
+        OR: [
+          { supplierCheckedAt: null },
+          { supplierCheckedAt: { lt: due } },
+          { supplierSubmittedAt: { gte: freshSince }, supplierCheckedAt: { lt: freshDue } },
+        ],
       },
       include: { supplier: true },
       orderBy: { supplierCheckedAt: { sort: "asc", nulls: "first" } },

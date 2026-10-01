@@ -60,7 +60,7 @@ export default async function OrderDetailPage({
             <p className="text-label uppercase text-ink-soft">Order ID</p>
             <TicketId className="mt-1 block">{order.orderId}</TicketId>
           </div>
-          <StatusBadge status={order.status} />
+          <StatusBadge status={order.status} via={order.service.via} />
         </CardHeader>
 
         <CardBody className="pt-3">
