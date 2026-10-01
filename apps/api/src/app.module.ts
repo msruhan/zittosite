@@ -9,6 +9,7 @@ import { TelegramModule } from "./telegram/telegram.module";
 import { OrdersModule } from "./orders/orders.module";
 import { PaymentsModule } from "./payments/payments.module";
 import { WhatsappInboundModule } from "./whatsapp-inbound/whatsapp-inbound.module";
+import { RunningAdsModule } from "./running-ads/running-ads.module";
 import { HealthController } from "./health/health.controller";
 
 @Module({
@@ -22,6 +23,7 @@ import { HealthController } from "./health/health.controller";
     OrdersModule,
     PaymentsModule,
     WhatsappInboundModule,
+    RunningAdsModule,
   ],
   controllers: [HealthController],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],

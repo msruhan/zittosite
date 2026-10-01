@@ -8,6 +8,8 @@ import { OrdersController } from "./orders.controller";
 import { ServicesController } from "./services.controller";
 import { OrdersService } from "./orders.service";
 import { OrderExpiryService } from "./order-expiry.service";
+import { TopupController } from "./topup.controller";
+import { TopupService } from "./topup.service";
 
 @Module({
   imports: [
@@ -17,8 +19,8 @@ import { OrderExpiryService } from "./order-expiry.service";
     forwardRef(() => AdminNotifyModule),
     WhatsappModule,
   ],
-  controllers: [OrdersController, ServicesController],
-  providers: [OrdersService, OrderExpiryService],
-  exports: [OrdersService],
+  controllers: [OrdersController, ServicesController, TopupController],
+  providers: [OrdersService, OrderExpiryService, TopupService],
+  exports: [OrdersService, TopupService],
 })
 export class OrdersModule {}

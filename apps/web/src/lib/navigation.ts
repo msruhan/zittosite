@@ -5,6 +5,7 @@ import {
   Gauge,
   Gear,
   ListChecks,
+  Megaphone,
   Package,
   PaperPlaneTilt,
   Shield,
@@ -12,6 +13,7 @@ import {
   SquaresFour,
   User,
   Users,
+  Wallet,
 } from "@phosphor-icons/react";
 import type { Icon } from "@phosphor-icons/react";
 
@@ -27,6 +29,7 @@ export const userNav: NavItem[] = [
   { href: "/app/dashboard", label: "Dashboard", icon: SquaresFour },
   { href: "/app/order", label: "Order", icon: Package, nested: true },
   { href: "/app/riwayat", label: "Riwayat Order", icon: ClockCounterClockwise },
+  { href: "/app/topup", label: "Topup Saldo", icon: Wallet, nested: true },
   { href: "/app/telegram", label: "Telegram", icon: PaperPlaneTilt },
   { href: "/app/profil", label: "Profil", icon: User },
   { href: "/app/security", label: "Security", icon: Shield },
@@ -38,6 +41,7 @@ export const adminNav: NavItem[] = [
   { href: "/admin/users", label: "Users", icon: Users },
   { href: "/admin/admins", label: "Admins", icon: ShieldCheck },
   { href: "/admin/services", label: "Services", icon: Package },
+  { href: "/admin/running-ads", label: "Ads Runner", icon: Megaphone },
   { href: "/admin/reports", label: "Reports", icon: FileText },
   { href: "/admin/activity", label: "Log Aktivitas", icon: ListChecks },
   { href: "/admin/security", label: "Security", icon: Shield },

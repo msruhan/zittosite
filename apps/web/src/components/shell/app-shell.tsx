@@ -16,6 +16,8 @@ interface AppShellProps {
   navLabel?: string;
   hideHrefs?: string[];
   topbarRight?: React.ReactNode;
+  /** Full-width strip under the top bar (e.g. the announcement ticker). */
+  banner?: React.ReactNode;
   children: React.ReactNode;
 }
 
@@ -55,6 +57,7 @@ export function AppShell({
   navLabel,
   hideHrefs,
   topbarRight,
+  banner,
   children,
 }: AppShellProps) {
   const [drawerOpen, setDrawerOpen] = React.useState(false);
@@ -142,6 +145,8 @@ export function AppShell({
               {topbarRight}
             </div>
           </header>
+
+          {banner}
 
           <main className="paper-ground min-h-[calc(100dvh-3.5rem)]">
             <div className="mx-auto w-full max-w-[1280px] px-4 py-6 sm:px-6 sm:py-8">

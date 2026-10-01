@@ -89,11 +89,12 @@ export class AdminReportsService {
       services,
     ] = await Promise.all([
       this.prisma.paymentInvoice.aggregate({
-        where: { paymentStatus: "paid" },
+        where: { purpose: "order", paymentStatus: "paid" },
         _sum: { amount: true, balanceUsed: true },
       }),
       this.prisma.paymentInvoice.aggregate({
         where: {
+          purpose: "order",
           paymentStatus: "paid",
           paidAt: { gte: todayStart, lt: tomorrowStart },
         },
@@ -116,13 +117,14 @@ export class AdminReportsService {
       }),
       this.prisma.paymentInvoice.findMany({
         where: {
+          purpose: "order",
           paymentStatus: "paid",
           paidAt: { gte: windowStart, lt: tomorrowStart },
         },
         select: { paidAt: true, amount: true, balanceUsed: true },
       }),
       this.prisma.paymentInvoice.findMany({
-        where: { paymentStatus: "paid" },
+        where: { purpose: "order", paymentStatus: "paid" },
         select: {
           amount: true,
           orders: {

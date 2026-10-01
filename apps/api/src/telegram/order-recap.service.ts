@@ -37,7 +37,12 @@ export type SuperAdminRecap = {
   >;
 };
 
-export type RecapOrderLine = { at: Date; imei: string; status: OrderStatus };
+export type RecapOrderLine = {
+  at: Date;
+  imei: string;
+  status: OrderStatus;
+  service?: string;
+};
 
 export type OperatorRecap = {
   day: Date;
@@ -100,7 +105,7 @@ export class OrderRecapService {
           _count: { _all: true },
         }),
         this.prisma.paymentInvoice.aggregate({
-          where: { paymentStatus: "paid", paidAt: range },
+          where: { purpose: "order", paymentStatus: "paid", paidAt: range },
           _sum: { amount: true },
           _count: { _all: true },
         }),
@@ -120,6 +125,7 @@ export class OrderRecapService {
             status: true,
             startedAt: true,
             updatedAt: true,
+            service: { select: { name: true } },
           },
           orderBy: [{ startedAt: "asc" }, { updatedAt: "asc" }],
         }),
@@ -152,7 +158,12 @@ export class OrderRecapService {
     const ordersByAdmin = new Map<string, RecapOrderLine[]>();
     for (const o of handledOrders) {
       const list = ordersByAdmin.get(o.assignedAdminId!) ?? [];
-      list.push({ at: o.startedAt ?? o.updatedAt, imei: o.imei, status: o.status });
+      list.push({
+        at: o.startedAt ?? o.updatedAt,
+        imei: o.imei,
+        status: o.status,
+        service: o.service.name,
+      });
       ordersByAdmin.set(o.assignedAdminId!, list);
     }
 

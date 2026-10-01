@@ -9,7 +9,8 @@ export type BalanceReason =
   | "late_payment"
   | "order_payment"
   | "payment_release"
-  | "admin_adjust";
+  | "admin_adjust"
+  | "topup";
 
 /** Entries whose sum is an order's outstanding refund (credits minus reversals). */
 const ORDER_REFUND_REASONS: BalanceReason[] = [

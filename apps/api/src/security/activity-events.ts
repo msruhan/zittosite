@@ -169,6 +169,22 @@ export const ACTIVITY_EVENTS = {
         target ? ` ${target}` : ""
       } (${REFUND_REASON[String(fields.reason)] ?? fields.reason})`,
   },
+  "balance.topup_created": {
+    category: "payment",
+    label: "Topup dibuat",
+    summary: ({ fields, target }) =>
+      `Membuat topup ${fields.invoiceId} sebesar ${rp(fields.amount)} lewat ${
+        fields.channel === "telegram" ? "Telegram" : "website"
+      }${target ? ` (${target})` : ""}`,
+  },
+  "balance.topup_paid": {
+    category: "payment",
+    label: "Topup berhasil",
+    summary: ({ fields, target }) =>
+      `Topup ${fields.invoiceId} sebesar ${rp(fields.amount)} masuk ke saldo${
+        target ? ` ${target}` : ""
+      }${fields.method ? ` via ${fields.method}` : ""}`,
+  },
   "balance.refund_reversed": {
     category: "payment",
     label: "Refund ditarik",
@@ -255,6 +271,24 @@ export const ACTIVITY_EVENTS = {
     category: "admin",
     label: "Admin dihapus",
     summary: ({ target, fields }) => `Menghapus akun admin ${target ?? fields.adminId ?? ""}`,
+  },
+  "admin.running_ad.created": {
+    category: "admin",
+    label: "Ads Runner ditambahkan",
+    summary: ({ fields }) => `Menambahkan ads runner "${fields.text ?? ""}"`,
+  },
+  "admin.running_ad.updated": {
+    category: "admin",
+    label: "Ads Runner diperbarui",
+    summary: ({ fields }) =>
+      typeof fields.active === "boolean"
+        ? `${fields.active ? "Menampilkan" : "Menyembunyikan"} ads runner "${fields.text ?? ""}"`
+        : `Memperbarui ads runner "${fields.text ?? ""}"`,
+  },
+  "admin.running_ad.deleted": {
+    category: "admin",
+    label: "Ads Runner dihapus",
+    summary: ({ fields }) => `Menghapus ads runner "${fields.text ?? ""}"`,
   },
   "admin.service.created": {
     category: "service",

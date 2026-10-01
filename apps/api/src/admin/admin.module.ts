@@ -12,9 +12,10 @@ import { AdminAdminsService } from "./admin-admins.service";
 import { AdminReportsService } from "./admin-reports.service";
 import { SuperAdminGuard } from "./super-admin.guard";
 import { OrdersModule } from "../orders/orders.module";
+import { AdminNotifyModule } from "../telegram/admin-notify.module";
 
 @Module({
-  imports: [PrismaModule, OrdersModule],
+  imports: [PrismaModule, OrdersModule, AdminNotifyModule],
   controllers: [AdminAuthController, AdminOpsController],
   providers: [
     AdminAuthService,

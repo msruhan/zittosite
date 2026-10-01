@@ -25,6 +25,7 @@ import {
 } from "../payments/sayabayar.client";
 import { serializeOrderListItem, serializeService } from "./orders.serializer";
 import { parseImeiList } from "./imei-list";
+import { TopupService } from "./topup.service";
 import {
   applyBalance,
   refundNote,
@@ -77,6 +78,7 @@ export class OrdersService {
     private readonly sayabayar: SayabayarClient,
     private readonly audit: AuditLogService,
     private readonly whatsappNotify: WhatsappNotifyService,
+    private readonly topups: TopupService,
   ) {}
 
   async listServices(userId: string) {
@@ -363,7 +365,12 @@ export class OrdersService {
    * updates every admin's order card, and tells the customer. An already-paid
    * order is refunded to the customer's balance.
    */
-  async adminCancelOrder(adminId: string, publicOrderId: string, reason?: string) {
+  async adminCancelOrder(
+    adminId: string,
+    publicOrderId: string,
+    reason?: string,
+    options: { fromWeb?: boolean } = {},
+  ) {
     const admin = await this.prisma.admin.findUniqueOrThrow({
       where: { id: adminId },
     });
@@ -467,6 +474,11 @@ export class OrdersService {
       actorName: admin.fullName,
       note: why,
     });
+    if (options.fromWeb) {
+      void this.adminNotify.notifySuperAdminsFollowUp(order.id, "cancelled", admin, why, {
+        includeActor: true,
+      });
+    }
     void this.adminNotify.notifyUserById(
       order.userId,
       userOrderNoticeHtml({
@@ -540,6 +552,7 @@ export class OrdersService {
   }): Promise<"paid" | "duplicate" | "unmatched" | "amount_mismatch" | "late"> {
     const invoice = await this.findGatewayInvoice(input);
     if (!invoice) return "unmatched";
+    if (invoice.purpose === "topup") return this.topups.applyGatewayPaid(invoice, input);
     if (invoice.paymentStatus === "paid") return "duplicate";
     if (invoice.amount - invoice.balanceUsed !== input.amount) {
       return "amount_mismatch";
@@ -609,6 +622,7 @@ export class OrdersService {
   ): Promise<"closed" | "ignored" | "unmatched"> {
     const invoice = await this.findGatewayInvoice(input);
     if (!invoice) return "unmatched";
+    if (invoice.purpose === "topup") return this.topups.closeFromGateway(invoice.id, status);
 
     const closed = await this.prisma.$transaction((tx) =>
       this.closePendingInvoice(tx, invoice.id, status, {

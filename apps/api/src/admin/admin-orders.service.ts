@@ -14,6 +14,8 @@ import {
   type RefundReason,
 } from "../orders/balance";
 import { AuditLogService } from "../security/audit-log.service";
+import { AdminNotifyService } from "../telegram/admin-notify.service";
+import { userOrderNoticeHtml } from "../telegram/telegram-messages";
 
 const orderInclude = {
   service: true,
@@ -46,6 +48,7 @@ export class AdminOrdersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditLogService,
+    private readonly adminNotify: AdminNotifyService,
   ) {}
 
   private async redactFor(viewerAdminId: string): Promise<boolean> {
@@ -184,9 +187,48 @@ export class AdminOrdersService {
         status: next,
       });
     }
+    if (order.status !== next && (next === "rejected" || next === "cancel")) {
+      this.notifyClosed(updated, next, admin, refunded, order.status !== "waiting_payment");
+    }
     return serializeOrderListItem(updated, {
       redactUser: admin.role !== "super_admin",
     });
+  }
+
+  /** Telegram fan-out for a website override: admin order cards, Super Admins, and the customer. */
+  private notifyClosed(
+    order: { id: string; orderId: string; userId: string; statusReason: string | null },
+    next: "rejected" | "cancel",
+    admin: { id: string; username: string; fullName: string },
+    refunded: number,
+    wasPaid: boolean,
+  ) {
+    const reason = order.statusReason?.trim() || undefined;
+    const kind = next === "rejected" ? "rejected" : "cancelled";
+    void this.adminNotify.syncOrderCards(order.id, kind, {
+      actorName: admin.fullName,
+      note: reason,
+    });
+    void this.adminNotify.notifySuperAdminsFollowUp(order.id, kind, admin, reason, {
+      includeActor: true,
+    });
+    void this.adminNotify.notifyUserById(
+      order.userId,
+      next === "rejected"
+        ? userOrderNoticeHtml({
+            kind: "rejected",
+            orderId: order.orderId,
+            reason,
+            refund: refunded,
+          })
+        : userOrderNoticeHtml({
+            kind: "cancelled",
+            orderId: order.orderId,
+            reason: reason ?? "Dibatalkan oleh Super Admin.",
+            wasPaid,
+            refund: refunded,
+          }),
+    );
   }
 
   /** Super Admin edits the keterangan of a closed order; the customer is not notified. */
@@ -252,7 +294,7 @@ export class AdminOrdersService {
       this.prisma.user.count(),
       this.prisma.service.count({ where: { active: true } }),
       this.prisma.paymentInvoice.aggregate({
-        where: { paymentStatus: "paid", paidAt: { gte: start } },
+        where: { purpose: "order", paymentStatus: "paid", paidAt: { gte: start } },
         _sum: { amount: true },
       }),
       this.prisma.order.findMany({

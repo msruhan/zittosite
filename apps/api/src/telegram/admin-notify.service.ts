@@ -87,14 +87,15 @@ export class AdminNotifyService {
     // WhatsApp-fulfilled services are processed in the WA group; only super admins get an info card.
     const viaWhatsapp = order.service.fulfillmentChannel === "whatsapp";
 
-    const assigned = new Set(
-      (
-        await this.prisma.serviceAssignment.findMany({
-          where: { serviceId: order.serviceId },
-          select: { adminId: true },
-        })
-      ).map((row) => row.adminId),
-    );
+    const assignments = await this.prisma.serviceAssignment.findMany({
+      where: { serviceId: order.serviceId },
+      select: { adminId: true, admin: { select: { fullName: true, status: true } } },
+      orderBy: { admin: { fullName: "asc" } },
+    });
+    const assigned = new Set(assignments.map((row) => row.adminId));
+    const assignedNames = assignments
+      .filter((row) => row.admin.status === "active")
+      .map((row) => row.admin.fullName);
     const destinations = (
       await this.adminTelegram.notificationDestinations()
     ).filter(
@@ -120,6 +121,7 @@ export class AdminNotifyService {
         channel: order.channel,
         price: order.price,
       },
+      assignedAdmins: assignedNames,
       viaWhatsapp,
     });
     const replyMarkup = {
@@ -292,11 +294,16 @@ export class AdminNotifyService {
   }
 
   /** Fresh (audible) message to super admins, skipping the acting admin. Never throws. */
+  /**
+   * `includeActor` also messages the acting Super Admin, for actions taken on
+   * the website where the bot chat shows no confirmation of its own.
+   */
   async notifySuperAdminsFollowUp(
     internalOrderId: string,
-    kind: "taken" | "rejected" | "done",
+    kind: "taken" | "rejected" | "done" | "cancelled",
     actor: { id: string; username: string; fullName: string },
     note?: string,
+    options: { includeActor?: boolean } = {},
   ): Promise<void> {
     const token = process.env.TELEGRAM_BOT_TOKEN?.trim();
     if (!token) return;
@@ -309,7 +316,9 @@ export class AdminNotifyService {
 
       const recipients = (
         await this.adminTelegram.notificationDestinations()
-      ).filter((d) => d.role === "super_admin" && d.adminId !== actor.id);
+      ).filter(
+        (d) => d.role === "super_admin" && (options.includeActor || d.adminId !== actor.id),
+      );
       if (!recipients.length) return;
 
       const base = {
@@ -338,6 +347,24 @@ export class AdminNotifyService {
         `Super admin follow-up notify error: ${
           err instanceof Error ? err.message : String(err)
         }`,
+      );
+    }
+  }
+
+  /** HTML message to every Super Admin's private chat. Never throws. */
+  async notifySuperAdmins(html: string): Promise<void> {
+    const token = process.env.TELEGRAM_BOT_TOKEN?.trim();
+    if (!token) return;
+    try {
+      const recipients = (await this.adminTelegram.notificationDestinations()).filter(
+        showsCustomer,
+      );
+      for (const chatId of new Set(recipients.map((d) => d.chatId))) {
+        await this.sendMessage(token, chatId, html);
+      }
+    } catch (err) {
+      this.logger.warn(
+        `Super admin notify error: ${err instanceof Error ? err.message : String(err)}`,
       );
     }
   }

@@ -52,6 +52,7 @@ function totpHeaders(code?: string): HeadersInit {
 type InviteLink = { admin: Admin; botUrl: string; expiresAt: string };
 
 const dateTime = new Intl.DateTimeFormat("id-ID", {
+  timeZone: "Asia/Jakarta",
   day: "numeric",
   month: "short",
   hour: "2-digit",

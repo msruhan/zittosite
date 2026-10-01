@@ -20,6 +20,19 @@ export type PaymentStatus =
   | "expired"
   | "cancelled";
 
+export interface Topup {
+  invoiceId: string;
+  amount: number;
+  amountDue: number;
+  status: PaymentStatus;
+  qrisString: string | null;
+  checkoutUrl: string | null;
+  paymentChannel: string;
+  expiredAt: string;
+  paidAt: string | null;
+  createdAt: string;
+}
+
 export type OrderChannel = "web" | "telegram";
 
 export type UserStatus = "active" | "suspended";
@@ -149,6 +162,19 @@ export interface Order {
   completedAt: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export type RunningAdColor = "yellow" | "red" | "green" | "blue" | "white";
+
+/** Announcement scrolled in the member portal ticker. */
+export interface RunningAd {
+  id: string;
+  text: string;
+  linkUrl: string | null;
+  tag: string | null;
+  tagColor: RunningAdColor;
+  isActive?: boolean;
+  sortOrder?: number;
 }
 
 /** An order joined with the records a screen needs to render it. */

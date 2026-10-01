@@ -11,6 +11,8 @@ import type { Admin, ResultStatus, User } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
 import { webPublicUrl } from "../config/env";
 import { OrdersService } from "../orders/orders.service";
+import { TopupService, type SerializedTopup } from "../orders/topup.service";
+import { TOPUP_PRESETS, parseTopupAmount, topupLimitMessage } from "../orders/topup-amount";
 import { TelegramLinkTokenService } from "./telegram-link-token.service";
 import { OrderRecapService } from "./order-recap.service";
 import {
@@ -43,6 +45,8 @@ import {
   statusAdminHtml,
   statusMemberHtml,
   superAdminRecapHtml,
+  topupPickHtml,
+  topupQrisCaptionHtml,
   unlinkedHtml,
   type BulkItem,
 } from "./telegram-messages";
@@ -58,6 +62,7 @@ const MEMBER_COMMANDS: BotCommandDef[] = [
   { command: "saldo", description: "Cek saldo akun" },
   { command: "order", description: "Buat order baru" },
   { command: "riwayat", description: "5 order terakhir" },
+  { command: "topup", description: "Topup saldo via QRIS" },
 ];
 
 const OPERATOR_COMMANDS: BotCommandDef[] = [
@@ -98,7 +103,25 @@ function memberMenuKeyboard() {
     .text("📋 Riwayat", "menu:riwayat")
     .row()
     .text("💎 Saldo", "menu:saldo")
+    .text("💳 Topup", "menu:topup")
+    .row()
     .text("👤 Status", "menu:status");
+}
+
+function topupAmountKeyboard() {
+  const keyboard = new InlineKeyboard();
+  TOPUP_PRESETS.forEach((amount, i) => {
+    keyboard.text(formatRp(amount), `top:amt:${amount}`);
+    if (i % 2 === 1) keyboard.row();
+  });
+  return keyboard.text("✏️ Nominal lain", "top:custom").row().text("⬅️ Menu", "menu:home");
+}
+
+function pendingTopupKeyboard(invoiceId: string) {
+  return new InlineKeyboard()
+    .text("❌ Batalkan topup", `top:cancel:${invoiceId}`)
+    .row()
+    .text("⬅️ Menu", "menu:home");
 }
 
 function backToMenuKeyboard() {
@@ -146,7 +169,8 @@ type ChatSession =
       adminId: string;
       resultStatus: ResultStatus;
     }
-  | { kind: "user_imei"; userId: string; serviceCode: string; serviceName: string; price: number };
+  | { kind: "user_imei"; userId: string; serviceCode: string; serviceName: string; price: number }
+  | { kind: "topup_amount"; userId: string };
 
 @Injectable()
 export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
@@ -163,6 +187,7 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
     private readonly orders: OrdersService,
     private readonly invites: AdminTelegramInviteService,
     private readonly recap: OrderRecapService,
+    private readonly topups: TopupService,
   ) {}
 
   getBot(): Bot | null {
@@ -380,6 +405,7 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
     bot.command("saldo", (ctx) => this.showSaldo(ctx));
     bot.command("order", (ctx) => this.showOrderPicker(ctx));
     bot.command("riwayat", (ctx) => this.showHistory(ctx));
+    bot.command("topup", (ctx) => this.showTopup(ctx));
     bot.command("rekap", (ctx) => this.showRecap(ctx));
     bot.command("rekaporder", (ctx) => this.sendAdminRecaps(ctx));
     bot.command("cancel", (ctx) => this.handleSuperAdminCancelCommand(ctx));
@@ -445,6 +471,28 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
         } else if (data.startsWith("uord:keep:")) {
           await ctx.answerCallbackQuery({ text: "Order tetap aktif" });
           await ctx.deleteMessage().catch(() => undefined);
+        } else if (data.startsWith("top:amt:")) {
+          await ctx.answerCallbackQuery();
+          await this.startTopup(ctx, data.slice("top:amt:".length));
+        } else if (data === "top:custom") {
+          const actor = await this.requireMember(ctx);
+          if (!actor) return;
+          this.sessions.set(chatId, { kind: "topup_amount", userId: actor.user.id });
+          await ctx.answerCallbackQuery();
+          await this.replyHtml(
+            ctx,
+            `Ketik nominal topup, misalnya <code>150000</code>.\n${escapeHtml(topupLimitMessage())}`,
+          );
+        } else if (data.startsWith("top:cancel:")) {
+          const actor = await this.requireMember(ctx);
+          if (!actor) return;
+          const invoiceId = data.slice("top:cancel:".length);
+          await this.topups.cancel(actor.user.id, invoiceId);
+          await ctx.answerCallbackQuery({ text: "Topup dibatalkan" });
+          const html = `🚫 Topup <code>${escapeHtml(invoiceId)}</code> dibatalkan.`;
+          await ctx
+            .editMessageCaption({ caption: html, parse_mode: TELEGRAM_PARSE_MODE })
+            .catch(() => this.replyHtml(ctx, html, { reply_markup: backToMenuKeyboard() }));
         } else if (data.startsWith("menu:")) {
           await this.handleMenuPick(ctx, data.slice("menu:".length));
         } else if (data.startsWith("inv:ok:") || data.startsWith("inv:no:")) {
@@ -473,6 +521,19 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
       const chatId = String(ctx.chat?.id ?? "");
       const session = this.sessions.get(chatId);
       if (!session) return next();
+
+      if (session.kind === "topup_amount") {
+        if (parseTopupAmount(text) === null) {
+          await this.replyHtml(
+            ctx,
+            `⚠️ ${escapeHtml(topupLimitMessage())} Ketik angka saja, misalnya <code>150000</code>.`,
+          );
+          return;
+        }
+        this.sessions.delete(chatId);
+        await this.startTopup(ctx, text);
+        return;
+      }
 
       if (session.kind === "done_note") {
         this.sessions.delete(chatId);
@@ -597,6 +658,7 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
     if (item === "riwayat") return this.showHistory(ctx);
     if (item === "saldo") return this.showSaldo(ctx);
     if (item === "status") return this.showStatus(ctx);
+    if (item === "topup") return this.showTopup(ctx);
     if (item === "rekap") return this.showRecap(ctx);
     return this.showMenu(ctx);
   }
@@ -722,7 +784,84 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
         balance: actor.user.creditBalance,
         portalUrl: `${webPublicUrl()}/app`,
       }),
-      { reply_markup: backToMenuKeyboard() },
+      {
+        reply_markup: new InlineKeyboard()
+          .text("💳 Topup", "menu:topup")
+          .text("⬅️ Menu", "menu:home"),
+      },
+    );
+  }
+
+  private async showTopup(ctx: Context) {
+    const actor = await this.requireMemberOrAdmin(ctx);
+    if (!actor) return;
+    if (actor.kind === "admin") {
+      await this.replyHtml(ctx, "Topup saldo khusus akun user.");
+      return;
+    }
+    const pending = await this.topups.pending(actor.user.id);
+    if (pending) {
+      await this.replyTopupQris(ctx, pending);
+      return;
+    }
+    await this.replyHtml(ctx, topupPickHtml(actor.user.creditBalance), {
+      reply_markup: topupAmountKeyboard(),
+    });
+  }
+
+  private async startTopup(ctx: Context, rawAmount: string) {
+    const actor = await this.requireMember(ctx);
+    if (!actor) return;
+    try {
+      const { topup, created } = await this.topups.create(
+        actor.user.id,
+        rawAmount,
+        "telegram",
+      );
+      if (!created) {
+        await this.replyHtml(
+          ctx,
+          "⏳ Masih ada topup yang menunggu pembayaran. Selesaikan atau batalkan dulu:",
+        );
+      }
+      await this.replyTopupQris(ctx, topup);
+    } catch (err: any) {
+      await this.replyHtml(ctx, `⚠️ ${escapeHtml(err?.message ?? "Gagal membuat topup")}`, {
+        reply_markup: backToMenuKeyboard(),
+      });
+    }
+  }
+
+  /** QRIS photo for a pending topup, falling back to the web payment page. */
+  private async replyTopupQris(ctx: Context, topup: SerializedTopup) {
+    const caption = topupQrisCaptionHtml({
+      invoiceId: topup.invoiceId,
+      amount: topup.amount,
+      amountDue: topup.amountDue,
+      expiresAt: new Date(topup.expiredAt),
+    });
+    if (topup.qrisString) {
+      try {
+        const png = await QRCode.toBuffer(topup.qrisString, {
+          type: "png",
+          width: 720,
+          margin: 3,
+          errorCorrectionLevel: "M",
+        });
+        await ctx.replyWithPhoto(new InputFile(png, `QRIS-${topup.invoiceId}.png`), {
+          caption,
+          parse_mode: TELEGRAM_PARSE_MODE,
+          reply_markup: pendingTopupKeyboard(topup.invoiceId),
+        });
+        return;
+      } catch (err: any) {
+        this.logger.warn(`Topup QRIS photo failed ${topup.invoiceId}: ${err?.message ?? err}`);
+      }
+    }
+    await this.replyHtml(
+      ctx,
+      [caption, "", "Bayar di portal:", escapeHtml(`${webPublicUrl()}/app/topup/${topup.invoiceId}`)].join("\n"),
+      { reply_markup: pendingTopupKeyboard(topup.invoiceId) },
     );
   }
 

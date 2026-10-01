@@ -5,6 +5,7 @@ import {
   OnModuleInit,
 } from "@nestjs/common";
 import { OrdersService } from "./orders.service";
+import { TopupService } from "./topup.service";
 
 const SWEEP_INTERVAL_MS = 60_000;
 
@@ -15,7 +16,10 @@ export class OrderExpiryService implements OnModuleInit, OnModuleDestroy {
   private timer: NodeJS.Timeout | null = null;
   private running = false;
 
-  constructor(private readonly orders: OrdersService) {}
+  constructor(
+    private readonly orders: OrdersService,
+    private readonly topups: TopupService,
+  ) {}
 
   onModuleInit() {
     this.timer = setInterval(() => void this.sweep(), SWEEP_INTERVAL_MS);
@@ -33,6 +37,8 @@ export class OrderExpiryService implements OnModuleInit, OnModuleDestroy {
     try {
       const expired = await this.orders.expireOverdueOrders();
       if (expired) this.logger.log(`Expired ${expired} unpaid order(s)`);
+      const topups = await this.topups.expireOverdue();
+      if (topups) this.logger.log(`Expired ${topups} unpaid topup(s)`);
     } catch (err) {
       this.logger.warn(
         `Expiry sweep failed: ${err instanceof Error ? err.message : String(err)}`,

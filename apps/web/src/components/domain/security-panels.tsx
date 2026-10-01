@@ -8,6 +8,7 @@ import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field, Input } from "@/components/ui/field";
 import { Tag } from "@/components/ui/status-badge";
 import { ApiError, api } from "@/lib/api";
+import { formatDateTime } from "@/lib/format";
 import { passwordPolicyError } from "@/lib/password";
 
 export function ChangePasswordCard({
@@ -285,7 +286,7 @@ export function AdminTotpCard() {
             <p className="text-body text-ink-soft">
               2FA aktif
               {enabledAt
-                ? ` sejak ${new Date(enabledAt).toLocaleString("id-ID")}`
+                ? ` sejak ${formatDateTime(enabledAt)} WIB`
                 : ""}
               . Nonaktifkan memerlukan password dan kode authenticator.
             </p>

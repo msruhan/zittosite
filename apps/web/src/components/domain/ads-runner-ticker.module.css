@@ -1,0 +1,24 @@
+.track {
+  animation: marquee 30s linear infinite;
+}
+
+.ticker:hover .track,
+.ticker:focus-within .track {
+  animation-play-state: paused;
+}
+
+@keyframes marquee {
+  to {
+    transform: translateX(-33.3333%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ticker {
+    overflow-x: auto;
+  }
+
+  .track {
+    animation: none;
+  }
+}

@@ -60,6 +60,11 @@ enum FulfillmentChannel {
   whatsapp
 }
 
+enum InvoicePurpose {
+  order
+  topup
+}
+
 enum PaymentStatus {
   pending
   paid
@@ -97,6 +102,7 @@ model User {
   orders         Order[]
   servicePrices  UserServicePrice[]
   balanceEntries BalanceEntry[]
+  topupInvoices  PaymentInvoice[]
 
   @@map("users")
 }
@@ -365,6 +371,9 @@ model OrderTelegramNotification {
 model PaymentInvoice {
   id               String        @id @default(cuid())
   invoiceId        String        @unique @map("invoice_id")
+  purpose          InvoicePurpose @default(order)
+  /// Owner of a topup invoice (topups have no orders).
+  userId           String?       @map("user_id")
   /// Bulk total: one invoice pays for every order in `orders`.
   amount           Int
   /// Part of `amount` paid from creditBalance at checkout; the gateway charges the rest.
@@ -381,9 +390,11 @@ model PaymentInvoice {
   createdAt        DateTime      @default(now()) @map("created_at")
   updatedAt        DateTime      @updatedAt @map("updated_at")
   orders           Order[]
+  user             User?         @relation(fields: [userId], references: [id], onDelete: Cascade)
   whatsappNotification WhatsappNotification?
 
   @@index([paymentReference])
+  @@index([userId, purpose, createdAt])
   @@map("payment_invoices")
 }
 
@@ -434,4 +445,21 @@ model OrderResult {
   createdByAdmin   Admin?       @relation(fields: [createdByAdminId], references: [id])
 
   @@map("order_results")
+}
+
+/// Announcements scrolled as a ticker under the member portal header.
+model RunningAd {
+  id        String   @id @default(cuid())
+  text      String
+  linkUrl   String?  @map("link_url")
+  /// Short label shown as a colored tag before the text (e.g. PROMO, INFO).
+  tag       String?
+  tagColor  String   @default("yellow") @map("tag_color")
+  isActive  Boolean  @default(true) @map("is_active")
+  sortOrder Int      @default(0) @map("sort_order")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([isActive, sortOrder])
+  @@map("running_ads")
 }

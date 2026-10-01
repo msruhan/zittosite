@@ -16,20 +16,48 @@ import { DataValue } from "@/components/ui/data-value";
 import { PaymentBadge } from "@/components/ui/status-badge";
 import { ApiError, api } from "@/lib/api";
 import { formatRupiah } from "@/lib/format";
-import type { OrderDetail } from "@/lib/types";
+import type { OrderDetail, Topup } from "@/lib/types";
 
 const PAYMENT_SIMULATION = process.env.NEXT_PUBLIC_PAYMENT_SIMULATION === "1";
 const STATUS_POLL_MS = 5_000;
 
+type PaymentState = "pending" | "paid" | "closed";
+
+async function fetchState(
+  kind: "order" | "topup",
+  id: string,
+  confirm = false,
+): Promise<PaymentState> {
+  if (kind === "topup") {
+    const topup = await api<Topup>(
+      `/topups/${id}${confirm ? "/check" : ""}`,
+      confirm ? { method: "POST" } : undefined,
+    );
+    return topup.status === "paid" ? "paid" : topup.status === "pending" ? "pending" : "closed";
+  }
+  const order = await api<OrderDetail>(
+    `/orders/${id}${confirm ? "/mark-paid" : ""}`,
+    confirm ? { method: "POST" } : undefined,
+  );
+  return order.status === "waiting_payment"
+    ? "pending"
+    : order.status === "cancel"
+      ? "closed"
+      : "paid";
+}
+
 export function PaymentPanel({
   orderId,
+  kind = "order",
   amount,
   expiresAt,
   qrPayload,
   checkoutUrl = null,
   gateway = false,
 }: {
+  /** Order ID, or the topup invoice ID when `kind` is "topup". */
   orderId: string;
+  kind?: "order" | "topup";
   amount: number;
   expiresAt: string;
   qrPayload: string | null;
@@ -40,39 +68,45 @@ export function PaymentPanel({
   const router = useRouter();
   const [expired, setExpired] = React.useState(false);
   const [confirming, setConfirming] = React.useState(false);
+  const isTopup = kind === "topup";
 
   const handleExpire = React.useCallback(() => setExpired(true), []);
 
   const handlePaid = React.useCallback(() => {
-    toast.success("Pembayaran diterima", {
-      description: "Order Anda masuk antrean admin.",
+    toast.success(isTopup ? "Topup berhasil" : "Pembayaran diterima", {
+      description: isTopup
+        ? "Saldo sudah masuk ke akun Anda."
+        : "Order Anda masuk antrean admin.",
     });
-    router.push("/app/riwayat");
+    router.push(isTopup ? "/app/topup" : "/app/riwayat");
     router.refresh();
-  }, [router]);
+  }, [router, isTopup]);
 
   React.useEffect(() => {
     if (!gateway || expired) return;
     const timer = window.setInterval(async () => {
       if (document.hidden) return;
       try {
-        const order = await api<OrderDetail>(`/orders/${orderId}`);
-        if (order.status === "cancel") setExpired(true);
-        else if (order.status !== "waiting_payment") handlePaid();
+        const state = await fetchState(kind, orderId);
+        if (state === "closed") setExpired(true);
+        else if (state === "paid") handlePaid();
       } catch {
         // Transient network errors: the next tick retries.
       }
     }, STATUS_POLL_MS);
     return () => window.clearInterval(timer);
-  }, [gateway, expired, orderId, handlePaid]);
+  }, [gateway, expired, kind, orderId, handlePaid]);
 
   async function handleConfirm() {
     setConfirming(true);
     try {
-      const order = await api<OrderDetail>(`/orders/${orderId}/mark-paid`, {
-        method: "POST",
-      });
-      if (order.status === "waiting_payment") {
+      const state = await fetchState(kind, orderId, true);
+      if (state === "closed") {
+        setExpired(true);
+        setConfirming(false);
+        return;
+      }
+      if (state === "pending") {
         toast("Sedang memverifikasi pembayaran", {
           description: "Halaman ini akan diperbarui otomatis begitu pembayaran terdeteksi.",
         });
@@ -100,15 +134,23 @@ export function PaymentPanel({
           <Warning className="size-5" weight="regular" />
         </span>
         <div className="space-y-1">
-          <p className="text-title text-ink">Batas waktu pembayaran habis</p>
+          <p className="text-title text-ink">
+            {isTopup ? "Topup tidak aktif lagi" : "Batas waktu pembayaran habis"}
+          </p>
           <p className="mx-auto max-w-[44ch] text-body text-ink-soft">
-            Invoice untuk order ini sudah kedaluwarsa, sehingga order dibatalkan.
-            Buat order baru untuk mendapatkan QRIS yang masih berlaku.
+            {isTopup
+              ? "Invoice topup ini sudah kedaluwarsa atau dibatalkan. Buat topup baru untuk mendapatkan QRIS yang masih berlaku."
+              : "Invoice untuk order ini sudah kedaluwarsa, sehingga order dibatalkan. Buat order baru untuk mendapatkan QRIS yang masih berlaku."}
           </p>
         </div>
-        <Button onClick={() => router.push("/app/order")}>
+        <Button
+          onClick={() => {
+            router.push(isTopup ? "/app/topup" : "/app/order");
+            router.refresh();
+          }}
+        >
           <ArrowsClockwise className="size-4" weight="regular" aria-hidden="true" />
-          Buat order baru
+          {isTopup ? "Buat topup baru" : "Buat order baru"}
         </Button>
       </div>
     );
@@ -166,10 +208,14 @@ export function PaymentPanel({
           />
           <span>
             {gateway
-              ? "Bayar tepat sesuai nominal di atas. Order otomatis masuk antrean setelah pembayaran terverifikasi."
+              ? `Bayar tepat sesuai nominal di atas. ${
+                  isTopup ? "Saldo otomatis masuk" : "Order otomatis masuk antrean"
+                } setelah pembayaran terverifikasi.`
               : PAYMENT_SIMULATION
                 ? "Mode simulasi: gunakan konfirmasi di bawah untuk menandai pembayaran."
-                : "Order otomatis masuk antrean setelah pembayaran terverifikasi. Hubungi support bila membutuhkan bantuan."}
+                : `${
+                    isTopup ? "Saldo otomatis masuk" : "Order otomatis masuk antrean"
+                  } setelah pembayaran terverifikasi. Hubungi support bila membutuhkan bantuan.`}
           </span>
         </p>
       </div>
@@ -188,7 +234,9 @@ export function PaymentPanel({
           <p className="text-center text-body text-ink-soft">
             {gateway
               ? "Sudah bayar? Tekan tombol ini agar pembayaran dicek lebih cepat."
-              : "Setelah transfer, tekan konfirmasi agar order masuk antrean."}
+              : isTopup
+                ? "Setelah transfer, tekan konfirmasi agar saldo masuk."
+                : "Setelah transfer, tekan konfirmasi agar order masuk antrean."}
           </p>
         </div>
       ) : null}

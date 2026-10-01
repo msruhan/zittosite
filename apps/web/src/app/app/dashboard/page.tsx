@@ -16,7 +16,7 @@ import { UserOrderTable } from "@/components/domain/user-order-table";
 import { ORDER_STATUS } from "@/lib/status";
 import { ApiError } from "@/lib/api";
 import { serverApi } from "@/lib/server-api";
-import { formatDateTime, formatRupiah } from "@/lib/format";
+import { formatDateTime, formatRupiah, jakartaMonthKey } from "@/lib/format";
 import type { OrderDetail, User } from "@/lib/types";
 
 export const metadata: Metadata = {
@@ -30,12 +30,7 @@ const ACTIVE = new Set([
   "in_process",
 ]);
 
-function toMonthKey(iso: string): string {
-  const d = new Date(iso);
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  return `${y}-${m}`;
-}
+const toMonthKey = jakartaMonthKey;
 
 function formatMonthLabel(key: string): string {
   const [y, m] = key.split("-").map(Number);
@@ -47,11 +42,11 @@ function formatMonthLabel(key: string): string {
 }
 
 function buildMonthOptions(orders: OrderDetail[]) {
-  const now = new Date();
+  const [nowYear, nowMonth] = jakartaMonthKey(new Date()).split("-").map(Number);
   const keys = new Set<string>();
 
   for (let i = 0; i < 12; i++) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const d = new Date(nowYear, nowMonth - 1 - i, 1);
     keys.add(
       `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`,
     );
@@ -159,8 +154,8 @@ export default async function UserDashboardPage({
           label="Saldo"
           value={formatRupiah(stats.balance)}
           hint="Saldo akun, otomatis dipakai saat order — tidak berubah oleh filter bulan."
-          caption={stats.balance === 0 ? "Tidak ada saldo" : "Siap dipakai"}
-          href="/app/profil"
+          caption={stats.balance === 0 ? "Tidak ada saldo · Topup" : "Siap dipakai"}
+          href="/app/topup"
         />
       </StatGrid>
 

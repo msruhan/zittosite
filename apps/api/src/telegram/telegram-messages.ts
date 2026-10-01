@@ -186,6 +186,33 @@ function recapOrderLines(
   return lines;
 }
 
+/** Order lines grouped under a bold service heading, numbering restarting per service. */
+function recapOrderLinesByService(
+  orders: Array<{ at: Date; imei: string; status: string; service?: string }>,
+  max: number,
+): string[] {
+  const groups = new Map<string, typeof orders>();
+  for (const o of orders) {
+    const key = o.service ?? "Lainnya";
+    groups.set(key, [...(groups.get(key) ?? []), o]);
+  }
+  const lines: string[] = [];
+  let budget = max;
+  let hidden = 0;
+  for (const [service, list] of groups) {
+    if (budget <= 0) {
+      hidden += list.length;
+      continue;
+    }
+    const shown = list.slice(0, budget);
+    budget -= shown.length;
+    hidden += list.length - shown.length;
+    lines.push("", `<b>${escapeHtml(service)}</b>`, ...recapOrderLines(shown, shown.length));
+  }
+  if (hidden > 0) lines.push(`<i>…dan ${hidden} order lainnya</i>`);
+  return lines;
+}
+
 function shortDay(day: Date): string {
   const parts = new Intl.DateTimeFormat("en-US", {
     timeZone: "Asia/Jakarta",
@@ -248,7 +275,7 @@ export function superAdminRecapHtml(input: {
     done: number;
     rejected: number;
     inProcess: number;
-    orders: Array<{ at: Date; imei: string; status: string }>;
+    orders: Array<{ at: Date; imei: string; status: string; service?: string }>;
   }>;
 }): string {
   const count = (status: string) => input.created.byStatus[status] ?? 0;
@@ -258,7 +285,7 @@ export function superAdminRecapHtml(input: {
     [
       `• <b>${escapeHtml(a.fullName)}</b>${handleSuffix(a.telegramHandle)}`,
       handledLine(a),
-      ...recapOrderLines(a.orders, 40),
+      ...recapOrderLinesByService(a.orders, 40),
     ].join("\n"),
   );
 
@@ -451,6 +478,8 @@ export function newOrderAdminHtml(input: {
   imei: string;
   serviceName: string;
   customer?: CardCustomer;
+  /** Super Admin card only: names of admins assigned to the service. */
+  assignedAdmins?: string[];
   viaWhatsapp?: boolean;
 }): string {
   return [
@@ -460,6 +489,17 @@ export function newOrderAdminHtml(input: {
     ...customerLines(input.customer),
     row("📱", "IMEI", input.imei, true),
     row("📦", "Layanan", input.serviceName),
+    ...(input.assignedAdmins
+      ? [
+          row(
+            "👷",
+            "Admin",
+            input.assignedAdmins.length
+              ? input.assignedAdmins.join(", ")
+              : "Belum ada admin",
+          ),
+        ]
+      : []),
     ...(input.viaWhatsapp
       ? [row("🔀", "Jalur", "WhatsApp (Roamercheck)")]
       : []),
@@ -471,6 +511,7 @@ const FOLLOW_UP_TITLE = {
   taken: "🛠️ <b>Order diambil admin</b>",
   rejected: "❌ <b>Order ditolak admin</b>",
   done: "✅ <b>Order diselesaikan admin</b>",
+  cancelled: "🚫 <b>Order dibatalkan admin</b>",
 } as const;
 
 export function superAdminFollowUpHtml(input: {
@@ -830,3 +871,77 @@ export function orderQrisCaptionHtml(input: {
   ].join("\n");
 }
 
+
+export function topupPickHtml(balance: number): string {
+  return [
+    "💳 <b>Topup saldo</b>",
+    "",
+    row("💰", "Saldo sekarang", formatRp(balance)),
+    "",
+    "Pilih nominal, atau tekan <b>Nominal lain</b> untuk mengetik sendiri.",
+    "Dibayar dengan QRIS, saldo masuk otomatis setelah pembayaran terdeteksi.",
+  ].join("\n");
+}
+
+export function topupQrisCaptionHtml(input: {
+  invoiceId: string;
+  amount: number;
+  amountDue: number;
+  expiresAt: Date;
+}): string {
+  const until = new Intl.DateTimeFormat("id-ID", {
+    timeZone: "Asia/Jakarta",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(input.expiresAt);
+  return [
+    "💳 <b>Topup saldo</b>",
+    "",
+    row("🧾", "Invoice", input.invoiceId, true),
+    row("💰", "Saldo masuk", formatRp(input.amount)),
+    row("⏰", "Bayar sebelum", `${until} WIB`),
+    "",
+    "Scan QRIS di atas dengan m-banking atau e-wallet.",
+    `Bayar <b>tepat ${escapeHtml(formatRp(input.amountDue))}</b> agar terdeteksi otomatis.`,
+    "Saldo masuk otomatis dan Anda dapat notifikasi di chat ini.",
+  ].join("\n");
+}
+
+export function topupPaidUserHtml(input: {
+  invoiceId: string;
+  amount: number;
+  balance: number;
+}): string {
+  return [
+    "✅ <b>Topup berhasil</b>",
+    "",
+    row("🧾", "Invoice", input.invoiceId, true),
+    row("➕", "Saldo masuk", formatRp(input.amount)),
+    row("💰", "Saldo sekarang", formatRp(input.balance)),
+    "",
+    "Saldo otomatis dipakai saat Anda membuat order.",
+  ].join("\n");
+}
+
+export function topupPaidSuperAdminHtml(input: {
+  invoiceId: string;
+  username: string;
+  amount: number;
+  paidAt: Date;
+}): string {
+  const at = new Intl.DateTimeFormat("id-ID", {
+    timeZone: "Asia/Jakarta",
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(input.paidAt);
+  return [
+    "💳 <b>Topup saldo masuk</b>",
+    "",
+    row("👤", "User", input.username, true),
+    row("💰", "Nominal", formatRp(input.amount)),
+    row("🧾", "Invoice", input.invoiceId, true),
+    row("🕒", "Dibayar", `${at} WIB`),
+  ].join("\n");
+}

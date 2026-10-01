@@ -3,9 +3,10 @@ import { AppShell } from "@/components/shell/app-shell";
 import { Notifications } from "@/components/shell/notifications";
 import type { NotificationItem } from "@/components/shell/notifications";
 import { UserChip } from "@/components/shell/user-chip";
+import { AdsRunnerTicker } from "@/components/domain/ads-runner-ticker";
 import { ApiError } from "@/lib/api";
 import { serverApi } from "@/lib/server-api";
-import type { OrderDetail, User } from "@/lib/types";
+import type { OrderDetail, RunningAd, User } from "@/lib/types";
 
 export default async function UserPortalLayout({
   children,
@@ -14,9 +15,13 @@ export default async function UserPortalLayout({
 }) {
   let user: User;
   let orders: OrderDetail[] = [];
+  let ads: RunningAd[] = [];
   try {
     user = await serverApi<User>("/me");
-    orders = await serverApi<OrderDetail[]>("/orders");
+    [orders, ads] = await Promise.all([
+      serverApi<OrderDetail[]>("/orders"),
+      serverApi<RunningAd[]>("/running-ads").catch(() => []),
+    ]);
   } catch (err) {
     if (err instanceof ApiError && err.status === 401) {
       redirect("/login");
@@ -39,6 +44,7 @@ export default async function UserPortalLayout({
   return (
     <AppShell
       variant="user"
+      banner={<AdsRunnerTicker items={ads} />}
       topbarRight={
         <>
           <Notifications items={notifications} />
