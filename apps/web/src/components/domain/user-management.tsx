@@ -819,7 +819,7 @@ function UserFormDialog({
         <Field
           label="Akses API"
           htmlFor="apiEnabled"
-          hint="User dapat membuat API key dan menerima order dari website / panel Dhru miliknya. Order API dibayar dari saldo."
+          hint="User dapat membuat API key dan menerima order dari website / panel reseller miliknya. Order API dibayar dari saldo."
         >
           <Select
             id="apiEnabled"

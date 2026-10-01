@@ -11,7 +11,7 @@ import { Tag } from "@/components/ui/status-badge";
 import { ApiError } from "@/lib/api";
 import { serverApi } from "@/lib/server-api";
 import { formatDate, formatRupiah } from "@/lib/format";
-import type { Service, User } from "@/lib/types";
+import type { User } from "@/lib/types";
 
 export const metadata: Metadata = {
   title: "Profil",
@@ -19,12 +19,8 @@ export const metadata: Metadata = {
 
 export default async function ProfilPage() {
   let user: User;
-  let services: Service[];
   try {
-    [user, services] = await Promise.all([
-      serverApi<User>("/me"),
-      serverApi<Service[]>("/services"),
-    ]);
+    user = await serverApi<User>("/me");
   } catch (err) {
     if (err instanceof ApiError && err.status === 401) redirect("/login");
     throw err;
@@ -77,20 +73,6 @@ export default async function ProfilPage() {
                   <Tag>Aktif</Tag>
                 ) : (
                   <Tag>Nonaktif</Tag>
-                )}
-              </DetailRow>
-              <DetailRow label="Harga layanan">
-                {services.length > 0 ? (
-                  <ul className="space-y-0.5 text-right">
-                    {services.map((service) => (
-                      <li key={service.id}>
-                        <span className="text-ink-soft">{service.name}: </span>
-                        <DataValue>{formatRupiah(service.price)}</DataValue>
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <span className="text-ink-soft">Belum ada layanan aktif</span>
                 )}
               </DetailRow>
               <DetailRow label="Saldo">

@@ -100,9 +100,9 @@ export function ApiConnectionCard({ endpoint, username }: { endpoint: string; us
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Koneksi Dhru Fusion</CardTitle>
+        <CardTitle>Koneksi API</CardTitle>
         <CardDescription>
-          Masukkan data ini di panel Dhru Fusion atau website Anda sebagai supplier API.
+          Masukkan data ini di panel reseller atau website Anda sebagai supplier API.
         </CardDescription>
       </CardHeader>
       <CardBody className="divide-y divide-hairline pt-1">

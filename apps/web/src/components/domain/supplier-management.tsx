@@ -209,7 +209,7 @@ export function SupplierManagement({ initialSuppliers }: { initialSuppliers: Sup
         ) : (
           <EmptyState
             title="Belum ada supplier"
-            description="Tambahkan panel Dhru Fusion (URL, username, API key), lalu pilih jalur API Supplier di layanan."
+            description="Tambahkan panel supplier API (URL, username, API key), lalu pilih jalur API Supplier di layanan."
             action={addButton}
           />
         )}
@@ -315,7 +315,7 @@ function SupplierFormDialog({
   return (
     <DialogContent
       title={creating ? "Tambah supplier" : "Edit supplier"}
-      description="Kredensial API Dhru Fusion dari akun reseller Anda di supplier."
+      description="Kredensial API dari akun reseller Anda di supplier."
       footer={
         <>
           <Button type="button" variant="ghost" onClick={onCancel}>

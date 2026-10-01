@@ -86,8 +86,8 @@ export class AdminOpsController {
   }
 
   @Get("reports/summary")
-  reportsSummary() {
-    return this.reports.summary();
+  reportsSummary(@Req() req: AdminReq) {
+    return this.reports.summary(req.admin.sub);
   }
 
   @Get("activity")
@@ -276,6 +276,18 @@ export class AdminOpsController {
       assignedAdmins: input.assignedAdminIds?.join(","),
     });
     return service;
+  }
+
+  @Delete("services/:id")
+  @UseGuards(SuperAdminGuard)
+  async deleteService(@Req() req: AdminReq, @Param("id") id: string) {
+    const removed = await this.services.remove(id);
+    this.audit.record("admin.service.deleted", {
+      actorId: req.admin.sub,
+      serviceId: removed.id,
+      serviceName: removed.name,
+    });
+    return { ok: true };
   }
 
   @Get("orders")

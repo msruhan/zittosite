@@ -114,6 +114,22 @@ export class AdminServicesService {
     return serializeAdminService(row);
   }
 
+  /** Orders keep a hard reference to their service, so used services can only go offline. */
+  async remove(id: string) {
+    const existing = await this.prisma.service.findUnique({
+      where: { id },
+      select: { id: true, name: true, _count: { select: { orders: true } } },
+    });
+    if (!existing) throw new NotFoundException("Layanan tidak ditemukan.");
+    if (existing._count.orders > 0) {
+      throw new ConflictException(
+        `Layanan sudah punya ${existing._count.orders} order sehingga tidak bisa dihapus. Matikan (offline) saja agar tidak bisa dipesan.`,
+      );
+    }
+    await this.prisma.service.delete({ where: { id } });
+    return { id: existing.id, name: existing.name };
+  }
+
   async update(
     id: string,
     input: {

@@ -5,6 +5,15 @@ import { PageHeader } from "@/components/shell/app-shell";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { DataValue } from "@/components/ui/data-value";
 import { Tag } from "@/components/ui/status-badge";
+import {
+  TBody,
+  TD,
+  TH,
+  THead,
+  TR,
+  Table,
+  TableScroll,
+} from "@/components/ui/table";
 import { DonutChart } from "@/components/domain/donut-chart";
 import { OrdersBarChart } from "@/components/domain/orders-bar-chart";
 import { RevenueChart } from "@/components/domain/revenue-chart";
@@ -20,7 +29,22 @@ export const metadata: Metadata = {
   title: "Reports",
 };
 
+type Money = {
+  revenue: number;
+  /** Null for admins who are not Super Admin. */
+  cost: number | null;
+  profit: number | null;
+  orders: number;
+};
+
 type ReportsSummary = {
+  finance: {
+    canSeeCost: boolean;
+    today: Money;
+    month: Money;
+    prevMonth: Money;
+    allTime: Money;
+  };
   kpis: {
     revenueTotal: number;
     revenueToday: number;
@@ -50,6 +74,89 @@ type ReportsSummary = {
   }[];
 };
 
+function marginPct(money: Money): number {
+  return money.revenue > 0 && money.profit !== null
+    ? Math.round((money.profit / money.revenue) * 100)
+    : 0;
+}
+
+function FinanceTable({ finance }: { finance: ReportsSummary["finance"] }) {
+  const rows: Array<{ label: string; money: Money }> = [
+    { label: "Hari ini", money: finance.today },
+    { label: "Bulan ini", money: finance.month },
+    { label: "Bulan lalu", money: finance.prevMonth },
+    { label: "Semua waktu", money: finance.allTime },
+  ];
+  const showCost = finance.canSeeCost;
+
+  return (
+    <Card>
+      <CardHeader className="items-start">
+        <div className="min-w-0">
+          <CardTitle>Rincian keuangan</CardTitle>
+          <p className="mt-1 text-body text-ink-soft">
+            {showCost
+              ? "Omset = total harga jual · Modal = biaya ke operator/Supplier API · Keuntungan = omset − modal."
+              : "Omset = total harga jual dari order yang selesai."}
+          </p>
+        </div>
+        <Tag>WIB</Tag>
+      </CardHeader>
+      <TableScroll>
+        <Table>
+          <THead>
+            <TR className="hover:bg-transparent">
+              <TH>Periode</TH>
+              <TH className="text-right">Order sukses</TH>
+              <TH className="text-right">Omset</TH>
+              {showCost ? (
+                <>
+                  <TH className="text-right">Modal</TH>
+                  <TH className="text-right">Keuntungan</TH>
+                  <TH className="text-right">Margin</TH>
+                </>
+              ) : null}
+            </TR>
+          </THead>
+          <TBody>
+            {rows.map(({ label, money }) => (
+              <TR key={label} className={label === "Semua waktu" ? "bg-mist/50" : undefined}>
+                <TD className="font-medium text-ink">{label}</TD>
+                <TD className="text-right">
+                  <DataValue>{money.orders}</DataValue>
+                </TD>
+                <TD className="text-right">
+                  <DataValue emphasis>{formatRupiah(money.revenue)}</DataValue>
+                </TD>
+                {showCost ? (
+                  <>
+                    <TD className="text-right">
+                      <DataValue className="text-ink-soft">
+                        {formatRupiah(money.cost ?? 0)}
+                      </DataValue>
+                    </TD>
+                    <TD className="text-right">
+                      <DataValue
+                        emphasis
+                        className={(money.profit ?? 0) < 0 ? "text-refused-ink" : "text-cleared-ink"}
+                      >
+                        {formatRupiah(money.profit ?? 0)}
+                      </DataValue>
+                    </TD>
+                    <TD className="text-right">
+                      <DataValue className="text-ink-soft">{marginPct(money)}%</DataValue>
+                    </TD>
+                  </>
+                ) : null}
+              </TR>
+            ))}
+          </TBody>
+        </Table>
+      </TableScroll>
+    </Card>
+  );
+}
+
 export default async function AdminReportsPage() {
   let data: ReportsSummary;
   try {
@@ -61,7 +168,8 @@ export default async function AdminReportsPage() {
     throw err;
   }
 
-  const { kpis, weeklyBars } = data;
+  const { kpis, weeklyBars, finance } = data;
+  const { allTime, today } = finance;
   const weekTotal = weeklyBars.reduce((sum, day) => sum + day.orders, 0);
   const prevHalf = weeklyBars
     .slice(0, 3)
@@ -79,7 +187,7 @@ export default async function AdminReportsPage() {
     <>
       <PageHeader
         title="Reports"
-        description="Ringkasan transaksi, distribusi kanal, dan volume order mingguan."
+        description="Omset, modal, keuntungan, distribusi kanal, dan volume order mingguan."
       />
 
       <div className="space-y-5 sm:space-y-6">
@@ -87,40 +195,60 @@ export default async function AdminReportsPage() {
           <StatTile
             index={0}
             tone="cleared"
-            label="Pendapatan total"
-            value={formatRupiah(kpis.revenueTotal)}
-            hint="Total dari invoice berstatus paid."
-            caption="Semua pembayaran diterima"
+            label="Total omset"
+            value={formatRupiah(allTime.revenue)}
+            hint="Total harga jual dari order Done. Order gagal atau di-refund tidak dihitung."
+            caption={`Hari ini ${formatRupiah(today.revenue)}`}
             href="/admin/orders"
           />
-          <StatTile
-            index={1}
-            tone="action"
-            label="Pendapatan hari ini"
-            value={formatRupiah(kpis.revenueToday)}
-            hint="Invoice paid hari ini (WIB)."
-            caption={`+${kpis.ordersToday} order hari ini`}
-            href="/admin/orders"
-          />
-          <StatTile
-            index={2}
-            tone="sky"
-            label="User terdaftar"
-            value={kpis.usersTotal}
-            hint="Akun user yang dibuat Super Admin."
-            caption={`${kpis.usersActive} aktif`}
-            href="/admin/users"
-          />
+          {finance.canSeeCost ? (
+            <>
+              <StatTile
+                index={1}
+                tone="hold"
+                label="Total modal"
+                value={formatRupiah(allTime.cost ?? 0)}
+                hint="Total harga modal yang dibayar ke operator atau Supplier API untuk order tersebut."
+                caption={`Hari ini ${formatRupiah(today.cost ?? 0)}`}
+                href="/admin/services"
+              />
+              <StatTile
+                index={2}
+                tone="action"
+                label="Total keuntungan"
+                value={formatRupiah(allTime.profit ?? 0)}
+                hint="Omset dikurangi modal."
+                caption={`Margin ${marginPct(allTime)}% · hari ini ${formatRupiah(today.profit ?? 0)}`}
+                href="/admin/orders"
+              />
+            </>
+          ) : (
+            <StatTile
+              index={1}
+              tone="sky"
+              label="User terdaftar"
+              value={kpis.usersTotal}
+              hint="Akun user yang dibuat Super Admin."
+              caption={`${kpis.usersActive} aktif`}
+              href="/admin/users"
+            />
+          )}
           <StatTile
             index={3}
             tone="working"
             label="Order selesai"
             value={kpis.ordersDone}
             hint="Order berstatus Done."
-            caption={`${kpis.waitingAction} menunggu aksi`}
+            caption={
+              finance.canSeeCost
+                ? `${kpis.waitingAction} menunggu aksi · ${kpis.usersTotal} user`
+                : `${kpis.waitingAction} menunggu aksi`
+            }
             href="/admin/orders"
           />
         </StatGrid>
+
+        <FinanceTable finance={finance} />
 
         <div className="grid gap-4 lg:grid-cols-2">
           <Card>
@@ -176,7 +304,7 @@ export default async function AdminReportsPage() {
         <div className="grid gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
           <Card>
             <CardHeader>
-              <CardTitle>Pendapatan 7 hari</CardTitle>
+              <CardTitle>Omset 7 hari</CardTitle>
               <Tag>Area</Tag>
             </CardHeader>
             <CardBody className="pt-2">

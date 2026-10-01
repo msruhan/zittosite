@@ -26,7 +26,7 @@ export default async function AdminSuppliersPage() {
     <>
       <PageHeader
         title="Supplier API"
-        description="Panel Dhru Fusion (mis. CeirBot) tempat order layanan berjalur API Supplier diteruskan dan diproses otomatis."
+        description="Panel supplier API (mis. CeirBot) tempat order layanan berjalur API Supplier diteruskan dan diproses otomatis."
       />
       <SupplierManagement initialSuppliers={suppliers} />
     </>

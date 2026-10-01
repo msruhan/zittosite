@@ -127,8 +127,7 @@ export function SupplierImportPanel({
     return rows.filter(
       (svc) =>
         svc.name.toLowerCase().includes(needle) ||
-        svc.group.toLowerCase().includes(needle) ||
-        svc.id.toLowerCase().includes(needle),
+        svc.group.toLowerCase().includes(needle),
     );
   }, [rows, query]);
 
@@ -265,7 +264,7 @@ export function SupplierImportPanel({
         <Input
           value={query}
           onChange={(event) => setQuery(event.target.value)}
-          placeholder="Cari nama, grup, atau ID layanan"
+          placeholder="Cari nama atau grup layanan"
           className="pl-9"
         />
       </label>
@@ -326,10 +325,9 @@ export function SupplierImportPanel({
                           />
                           <span className="min-w-0 flex-1">
                             <span className="block text-body font-medium text-ink">{svc.name}</span>
-                            <span className="block font-data text-label text-ink-faint">
-                              ID {svc.id}
-                              {svc.time ? ` · ${svc.time}` : ""}
-                            </span>
+                            {svc.time ? (
+                              <span className="block text-label text-ink-faint">{svc.time}</span>
+                            ) : null}
                           </span>
                           <span className="shrink-0 text-right">
                             {done ? (

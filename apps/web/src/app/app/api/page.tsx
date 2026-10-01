@@ -52,7 +52,7 @@ export default async function ApiAccessPage() {
     <>
       <PageHeader
         title="API Access"
-        description="Terima order di website atau panel Dhru Fusion Anda, lalu teruskan otomatis ke sini. Order API dibayar dari saldo."
+        description="Terima order di website atau panel reseller Anda, lalu teruskan otomatis ke sini. Order API dibayar dari saldo."
       />
       <div className="mx-auto w-full max-w-3xl space-y-4">
         <ApiConnectionCard endpoint={endpoint} username={keys.username} />

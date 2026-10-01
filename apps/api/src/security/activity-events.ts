@@ -332,6 +332,11 @@ export const ACTIVITY_EVENTS = {
         ? `Mengubah layanan ${fields.serviceName ?? ""} menjadi ${fields.active ? "online" : "offline"}`
         : `Memperbarui layanan ${fields.serviceName ?? fields.serviceId ?? ""}`,
   },
+  "admin.service.deleted": {
+    category: "service",
+    label: "Layanan dihapus",
+    summary: ({ fields }) => `Menghapus layanan ${fields.serviceName ?? fields.serviceId ?? ""}`,
+  },
   "admin.supplier.created": {
     category: "service",
     label: "Supplier API ditambahkan",

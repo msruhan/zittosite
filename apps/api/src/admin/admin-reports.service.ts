@@ -103,14 +103,56 @@ function formatWeekdayNarrow(dayStart: Date): string {
 export class AdminReportsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async summary() {
-    const todayStart = jakartaDayStart(new Date());
+  async summary(viewerId: string) {
+    const now = new Date();
+    const todayStart = jakartaDayStart(now);
     const windowStart = addJakartaDays(todayStart, -6);
     const tomorrowStart = addJakartaDays(todayStart, 1);
+    const monthStart = jakartaMonthStart(now);
+    const prevMonthStart = jakartaMonthStart(addJakartaDays(monthStart, -1));
+    const earnedFrom = prevMonthStart < windowStart ? prevMonthStart : windowStart;
 
     const dayStarts = Array.from({ length: 7 }, (_, i) =>
       addJakartaDays(windowStart, i),
     );
+
+    const [viewer, earnedAllTime, earnedRecent] = await Promise.all([
+      this.prisma.admin.findUnique({ where: { id: viewerId }, select: { role: true } }),
+      this.prisma.order.aggregate({
+        where: EARNED_ORDER,
+        _sum: { price: true, costPrice: true },
+        _count: { _all: true },
+      }),
+      this.prisma.order.findMany({
+        where: { ...EARNED_ORDER, completedAt: { gte: earnedFrom } },
+        select: { price: true, costPrice: true, completedAt: true },
+      }),
+    ]);
+    const canSeeCost = viewer?.role === "super_admin";
+
+    const today = emptyMoney();
+    const month = emptyMoney();
+    const prevMonth = emptyMoney();
+    const daily = dayStarts.map(() => emptyMoney());
+    for (const sale of earnedRecent) {
+      const at = sale.completedAt!;
+      if (at >= todayStart) addSale(today, sale);
+      if (at >= monthStart) addSale(month, sale);
+      else if (at >= prevMonthStart) addSale(prevMonth, sale);
+      const dayIndex = dayIndexOf(dayStarts, at);
+      if (dayIndex >= 0) addSale(daily[dayIndex]!, sale);
+    }
+    const allRevenue = earnedAllTime._sum.price ?? 0;
+    const allCost = earnedAllTime._sum.costPrice ?? 0;
+    const allTime: Money = {
+      revenue: allRevenue,
+      cost: allCost,
+      profit: allRevenue - allCost,
+      orders: earnedAllTime._count._all,
+    };
+    /** Plain admins see turnover only; cost and profit stay Super Admin data. */
+    const visible = (money: Money) =>
+      canSeeCost ? money : { ...money, cost: null, profit: null };
 
     const [
       revenueTotalAgg,
@@ -122,7 +164,6 @@ export class AdminReportsService {
       waitingAction,
       statusGroups,
       ordersInWindow,
-      paidInWindow,
       paidAllWithService,
       admins,
       services,
@@ -154,14 +195,6 @@ export class AdminReportsService {
       this.prisma.order.findMany({
         where: { createdAt: { gte: windowStart, lt: tomorrowStart }, isTest: false },
         select: { createdAt: true, channel: true },
-      }),
-      this.prisma.paymentInvoice.findMany({
-        where: {
-          purpose: "order", isTest: false,
-          paymentStatus: "paid",
-          paidAt: { gte: windowStart, lt: tomorrowStart },
-        },
-        select: { paidAt: true, amount: true, balanceUsed: true },
       }),
       this.prisma.paymentInvoice.findMany({
         where: { purpose: "order", isTest: false, paymentStatus: "paid" },
@@ -203,17 +236,11 @@ export class AdminReportsService {
       return { label: formatWeekdayNarrow(day), orders };
     });
 
-    const revenueSeries = dayStarts.map((day) => {
-      const next = addJakartaDays(day, 1);
-      const dayPaid = paidInWindow.filter(
-        (inv) => inv.paidAt && inv.paidAt >= day && inv.paidAt < next,
-      );
-      return {
-        label: formatDayLabel(day),
-        revenue: dayPaid.reduce((sum, inv) => sum + inv.amount - inv.balanceUsed, 0),
-        orders: dayPaid.length,
-      };
-    });
+    const revenueSeries = dayStarts.map((day, i) => ({
+      label: formatDayLabel(day),
+      revenue: daily[i]!.revenue,
+      orders: daily[i]!.orders,
+    }));
 
     let web = 0;
     let telegram = 0;
@@ -259,6 +286,13 @@ export class AdminReportsService {
       .sort((a, b) => b.handledCount - a.handledCount);
 
     return {
+      finance: {
+        canSeeCost,
+        today: visible(today),
+        month: visible(month),
+        prevMonth: visible(prevMonth),
+        allTime: visible(allTime),
+      },
       kpis: {
         revenueTotal:
           (revenueTotalAgg._sum.amount ?? 0) - (revenueTotalAgg._sum.balanceUsed ?? 0),

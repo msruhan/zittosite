@@ -52,7 +52,7 @@ const TOC: TocGroup[] = [
       { id: "kode-status", label: "Kode status order" },
       { id: "error", label: "Daftar error" },
       { id: "rate-limit", label: "Rate limit" },
-      { id: "dhru-fusion", label: "Setup Dhru Fusion" },
+      { id: "setup-panel", label: "Setup panel reseller" },
     ],
   },
 ];
@@ -315,7 +315,7 @@ export function ApiDocs({ endpoint, username, apiEnabled }: { endpoint: string; 
           <p className="text-label font-bold uppercase tracking-wide text-action">API Reference</p>
           <h1 className="mt-1 text-display text-ink">Dokumentasi API</h1>
           <P className="max-w-[64ch]">
-            Hubungkan website atau panel Dhru Fusion Anda untuk mengambil daftar layanan, mengirim order IMEI, dan
+            Hubungkan website atau panel reseller Anda untuk mengambil daftar layanan, mengirim order IMEI, dan
             menerima hasilnya secara otomatis. Semua order lewat API dibayar dari saldo akun.
           </P>
 
@@ -397,7 +397,7 @@ export function ApiDocs({ endpoint, username, apiEnabled }: { endpoint: string; 
           </P>
           <ParamTable params={AUTH_PARAMS} caption="Field autentikasi" />
           <P>
-            Untuk kompatibilitas dengan server Dhru lain, alias <C>api_username</C>, <C>user</C>, <C>key</C>,{" "}
+            Untuk kompatibilitas dengan panel reseller lain, alias <C>api_username</C>, <C>user</C>, <C>key</C>,{" "}
             <C>api_key</C>, <C>apikey</C>, dan <C>accesskey</C> juga diterima, termasuk format gabungan{" "}
             <C>username.apikey</C> di field key.
           </P>
@@ -423,7 +423,7 @@ export function ApiDocs({ endpoint, username, apiEnabled }: { endpoint: string; 
                 type: "XML | JSON",
                 desc: (
                   <>
-                    Data order. Format XML Dhru <C>{"<PARAMETERS><ID>…</ID><IMEI>…</IMEI></PARAMETERS>"}</C> atau JSON{" "}
+                    Data order. Format XML <C>{"<PARAMETERS><ID>…</ID><IMEI>…</IMEI></PARAMETERS>"}</C> atau JSON{" "}
                     <C>{'{"ID":"…","IMEI":"…"}'}</C>. Field <C>ID</C>, <C>IMEI</C>, dan <C>orderid</C> juga boleh
                     dikirim langsung sebagai field form.
                   </>
@@ -486,8 +486,8 @@ export function ApiDocs({ endpoint, username, apiEnabled }: { endpoint: string; 
               apiversion: "8.2",
             })}
           >
-            <Callout title="Nama key mengikuti Dhru">
-              Key <C>AccoutInfo</C> memang ditulis tanpa huruf &quot;n&quot; agar kompatibel dengan klien Dhru Fusion.
+            <Callout title="Nama key mengikuti standar">
+              Key <C>AccoutInfo</C> memang ditulis tanpa huruf &quot;n&quot; agar kompatibel dengan panel reseller.
             </Callout>
           </Endpoint>
 
@@ -547,7 +547,7 @@ export function ApiDocs({ endpoint, username, apiEnabled }: { endpoint: string; 
               params={[
                 { name: "ID", type: "string", required: true, desc: <>Kode layanan (<C>SERVICEID</C>), tidak peka huruf besar/kecil. Alias: <C>SERVICEID</C>.</> },
                 { name: "IMEI", type: "string", required: true, desc: "IMEI 15 digit yang valid." },
-                { name: "CUSTOMFIELD", type: "base64 JSON", desc: <>Opsional, dikirim otomatis oleh sebagian klien Dhru. Isinya digabung ke parameters.</> },
+                { name: "CUSTOMFIELD", type: "base64 JSON", desc: <>Opsional, dikirim otomatis oleh sebagian panel reseller. Isinya digabung ke parameters.</> },
               ]}
             />
           </Endpoint>
@@ -790,7 +790,7 @@ app.post("/webhook/order", express.raw({ type: "application/json" }), (req, res)
         <Section id="kode-status" className="mt-6">
           <H3>Kode status order</H3>
           <P>
-            Nilai <C>STATUS</C> di <C>orderstatus</C> dan <C>status</C> di webhook mengikuti kode Dhru Fusion.
+            Nilai <C>STATUS</C> di <C>orderstatus</C> dan <C>status</C> di webhook mengikuti standar API reseller.
           </P>
           <div className="mt-3 overflow-hidden rounded-lg border border-hairline bg-surface">
             {[
@@ -855,13 +855,12 @@ app.post("/webhook/order", express.raw({ type: "application/json" }), (req, res)
           </div>
         </Section>
 
-        <Section id="dhru-fusion" className="mt-10 pb-10">
-          <H3>Setup Dhru Fusion</H3>
-          <P>Tambahkan kami sebagai API supplier di panel Dhru Fusion Anda dengan data berikut:</P>
+        <Section id="setup-panel" className="mt-10 pb-10">
+          <H3>Setup di panel reseller</H3>
+          <P>Tambahkan kami sebagai API supplier di panel reseller Anda dengan data berikut:</P>
           <RefTable
-            head={["Field di Dhru", "Isi"]}
+            head={["Field di panel", "Isi"]}
             rows={[
-              ["API Type", "Dhru Fusion"],
               ["URL", <C key="url">{endpoint}</C>],
               ["Username", <C key="username">{username}</C>],
               ["API Access Key", <>API key dari menu <Link href="/app/api" className="font-bold text-action hover:underline">API Access</Link></>],
@@ -869,7 +868,7 @@ app.post("/webhook/order", express.raw({ type: "application/json" }), (req, res)
           />
           <P>
             Setelah tersambung, sinkronkan daftar layanan lalu petakan layanan Anda ke <C>SERVICEID</C> kami. Status dan
-            hasil order akan ditarik otomatis oleh Dhru.
+            hasil order akan ditarik otomatis oleh panel Anda.
           </P>
         </Section>
       </div>

@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { MagnifyingGlass, PencilSimple, Plus } from "@phosphor-icons/react";
+import { MagnifyingGlass, PencilSimple, Plus, Trash } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -60,9 +60,12 @@ export function ServiceManagement({
 }) {
   const [services, setServices] = React.useState(initialServices);
   const [query, setQuery] = React.useState("");
+  const [listTab, setListTab] = React.useState<CreateTab>("manual");
   const [editing, setEditing] = React.useState<ServiceDraft | null>(null);
   const [creating, setCreating] = React.useState(false);
   const [togglingId, setTogglingId] = React.useState<string | null>(null);
+  const [deleting, setDeleting] = React.useState<Service | null>(null);
+  const [deleteBusy, setDeleteBusy] = React.useState(false);
 
   const [syncedServices, setSyncedServices] = React.useState(initialServices);
   if (initialServices !== syncedServices) {
@@ -70,16 +73,26 @@ export function ServiceManagement({
     setServices(initialServices);
   }
 
+  const apiServices = React.useMemo(
+    () => services.filter((service) => service.fulfillmentChannel === "supplier"),
+    [services],
+  );
+  const manualServices = React.useMemo(
+    () => services.filter((service) => service.fulfillmentChannel !== "supplier"),
+    [services],
+  );
+  const tabServices = listTab === "api" ? apiServices : manualServices;
+
   const filtered = React.useMemo(() => {
     const needle = query.trim().toLowerCase();
-    if (!needle) return services;
-    return services.filter(
+    if (!needle) return tabServices;
+    return tabServices.filter(
       (service) =>
         service.name.toLowerCase().includes(needle) ||
         service.description.toLowerCase().includes(needle) ||
         (service.code ?? "").toLowerCase().includes(needle),
     );
-  }, [services, query]);
+  }, [tabServices, query]);
 
   async function reload() {
     setServices(await api<Service[]>("/admin/services"));
@@ -163,6 +176,22 @@ export function ServiceManagement({
     }
   }
 
+  async function handleDelete(service: Service) {
+    setDeleteBusy(true);
+    try {
+      await api(`/admin/services/${service.id}`, { method: "DELETE" });
+      await reload();
+      setDeleting(null);
+      toast.success("Layanan dihapus", { description: service.name });
+    } catch (err) {
+      toast.error("Gagal menghapus", {
+        description: err instanceof ApiError ? err.message : "Hapus gagal",
+      });
+    } finally {
+      setDeleteBusy(false);
+    }
+  }
+
   function openCreate() {
     setCreating(true);
     setEditing({
@@ -181,6 +210,17 @@ export function ServiceManagement({
 
   return (
     <div className="space-y-4">
+      <SegmentedTabs
+        label="Jenis layanan"
+        value={listTab}
+        onChange={setListTab}
+        className="sm:w-96"
+        tabs={[
+          { id: "manual", label: "Service manual", count: manualServices.length },
+          { id: "api", label: "Service API", count: apiServices.length },
+        ]}
+      />
+
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
         <label className="relative flex-1">
           <span className="sr-only">Cari layanan</span>
@@ -269,8 +309,7 @@ export function ServiceManagement({
                           </span>
                         ) : service.fulfillmentChannel === "supplier" ? (
                           <span className="text-body text-ink-soft">
-                            {service.supplierName ?? "Supplier"} ·{" "}
-                            <span className="font-data">#{service.supplierServiceId}</span>
+                            {service.supplierName ?? "Supplier"}
                           </span>
                         ) : (
                           <AssigneeList assignees={service.assignedAdmins ?? []} />
@@ -308,6 +347,14 @@ export function ServiceManagement({
                           >
                             <PencilSimple className="size-4 text-action" />
                           </Button>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            aria-label={`Hapus ${service.name}`}
+                            onClick={() => setDeleting(service)}
+                          >
+                            <Trash className="size-4 text-refused-ink" />
+                          </Button>
                         </div>
                       </TD>
                     </TR>
@@ -316,23 +363,27 @@ export function ServiceManagement({
               </Table>
             </TableScroll>
             <p className="border-t border-hairline px-4 py-3 font-data tabular text-body text-ink-soft">
-              Menampilkan {filtered.length} dari {services.length} layanan
+              Menampilkan {filtered.length} dari {tabServices.length} layanan
             </p>
           </>
         ) : (
           <EmptyState
             title={
-              services.length === 0
-                ? "Belum ada layanan"
+              tabServices.length === 0
+                ? listTab === "api"
+                  ? "Belum ada service API"
+                  : "Belum ada service manual"
                 : "Tidak ada layanan yang cocok"
             }
             description={
-              services.length === 0
-                ? "Tambahkan layanan pertama agar user bisa membuat order."
+              tabServices.length === 0
+                ? listTab === "api"
+                  ? "Tambahkan layanan dari daftar Supplier API agar order diteruskan otomatis."
+                  : "Tambahkan layanan yang diproses operator lewat Telegram atau WhatsApp."
                 : "Coba ubah kata kunci pencarian."
             }
             action={
-              services.length === 0 ? (
+              tabServices.length === 0 ? (
                 <Button onClick={openCreate}>
                   <Plus className="size-4" aria-hidden="true" />
                   Tambah Layanan
@@ -362,6 +413,7 @@ export function ServiceManagement({
             operators={operators}
             suppliers={suppliers}
             creating={creating}
+            initialTab={listTab}
             existingServices={services}
             onCancel={() => {
               setEditing(null);
@@ -374,6 +426,32 @@ export function ServiceManagement({
               setCreating(false);
             }}
           />
+        ) : null}
+      </Dialog>
+
+      <Dialog open={Boolean(deleting)} onOpenChange={(open) => !open && setDeleting(null)}>
+        {deleting ? (
+          <DialogContent
+            title={`Hapus ${deleting.name}?`}
+            description="Layanan yang sudah punya order tidak bisa dihapus agar riwayat order tetap utuh. Matikan (offline) saja jika hanya ingin menyembunyikannya."
+            footer={
+              <>
+                <Button variant="ghost" onClick={() => setDeleting(null)}>
+                  Batal
+                </Button>
+                <Button
+                  variant="danger"
+                  loading={deleteBusy}
+                  loadingLabel="Menghapus"
+                  onClick={() => void handleDelete(deleting)}
+                >
+                  Hapus layanan
+                </Button>
+              </>
+            }
+          >
+            <p className="text-body text-ink-soft">Tindakan ini tidak bisa dibatalkan.</p>
+          </DialogContent>
         ) : null}
       </Dialog>
     </div>
@@ -474,13 +552,25 @@ function OperatorPicker({
 
 type CreateTab = "manual" | "api";
 
-function CreateTabs({ value, onChange }: { value: CreateTab; onChange: (tab: CreateTab) => void }) {
-  const tabs: Array<{ id: CreateTab; label: string }> = [
-    { id: "manual", label: "Tambah manual" },
-    { id: "api", label: "Tambah dari API" },
-  ];
+function SegmentedTabs({
+  label,
+  value,
+  onChange,
+  tabs,
+  className,
+}: {
+  label: string;
+  value: CreateTab;
+  onChange: (tab: CreateTab) => void;
+  tabs: Array<{ id: CreateTab; label: string; count?: number }>;
+  className?: string;
+}) {
   return (
-    <div role="tablist" aria-label="Cara menambah layanan" className="mb-5 grid grid-cols-2 gap-1 rounded-lg bg-mist p-1">
+    <div
+      role="tablist"
+      aria-label={label}
+      className={cn("grid grid-cols-2 gap-1 rounded-lg bg-mist p-1", className)}
+    >
       {tabs.map((tab) => (
         <button
           key={tab.id}
@@ -489,13 +579,23 @@ function CreateTabs({ value, onChange }: { value: CreateTab; onChange: (tab: Cre
           aria-selected={value === tab.id}
           onClick={() => onChange(tab.id)}
           className={cn(
-            "h-9 rounded-md text-body font-bold transition-[background-color,color,box-shadow] duration-150 ease-out-strong",
+            "inline-flex h-9 items-center justify-center gap-2 rounded-md text-body font-bold transition-[background-color,color,box-shadow] duration-150 ease-out-strong",
             value === tab.id
               ? "bg-surface text-ink shadow-resting"
               : "text-ink-soft hover:text-ink",
           )}
         >
           {tab.label}
+          {tab.count !== undefined ? (
+            <span
+              className={cn(
+                "rounded-full px-1.5 font-data text-label tabular",
+                value === tab.id ? "bg-action-wash text-action" : "bg-surface/70 text-ink-soft",
+              )}
+            >
+              {tab.count}
+            </span>
+          ) : null}
         </button>
       ))}
     </div>
@@ -507,6 +607,7 @@ function ServiceFormDialog({
   operators,
   suppliers,
   creating,
+  initialTab,
   existingServices,
   onCancel,
   onSave,
@@ -516,12 +617,13 @@ function ServiceFormDialog({
   operators: Admin[];
   suppliers: Supplier[];
   creating: boolean;
+  initialTab: CreateTab;
   existingServices: Service[];
   onCancel: () => void;
   onSave: (service: ServiceDraft) => void | Promise<void>;
   onImported: () => void | Promise<void>;
 }) {
-  const [tab, setTab] = React.useState<CreateTab>("manual");
+  const [tab, setTab] = React.useState<CreateTab>(initialTab);
   const [importBusy, setImportBusy] = React.useState(false);
   const [importCount, setImportCount] = React.useState(0);
   const [draft, setDraft] = React.useState(() => {
@@ -625,7 +727,18 @@ function ServiceFormDialog({
         </>
       }
     >
-      {creating ? <CreateTabs value={tab} onChange={setTab} /> : null}
+      {creating ? (
+        <SegmentedTabs
+          label="Cara menambah layanan"
+          value={tab}
+          onChange={setTab}
+          className="mb-5"
+          tabs={[
+            { id: "manual", label: "Tambah manual" },
+            { id: "api", label: "Tambah dari API" },
+          ]}
+        />
+      ) : null}
       {importing ? (
         <SupplierImportPanel
           formId="supplier-import-form"
@@ -871,7 +984,7 @@ function SupplierPicker({
     group: svc.group,
   }));
   if (supplierServiceId && !selected) {
-    options.unshift({ value: supplierServiceId, label: `ID ${supplierServiceId}` });
+    options.unshift({ value: supplierServiceId, label: "Layanan tidak tersedia lagi di supplier" });
   }
 
   return (
@@ -897,7 +1010,7 @@ function SupplierPicker({
             loadError
               ? undefined
               : selected
-                ? `${selected.group} · ID ${selected.id}${selected.time ? ` · ${selected.time}` : ""}. Harga modal diisi dari harga supplier.`
+                ? `${selected.group}${selected.time ? ` · ${selected.time}` : ""}. Harga modal diisi dari harga supplier.`
                 : remote === null
                   ? "Memuat daftar layanan supplier…"
                   : "Order lunas akan diteruskan otomatis ke layanan ini."
