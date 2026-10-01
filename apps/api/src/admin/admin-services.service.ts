@@ -88,16 +88,12 @@ export class AdminServicesService {
     assignedAdminIds?: string[];
     inputType?: unknown;
   } & SupplierRoute) {
-    const code = String(input.code ?? "")
-      .trim()
-      .toLowerCase()
-      .replace(/[^a-z0-9_-]/g, "");
     const name = String(input.name ?? "").trim();
-    const description = String(input.description ?? "").trim();
+    const description = String(input.description ?? "").trim() || name;
     const estimate = String(input.estimate ?? "").trim() || "—";
     const price = Number(input.price);
-    if (!code || !name || !description) {
-      throw new BadRequestException("Code, nama, dan deskripsi wajib.");
+    if (!name) {
+      throw new BadRequestException("Nama layanan wajib.");
     }
     if (!Number.isFinite(price) || price < 0) {
       throw new BadRequestException("Harga tidak valid.");
@@ -106,8 +102,7 @@ export class AdminServicesService {
     if (!Number.isFinite(costPrice) || costPrice < 0) {
       throw new BadRequestException("Harga modal tidak valid.");
     }
-    const exists = await this.prisma.service.findUnique({ where: { code } });
-    if (exists) throw new ConflictException("Code layanan sudah dipakai.");
+    const code = await this.uniqueCode(input.code || name);
     const adminIds = await this.validOperatorIds(input.assignedAdminIds ?? []);
     const fulfillmentChannel = input.fulfillmentChannel ?? "telegram";
     const route = await this.supplierRoute(fulfillmentChannel, input);
@@ -252,6 +247,31 @@ export class AdminServicesService {
     const supplier = await this.prisma.supplier.findUnique({ where: { id: supplierId } });
     if (!supplier) throw new BadRequestException("Supplier tidak ditemukan.");
     return { supplierId, supplierServiceId };
+  }
+
+  /** Slug of the requested code (or name), suffixed `-2`, `-3`, … until unused. */
+  private async uniqueCode(source: string): Promise<string> {
+    const base =
+      source
+        .toLowerCase()
+        .normalize("NFKD")
+        .replace(/[^a-z0-9_-]+/g, "-")
+        .replace(/-+/g, "-")
+        .replace(/^-|-$/g, "")
+        .slice(0, 34) || "layanan";
+    const taken = new Set(
+      (
+        await this.prisma.service.findMany({
+          where: { code: { startsWith: base } },
+          select: { code: true },
+        })
+      ).map((row) => row.code),
+    );
+    if (!taken.has(base)) return base;
+    for (let n = 2; ; n++) {
+      const candidate = `${base}-${n}`;
+      if (!taken.has(candidate)) return candidate;
+    }
   }
 
   private async validOperatorIds(ids: string[]) {

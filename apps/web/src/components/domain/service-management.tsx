@@ -105,7 +105,6 @@ export function ServiceManagement({
         await api("/admin/services", {
           method: "POST",
           body: JSON.stringify({
-            code: next.code || next.name.toLowerCase().replace(/\s+/g, "-"),
             name: next.name,
             description: next.description,
             price: next.price,
@@ -641,7 +640,6 @@ function ServiceFormDialog({
   const [saving, setSaving] = React.useState(false);
   const [errors, setErrors] = React.useState<{
     name?: string;
-    code?: string;
     price?: string;
     costPrice?: string;
     estimate?: string;
@@ -655,9 +653,6 @@ function ServiceFormDialog({
     const nextErrors: typeof errors = {};
     if (!draft.name.trim()) {
       nextErrors.name = "Masukkan nama layanan.";
-    }
-    if (creating && !(draft.code ?? "").trim()) {
-      nextErrors.code = "Masukkan code unik (mis. activation).";
     }
     if (!draft.price || draft.price < 1) {
       nextErrors.price = "Harga harus lebih dari Rp0.";
@@ -681,7 +676,6 @@ function ServiceFormDialog({
     try {
       await onSave({
         ...draft,
-        code: (draft.code ?? "").trim(),
         name: draft.name.trim(),
         description: draft.description.trim(),
         estimate: draft.estimate.trim(),
@@ -758,22 +752,6 @@ function ServiceFormDialog({
         noValidate
         className="space-y-4"
       >
-        {creating ? (
-          <Field label="Code" htmlFor="code" required error={errors.code} hint="Unik, huruf kecil (mis. activation).">
-            <Input
-              id="code"
-              className="font-data"
-              value={draft.code ?? ""}
-              invalid={Boolean(errors.code)}
-              onChange={(event) =>
-                setDraft((current) => ({
-                  ...current,
-                  code: event.target.value,
-                }))
-              }
-            />
-          </Field>
-        ) : null}
         <Field label="Nama layanan" htmlFor="name" required error={errors.name}>
           <Input
             id="name"
