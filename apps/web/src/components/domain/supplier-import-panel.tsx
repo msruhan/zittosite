@@ -184,7 +184,7 @@ export function SupplierImportPanel({
           body: JSON.stringify({
             code,
             name: svc.name.slice(0, 120),
-            description: plainText(svc.info),
+            description: plainText(svc.info) || svc.name.slice(0, 1000),
             price: priceFor(svc),
             costPrice: Math.round(svc.credit),
             estimate: (svc.time || "Sesuai supplier").slice(0, 60),
