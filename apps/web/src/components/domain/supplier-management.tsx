@@ -64,6 +64,10 @@ export function SupplierManagement({ initialSuppliers }: { initialSuppliers: Sup
       setSuppliers((current) => current.map((s) => (s.id === updated.id ? updated : s)));
       if (updated.lastError) {
         toast.error("Koneksi gagal", { description: updated.lastError });
+      } else if (updated.remoteServiceCount === 0) {
+        toast.warning("Terhubung, tetapi supplier tidak membuka layanan", {
+          description: `Saldo terbaca (${updated.lastBalance ?? "-"}), namun ${updated.name} mengirim daftar layanan kosong. Aktifkan dan beri harga layanan di panel supplier, lalu sinkron ulang.`,
+        });
       } else {
         toast.success("Terhubung", {
           description: `Saldo di ${updated.name}: ${updated.lastBalance ?? "-"} · ${updated.remoteServiceCount ?? 0} layanan tersedia`,
@@ -146,7 +150,11 @@ export function SupplierManagement({ initialSuppliers }: { initialSuppliers: Sup
                         <span className="text-ink-soft">tersedia</span>
                       </p>
                       <p className="text-label text-ink-faint">
-                        {supplier.serviceCount > 0 ? (
+                        {supplier.remoteServiceCount === null ? (
+                          "Sinkron untuk membaca layanan"
+                        ) : supplier.remoteServiceCount === 0 ? (
+                          <span className="text-hold-ink">Supplier belum membuka layanan</span>
+                        ) : supplier.serviceCount > 0 ? (
                           `${supplier.serviceCount} terhubung ke layanan`
                         ) : (
                           <Link href="/admin/services" className="text-action hover:underline">
