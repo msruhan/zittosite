@@ -20,6 +20,7 @@ import { userOrderNoticeHtml } from "../telegram/telegram-messages";
 import { processDurationLabel } from "../orders/process-duration";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+const DEFAULT_DONE_NOTE = "Order selesai diproses.";
 
 /** `YYYY-MM-DD` as midnight in Asia/Jakarta (UTC+7, no DST); null when absent or malformed. */
 export function jakartaDayStart(value?: string): Date | null {
@@ -180,6 +181,21 @@ export class AdminOrdersService {
         ? await refundOrderToBalance(tx, order, refundReason)
         : 0;
       const reversed = refundReason ? 0 : await reverseOrderRefund(tx, order);
+      const reopened = order.status === "done" && next !== "done";
+      if (reopened) {
+        // A reopened order must accept a fresh result (OrderResult is one per order).
+        await tx.orderResult.deleteMany({ where: { orderId: order.id } });
+      }
+      if (next === "done" && !order.result) {
+        await tx.orderResult.create({
+          data: {
+            orderId: order.id,
+            resultStatus: "success",
+            resultNote: DEFAULT_DONE_NOTE,
+            createdByAdminId: admin.id,
+          },
+        });
+      }
       const updated = await tx.order.update({
         where: { id: order.id },
         data: {
@@ -187,6 +203,7 @@ export class AdminOrdersService {
           ...(next === "done" && !order.completedAt
             ? { completedAt: new Date() }
             : {}),
+          ...(reopened ? { completedAt: null } : {}),
           ...(next === "in_process" && !order.startedAt
             ? { startedAt: new Date() }
             : {}),
@@ -226,10 +243,64 @@ export class AdminOrdersService {
     }
     if (order.status !== next && (next === "rejected" || next === "cancel")) {
       this.notifyClosed(updated, next, admin, refunded, order.status !== "waiting_payment");
+    } else if (order.status !== next && (next === "in_process" || next === "done")) {
+      this.notifyProgress(updated, next, admin, refunded);
     }
     return serializeOrderListItem(updated, {
       redactUser: admin.role !== "super_admin",
     });
+  }
+
+  /** Same Telegram fan-out as {@link notifyClosed}, for overrides to in_process or done. */
+  private notifyProgress(
+    order: {
+      id: string;
+      orderId: string;
+      userId: string;
+      imei: string;
+      service: { name: string };
+      assignedAdmin: { fullName: string } | null;
+      result: { resultStatus: string; resultNote: string } | null;
+      createdAt: Date;
+      invoice: { paidAt: Date | null } | null;
+      activity: Array<{ status: string; createdAt: Date }>;
+    },
+    next: "in_process" | "done",
+    admin: { id: string; username: string; fullName: string },
+    refunded: number,
+  ) {
+    const actorName = order.assignedAdmin?.fullName ?? admin.fullName;
+    if (next === "in_process") {
+      void this.adminNotify.syncOrderCards(order.id, "taken", { actorName });
+      void this.adminNotify.notifySuperAdminsFollowUp(order.id, "taken", admin, undefined, {
+        includeActor: true,
+      });
+      void this.adminNotify.notifyUserById(
+        order.userId,
+        userOrderNoticeHtml({ kind: "taken", orderId: order.orderId }),
+      );
+      return;
+    }
+
+    const resultNote = order.result?.resultNote ?? DEFAULT_DONE_NOTE;
+    const typedNote = resultNote === DEFAULT_DONE_NOTE ? "" : resultNote;
+    void this.adminNotify.syncOrderCards(order.id, "done", { actorName, note: resultNote });
+    void this.adminNotify.notifySuperAdminsFollowUp(order.id, "done", admin, resultNote, {
+      includeActor: true,
+    });
+    void this.adminNotify.notifyUserById(
+      order.userId,
+      userOrderNoticeHtml({
+        kind: "done",
+        orderId: order.orderId,
+        imei: order.imei,
+        serviceName: order.service.name,
+        resultStatus: order.result?.resultStatus ?? "success",
+        note: typedNote,
+        refund: refunded,
+        duration: processDurationLabel(order),
+      }),
+    );
   }
 
   /** Telegram fan-out for a website override: admin order cards, Super Admins, and the customer. */
