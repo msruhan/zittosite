@@ -76,16 +76,6 @@ export default async function OrderStatusPage({
                   <DataValue>{order.imei}</DataValue>
                 </dd>
               </div>
-              {order.assignedAdmin ? (
-                <div>
-                  <dt className="text-label uppercase text-ink-soft">
-                    Admin pemroses
-                  </dt>
-                  <dd className="mt-0.5 text-body font-medium text-ink">
-                    {order.assignedAdmin.fullName}
-                  </dd>
-                </div>
-              ) : null}
             </dl>
 
             <div className="mt-5">

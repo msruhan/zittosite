@@ -114,11 +114,6 @@ export default async function OrderDetailPage({
                 </DataValue>
               </DetailRow>
             ) : null}
-            {order.assignedAdmin ? (
-              <DetailRow label="Admin pemroses">
-                {order.assignedAdmin.fullName}
-              </DetailRow>
-            ) : null}
             {order.notes ? (
               <DetailRow label="Catatan Anda">{order.notes}</DetailRow>
             ) : null}
