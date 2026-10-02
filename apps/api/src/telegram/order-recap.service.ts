@@ -9,7 +9,10 @@ export type AdminDayStats = {
   done: number;
   rejected: number;
   inProcess: number;
-  /** Sum of the selling price of orders completed today. */
+  /**
+   * Orders completed today: summed cost price (what the admin earns) for admin
+   * stats, selling price for the WhatsApp processor.
+   */
   doneAmount: number;
 };
 
@@ -54,14 +57,16 @@ export type OperatorRecap = {
 };
 
 type Counted = { assignedAdminId: string | null; _count: { _all: number } };
-type Summed = { assignedAdminId: string | null; _sum: { price: number | null } };
+type Summed = { assignedAdminId: string | null; _sum: { costPrice: number | null } };
 
+/** Totals skip unassigned orders: those belong to the WhatsApp processor, not an admin. */
 function tally(rows: Counted[]) {
   const map = new Map<string, number>();
   let total = 0;
   for (const row of rows) {
+    if (!row.assignedAdminId) continue;
     total += row._count._all;
-    if (row.assignedAdminId) map.set(row.assignedAdminId, row._count._all);
+    map.set(row.assignedAdminId, row._count._all);
   }
   return { map, total };
 }
@@ -70,9 +75,10 @@ function sumByAdmin(rows: Summed[]) {
   const map = new Map<string, number>();
   let total = 0;
   for (const row of rows) {
-    const amount = row._sum.price ?? 0;
+    if (!row.assignedAdminId) continue;
+    const amount = row._sum.costPrice ?? 0;
     total += amount;
-    if (row.assignedAdminId) map.set(row.assignedAdminId, amount);
+    map.set(row.assignedAdminId, amount);
   }
   return { map, total };
 }
@@ -178,7 +184,7 @@ export class OrderRecapService {
         this.prisma.order.groupBy({
           by: ["assignedAdminId"],
           where: where.done,
-          _sum: { price: true },
+          _sum: { costPrice: true },
         }),
       ]);
 
@@ -338,13 +344,13 @@ export class OrderRecapService {
       }),
       this.prisma.order.aggregate({
         where: { ...where.done, assignedAdminId: adminId },
-        _sum: { price: true },
+        _sum: { costPrice: true },
       }),
     ]);
 
     return {
       day: start,
-      stats: { taken, done, rejected, inProcess, doneAmount: amount._sum.price ?? 0 },
+      stats: { taken, done, rejected, inProcess, doneAmount: amount._sum.costPrice ?? 0 },
       queue,
       orders: orders
         .map((o) => ({
