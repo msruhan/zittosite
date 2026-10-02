@@ -51,6 +51,24 @@ test("placeOrder sends Dhru form fields with IMEI and base64 CUSTOMFIELD", async
   assert.deepEqual(JSON.parse(Buffer.from(custom, "base64").toString()), { IMEI: "356938035643809" });
 });
 
+test("placeOrder without a device value sends QNT top-level and extras in CUSTOMFIELD", async () => {
+  const { calls, impl } = fakeFetch({ SUCCESS: [{ MESSAGE: "ok", REFERENCEID: "R-78" }] });
+  await new DhruSupplierClient(config, impl).placeOrder("SVC5", null, {
+    QNT: "3",
+    USERNAME: "budi",
+    EMAIL: "budi@example.com",
+  });
+  const params = calls[0]!.form.get("parameters")!;
+  assert.doesNotMatch(params, /<IMEI>/);
+  assert.match(params, /<QNT>3<\/QNT>/);
+  const custom = /<CUSTOMFIELD>([^<]+)<\/CUSTOMFIELD>/.exec(params)![1]!;
+  assert.deepEqual(JSON.parse(Buffer.from(custom, "base64").toString()), {
+    QNT: "3",
+    USERNAME: "budi",
+    EMAIL: "budi@example.com",
+  });
+});
+
 test("Dhru ERROR is a supplier decision, transport problems throw", async () => {
   const refused = fakeFetch({ ERROR: [{ MESSAGE: "Invalid IMEI" }] });
   assert.deepEqual(await new DhruSupplierClient(config, refused.impl).placeOrder("1", "2"), {

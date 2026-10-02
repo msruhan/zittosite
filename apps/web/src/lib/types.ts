@@ -111,8 +111,12 @@ export interface Service {
   /** Admin panel only: Layanan Spesial group membership. */
   serviceGroupId?: string | null;
   serviceGroupName?: string | null;
-  /** What the user enters per order; SN/ECID only for Layanan Spesial. */
-  inputType?: "imei" | "sn" | "ecid";
+  /** What the user enters per order; SN/ECID/none only for Layanan Spesial. */
+  inputType?: "imei" | "sn" | "ecid" | "none";
+  /** Layanan Spesial only: extra fields the user must fill per order. */
+  requireQnt?: boolean;
+  requireEmail?: boolean;
+  requireUsername?: boolean;
   /** Admin panel only: where paid orders are processed. */
   fulfillmentChannel?: FulfillmentChannel;
   /** Admin panel only: upstream supplier route when fulfillmentChannel is "supplier". */
@@ -258,8 +262,13 @@ export interface Order {
   userId: string;
   serviceId: string;
   channel: OrderChannel;
+  /** Device value; "-" when the service takes none. */
   imei: string;
   notes: string | null;
+  /** Layanan Spesial extra fields; null when the service does not require them. */
+  quantity?: number | null;
+  email?: string | null;
+  username?: string | null;
   status: OrderStatus;
   /** Keterangan for rejected/cancelled orders; null means none. */
   statusReason?: string | null;

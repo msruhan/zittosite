@@ -61,6 +61,8 @@ function reportsSummary() {
       ordersDone: stats.done,
       waitingAction: stats.waitingAction,
     },
+    years: [new Date().getFullYear()],
+    period: null,
     channelMix: getChannelMix(),
     weeklyBars: getWeeklyOrderBars(),
     revenueSeries: getRevenueSeries(),

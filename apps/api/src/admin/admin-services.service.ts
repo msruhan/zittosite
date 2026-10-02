@@ -7,7 +7,12 @@ import {
 import type { FulfillmentChannel, Prisma, ServiceMenu } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
 import { serializeService } from "../orders/orders.serializer";
-import { type InputType, parseInputType } from "../orders/imei-list";
+import {
+  type ExtraFieldFlags,
+  type ServiceInputType,
+  hasExtraFields,
+  parseServiceInputType,
+} from "../orders/special-fields";
 import { isSpecialService } from "../orders/supplier-routed";
 import { usdCentsToIdr } from "../orders/usd-pricing";
 import { UsdRateService } from "../orders/usd-rate.service";
@@ -50,17 +55,42 @@ type SupplierRoute = { supplierId?: string | null; supplierServiceId?: string | 
 /** Layanan Spesial only; ignored (and cleared) for every other service. */
 type UsdPrices = { priceUsdCents?: number; costUsdCents?: number };
 
-/** SN/ECID are only for Layanan Spesial; regular and Ceir services always take an IMEI. */
+/** SN/ECID/none are only for Layanan Spesial; regular and Ceir services always take an IMEI. */
 function inputTypeFor(
   service: { fulfillmentChannel: FulfillmentChannel; menu: ServiceMenu },
   requested: unknown,
-  current: InputType = "imei",
-): InputType {
+  current: ServiceInputType = "imei",
+): ServiceInputType {
   if (!isSpecialService(service)) return "imei";
   if (requested === undefined) return current;
-  const type = parseInputType(requested);
-  if (!type) throw new BadRequestException("Jenis input harus IMEI, SN, atau ECID.");
+  const type = parseServiceInputType(requested);
+  if (!type) throw new BadRequestException("Jenis input harus IMEI, SN, ECID, atau tidak ada.");
   return type;
+}
+
+type ExtraFieldInput = Partial<ExtraFieldFlags>;
+
+/** Extra order fields are Layanan Spesial only; a service without a device value needs at least one. */
+function extraFieldsFor(
+  service: { fulfillmentChannel: FulfillmentChannel; menu: ServiceMenu },
+  inputType: ServiceInputType,
+  requested: ExtraFieldInput,
+  current: ExtraFieldFlags = { requireQnt: false, requireEmail: false, requireUsername: false },
+): ExtraFieldFlags {
+  if (!isSpecialService(service)) {
+    return { requireQnt: false, requireEmail: false, requireUsername: false };
+  }
+  const flags: ExtraFieldFlags = {
+    requireQnt: requested.requireQnt ?? current.requireQnt,
+    requireEmail: requested.requireEmail ?? current.requireEmail,
+    requireUsername: requested.requireUsername ?? current.requireUsername,
+  };
+  if (inputType === "none" && !hasExtraFields(flags)) {
+    throw new BadRequestException(
+      "Layanan tanpa IMEI/SN/ECID harus mewajibkan minimal satu field: Qnt, Email, atau Username.",
+    );
+  }
+  return flags;
 }
 
 type ServiceWithAssignments = Prisma.ServiceGetPayload<{
@@ -126,7 +156,7 @@ export class AdminServicesService {
     assignedAdminIds?: string[];
     inputType?: unknown;
     menu?: ServiceMenu;
-  } & SupplierRoute & UsdPrices) {
+  } & SupplierRoute & UsdPrices & ExtraFieldInput) {
     const name = String(input.name ?? "").trim();
     const description = String(input.description ?? "").trim() || name;
     const estimate = String(input.estimate ?? "").trim() || "—";
@@ -139,6 +169,7 @@ export class AdminServicesService {
     const route = await this.supplierRoute(fulfillmentChannel, input);
     const menu = input.menu ?? "ceir";
     const inputType = inputTypeFor({ fulfillmentChannel, menu }, input.inputType);
+    const extraFields = extraFieldsFor({ fulfillmentChannel, menu }, inputType, input);
     const special = isSpecialService({ fulfillmentChannel, menu });
     if (special && input.priceUsdCents === undefined) {
       throw new BadRequestException("Harga USD wajib untuk Layanan Spesial.");
@@ -168,6 +199,7 @@ export class AdminServicesService {
         ...route,
         menu,
         inputType,
+        ...extraFields,
         priceUsdCents: usd?.priceUsdCents ?? null,
         costUsdCents: usd?.costUsdCents ?? null,
         assignments: { create: adminIds.map((adminId) => ({ adminId })) },
@@ -206,7 +238,7 @@ export class AdminServicesService {
       assignedAdminIds?: string[];
       inputType?: unknown;
       menu?: ServiceMenu;
-    } & SupplierRoute & UsdPrices,
+    } & SupplierRoute & UsdPrices & ExtraFieldInput,
   ) {
     const existing = await this.prisma.service.findUnique({ where: { id } });
     if (!existing) throw new NotFoundException("Layanan tidak ditemukan.");
@@ -218,6 +250,7 @@ export class AdminServicesService {
       input.inputType,
       existing.inputType,
     );
+    const extraFields = extraFieldsFor({ fulfillmentChannel, menu }, inputType, input, existing);
     const special = isSpecialService({ fulfillmentChannel, menu });
     const priceUsdCents = input.priceUsdCents ?? existing.priceUsdCents;
     if (special && priceUsdCents === null) {
@@ -288,6 +321,7 @@ export class AdminServicesService {
           ...route,
           menu,
           inputType,
+          ...extraFields,
           ...(isSpecialService({ fulfillmentChannel, menu }) ? {} : { serviceGroupId: null }),
         },
         include: SERVICE_INCLUDE,

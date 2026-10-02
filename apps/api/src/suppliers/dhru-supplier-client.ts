@@ -60,7 +60,7 @@ function text(value: unknown): string {
 
 /** Dhru carries SN/ECID in their own fields; IMEI already travels as `IMEI`. */
 export function supplierInputFields(
-  inputType: "imei" | "sn" | "ecid",
+  inputType: "imei" | "sn" | "ecid" | "none",
   value: string,
 ): Record<string, string> {
   if (inputType === "sn") return { SN: value };
@@ -162,15 +162,20 @@ export class DhruSupplierClient {
     return { ok: true, data: parseServiceList(reply.data.LIST) };
   }
 
+  /**
+   * `imei` is null for services without a device value. Every field travels in
+   * CUSTOMFIELD; QNT also goes top-level, where Dhru reads the quantity.
+   */
   async placeOrder(
     serviceId: string,
-    imei: string,
+    imei: string | null,
     extra: Record<string, string> = {},
   ): Promise<DhruReply<{ referenceId: string }>> {
-    const fields = { IMEI: imei, ...extra };
+    const fields = { ...(imei ? { IMEI: imei } : {}), ...extra };
     const reply = await this.call("placeimeiorder", {
       ID: serviceId,
-      IMEI: imei,
+      ...(imei ? { IMEI: imei } : {}),
+      ...(extra.QNT ? { QNT: extra.QNT } : {}),
       CUSTOMFIELD: Buffer.from(JSON.stringify(fields), "utf8").toString("base64"),
     });
     if (!reply.ok) return reply;

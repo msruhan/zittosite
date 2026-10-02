@@ -9,6 +9,7 @@ import { DataValue } from "@/components/ui/data-value";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Field, Input, Textarea } from "@/components/ui/field";
+import { Combobox } from "@/components/ui/combobox";
 import { Select, type SelectOption } from "@/components/ui/select";
 import { Tag } from "@/components/ui/status-badge";
 import { Switch } from "@/components/ui/switch";
@@ -31,7 +32,6 @@ import {
   usdCentsToIdr,
 } from "@/lib/format";
 import { ApiError, api } from "@/lib/api";
-import type { InputType } from "@/lib/imei-list";
 import { cn } from "@/lib/utils";
 import {
   SERVICE_MENU_LABEL,
@@ -52,6 +52,12 @@ const CHANNEL_LABEL: Record<FulfillmentChannel, string> = {
 };
 
 type ServiceDraft = Service & { assignedAdminIds: string[] };
+
+const EXTRA_FIELD_OPTIONS = [
+  { key: "requireQnt", label: "Qnt" },
+  { key: "requireEmail", label: "Email" },
+  { key: "requireUsername", label: "Username" },
+] as const satisfies ReadonlyArray<{ key: keyof Service; label: string }>;
 
 function toDraft(service: Service): ServiceDraft {
   return {
@@ -142,6 +148,9 @@ export function ServiceManagement({
             supplierServiceId: next.supplierServiceId ?? null,
             menu: next.menu ?? "ceir",
             inputType: next.inputType ?? "imei",
+            requireQnt: next.requireQnt ?? false,
+            requireEmail: next.requireEmail ?? false,
+            requireUsername: next.requireUsername ?? false,
             ...(next.priceUsdCents != null
               ? {
                   priceUsd: next.priceUsdCents / 100,
@@ -166,6 +175,9 @@ export function ServiceManagement({
             supplierServiceId: next.supplierServiceId ?? null,
             menu: next.menu ?? "ceir",
             inputType: next.inputType ?? "imei",
+            requireQnt: next.requireQnt ?? false,
+            requireEmail: next.requireEmail ?? false,
+            requireUsername: next.requireUsername ?? false,
             ...(next.priceUsdCents != null
               ? {
                   priceUsd: next.priceUsdCents / 100,
@@ -720,6 +732,7 @@ function ServiceFormDialog({
     costPrice?: string;
     estimate?: string;
     supplier?: string;
+    fields?: string;
   }>({});
   const costPrice = draft.costPrice ?? 0;
   const margin = draft.price - costPrice;
@@ -758,6 +771,15 @@ function ServiceFormDialog({
     }
     if (!draft.estimate.trim()) {
       nextErrors.estimate = "Masukkan estimasi pengerjaan.";
+    }
+    if (
+      special &&
+      draft.inputType === "none" &&
+      !draft.requireQnt &&
+      !draft.requireEmail &&
+      !draft.requireUsername
+    ) {
+      nextErrors.fields = "Tanpa IMEI/SN/ECID, centang minimal satu field: Qnt, Email, atau Username.";
     }
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length > 0) return;
@@ -1011,7 +1033,14 @@ function ServiceFormDialog({
                 setDraft((current) => ({
                   ...current,
                   menu: value as ServiceMenu,
-                  ...(value === "ceir" ? { inputType: "imei" as InputType } : {}),
+                  ...(value === "ceir"
+                    ? {
+                        inputType: "imei" as const,
+                        requireQnt: false,
+                        requireEmail: false,
+                        requireUsername: false,
+                      }
+                    : {}),
                 }));
                 if (value === "special" && !usdText.price && draft.price > 0) {
                   setUsdText({
@@ -1029,27 +1058,69 @@ function ServiceFormDialog({
           </Field>
         ) : null}
         {draft.fulfillmentChannel === "supplier" && draft.menu === "special" ? (
-          <Field
-            label="Field yang diisi user"
-            htmlFor="inputType"
-            hint="Khusus Layanan Spesial. User hanya mengisi satu jenis data ini saat order."
-          >
-            <Select
-              id="inputType"
-              value={draft.inputType ?? "imei"}
-              onValueChange={(value) =>
-                setDraft((current) => ({
-                  ...current,
-                  inputType: value as InputType,
-                }))
-              }
-              options={[
-                { value: "imei", label: "IMEI (15 digit)" },
-                { value: "sn", label: "SN (Serial Number)" },
-                { value: "ecid", label: "ECID" },
-              ]}
-            />
-          </Field>
+          <>
+            <Field
+              label="Field yang diisi user"
+              htmlFor="inputType"
+              hint="Khusus Layanan Spesial. Data perangkat yang diisi user saat order."
+            >
+              <Select
+                id="inputType"
+                value={draft.inputType ?? "imei"}
+                onValueChange={(value) => {
+                  setDraft((current) => ({
+                    ...current,
+                    inputType: value as NonNullable<Service["inputType"]>,
+                  }));
+                  setErrors((current) => ({ ...current, fields: undefined }));
+                }}
+                options={[
+                  { value: "imei", label: "IMEI (15 digit)" },
+                  { value: "sn", label: "SN (Serial Number)" },
+                  { value: "ecid", label: "ECID" },
+                  { value: "none", label: "Tidak ada (tanpa IMEI/SN/ECID)" },
+                ]}
+              />
+            </Field>
+            <fieldset>
+              <legend className="mb-1 text-body font-medium text-ink">Field tambahan</legend>
+              <p className="mb-2 text-body text-ink-soft">
+                Yang dicentang wajib diisi user saat order dan ikut dikirim ke supplier
+                (QNT, EMAIL, USERNAME). Qnt tidak mengubah harga.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {EXTRA_FIELD_OPTIONS.map((option) => (
+                  <label
+                    key={option.key}
+                    className={cn(
+                      "inline-flex h-10 cursor-pointer items-center gap-2.5 rounded-md border px-3.5 text-body",
+                      "transition-colors duration-150 ease-out-strong",
+                      draft[option.key]
+                        ? "border-action bg-action-wash font-medium text-action"
+                        : "border-hairline bg-surface text-ink hover:bg-mist",
+                    )}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={Boolean(draft[option.key])}
+                      onChange={(event) => {
+                        const checked = event.target.checked;
+                        setDraft((current) => ({ ...current, [option.key]: checked }));
+                        setErrors((current) => ({ ...current, fields: undefined }));
+                      }}
+                      className="size-4 rounded-sm border-hairline accent-action"
+                    />
+                    {option.label}
+                  </label>
+                ))}
+              </div>
+              {errors.fields ? (
+                <p role="alert" className="mt-1.5 text-body text-refused-ink">
+                  {errors.fields}
+                </p>
+              ) : null}
+            </fieldset>
+          </>
         ) : null}
         {draft.fulfillmentChannel === "telegram" ||
         !draft.fulfillmentChannel ? (
@@ -1167,7 +1238,7 @@ function SupplierPicker({
           }
           error={loadError ?? undefined}
         >
-          <Select
+          <Combobox
             id="supplierServiceId"
             value={supplierServiceId ?? undefined}
             placeholder={remote === null && !loadError ? "Memuat…" : "Pilih layanan supplier"}

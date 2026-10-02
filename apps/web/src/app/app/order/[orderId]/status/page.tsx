@@ -12,7 +12,7 @@ import { OrderStepper } from "@/components/domain/order-stepper";
 import { ORDER_STATUS } from "@/lib/status";
 import { ApiError } from "@/lib/api";
 import { serverApi } from "@/lib/server-api";
-import { INPUT_TYPE_LABEL } from "@/lib/imei-list";
+import { deviceLabel, orderExtraRows } from "@/lib/order-fields";
 import { orderMenu } from "@/lib/order-routes";
 import type { OrderDetail } from "@/lib/types";
 
@@ -68,14 +68,24 @@ export default async function OrderStatusPage({
                   {order.service.name}
                 </dd>
               </div>
-              <div>
-                <dt className="text-label uppercase text-ink-soft">
-                  {INPUT_TYPE_LABEL[order.service.inputType ?? "imei"]}
-                </dt>
-                <dd className="mt-0.5">
-                  <DataValue>{order.imei}</DataValue>
-                </dd>
-              </div>
+              {deviceLabel(order.service.inputType) ? (
+                <div>
+                  <dt className="text-label uppercase text-ink-soft">
+                    {deviceLabel(order.service.inputType)}
+                  </dt>
+                  <dd className="mt-0.5">
+                    <DataValue>{order.imei}</DataValue>
+                  </dd>
+                </div>
+              ) : null}
+              {orderExtraRows(order).map((row) => (
+                <div key={row.label} className="min-w-0">
+                  <dt className="text-label uppercase text-ink-soft">{row.label}</dt>
+                  <dd className="mt-0.5">
+                    <DataValue className="break-all">{row.value}</DataValue>
+                  </dd>
+                </div>
+              ))}
             </dl>
 
             <div className="mt-5">

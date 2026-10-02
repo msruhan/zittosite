@@ -9,6 +9,8 @@
     "test": "node --import tsx --test \"src/**/*.test.ts\"",
     "prisma:migrate": "prisma migrate dev",
     "prisma:seed": "tsx prisma/seed.ts",
+    "seed:dummy": "tsx prisma/seed-dummy.ts",
+    "mock:supplier": "tsx scripts/mock-supplier.ts",
     "prisma:generate": "prisma generate"
   },
   "prisma": {

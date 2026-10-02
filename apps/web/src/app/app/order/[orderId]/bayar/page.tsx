@@ -9,7 +9,7 @@ import { CancelOrderButton } from "@/components/domain/cancel-order-button";
 import { ApiError } from "@/lib/api";
 import { serverApi } from "@/lib/server-api";
 import { orderMenu } from "@/lib/order-routes";
-import { INPUT_TYPE_LABEL } from "@/lib/imei-list";
+import { deviceLabel, orderExtraRows } from "@/lib/order-fields";
 import { formatDateTime, formatRupiah } from "@/lib/format";
 import type { OrderDetail } from "@/lib/types";
 
@@ -82,7 +82,7 @@ export default async function PaymentPage({
               </div>
               <div className="py-2.5">
                 <dt className="text-body text-ink-soft">
-                  {INPUT_TYPE_LABEL[order.service.inputType ?? "imei"]} ({bulk.length} order, 1 QRIS)
+                  {deviceLabel(order.service.inputType) ?? "Order"} ({bulk.length} order, 1 QRIS)
                 </dt>
                 <dd className="mt-2">
                   <ul className="space-y-1.5">
@@ -101,16 +101,24 @@ export default async function PaymentPage({
                 </dd>
               </div>
             </>
-          ) : (
+          ) : deviceLabel(order.service.inputType) ? (
             <div className="flex items-baseline justify-between gap-4 py-2.5">
               <dt className="text-body text-ink-soft">
-                {INPUT_TYPE_LABEL[order.service.inputType ?? "imei"]}
+                {deviceLabel(order.service.inputType)}
               </dt>
               <dd>
                 <DataValue>{order.imei}</DataValue>
               </dd>
             </div>
-          )}
+          ) : null}
+          {orderExtraRows(order).map((row) => (
+            <div key={row.label} className="flex items-baseline justify-between gap-4 py-2.5">
+              <dt className="text-body text-ink-soft">{row.label}</dt>
+              <dd className="min-w-0 text-right">
+                <DataValue className="break-all">{row.value}</DataValue>
+              </dd>
+            </div>
+          ))}
           {order.invoice.balanceUsed ? (
             <>
               <div className="flex items-baseline justify-between gap-4 py-2.5">

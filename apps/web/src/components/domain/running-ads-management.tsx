@@ -14,6 +14,7 @@ import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Field, Input } from "@/components/ui/field";
+import { SearchInput } from "@/components/ui/search-input";
 import { Switch } from "@/components/ui/switch";
 import {
   TBody,
@@ -30,6 +31,7 @@ import {
   AdsRunnerTicker,
 } from "@/components/domain/ads-runner-ticker";
 import { ApiError, api } from "@/lib/api";
+import { matchesSearch } from "@/lib/search";
 import { cn } from "@/lib/utils";
 import type { RunningAd, RunningAdColor } from "@/lib/types";
 
@@ -69,7 +71,12 @@ export function RunningAdsManagement({ initialAds }: { initialAds: RunningAd[] }
   const [deleting, setDeleting] = React.useState<RunningAd | null>(null);
   const [busyId, setBusyId] = React.useState<string | null>(null);
 
+  const [query, setQuery] = React.useState("");
+
   const activeAds = ads.filter((ad) => ad.isActive);
+  const filteredAds = ads
+    .map((ad, index) => ({ ad, index }))
+    .filter(({ ad }) => matchesSearch(query, [ad.text, ad.tag, ad.linkUrl]));
 
   async function reload() {
     setAds(await api<RunningAd[]>("/admin/running-ads"));
@@ -177,6 +184,26 @@ export function RunningAdsManagement({ initialAds }: { initialAds: RunningAd[] }
 
       <Card>
         {ads.length ? (
+          <div className="border-b border-hairline p-3 sm:px-4">
+            <SearchInput
+              value={query}
+              onChange={setQuery}
+              label="Cari ads"
+              placeholder="Cari teks, label, atau link"
+            />
+          </div>
+        ) : null}
+        {ads.length && !filteredAds.length ? (
+          <EmptyState
+            title="Tidak ada ads yang cocok"
+            description={`Tidak ada ads yang cocok dengan "${query.trim()}".`}
+            action={
+              <Button variant="secondary" onClick={() => setQuery("")}>
+                Reset pencarian
+              </Button>
+            }
+          />
+        ) : ads.length ? (
           <>
             <TableScroll>
               <Table>
@@ -190,7 +217,7 @@ export function RunningAdsManagement({ initialAds }: { initialAds: RunningAd[] }
                   </TR>
                 </THead>
                 <TBody>
-                  {ads.map((ad, index) => (
+                  {filteredAds.map(({ ad, index }) => (
                     <TR key={ad.id}>
                       <TD>
                         <div className="flex items-center gap-0.5">

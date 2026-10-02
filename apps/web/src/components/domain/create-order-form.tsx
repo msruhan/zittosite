@@ -6,8 +6,8 @@ import { useRouter } from "next/navigation";
 import { Info, QrCode, Wallet } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { Field, Textarea } from "@/components/ui/field";
-import { Select } from "@/components/ui/select";
+import { Field, Input, Textarea } from "@/components/ui/field";
+import { Combobox } from "@/components/ui/combobox";
 import { DataValue } from "@/components/ui/data-value";
 import { ImeiChipInput } from "@/components/domain/imei-chip-input";
 import { ApiError, api } from "@/lib/api";
@@ -20,6 +20,34 @@ import {
   type InputType,
 } from "@/lib/imei-list";
 import type { Service } from "@/lib/types";
+
+// Keep in sync with apps/api/src/orders/special-fields.ts.
+const QNT_MAX = 100_000;
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+type ExtraValues = { qnt: string; email: string; username: string };
+type ExtraErrors = Partial<Record<keyof ExtraValues, string>>;
+const EMPTY_EXTRAS: ExtraValues = { qnt: "", email: "", username: "" };
+
+function validateExtras(service: Service, values: ExtraValues): ExtraErrors {
+  const errors: ExtraErrors = {};
+  if (service.requireQnt) {
+    const qnt = Number(values.qnt.trim());
+    if (!values.qnt.trim()) errors.qnt = "Masukkan Qnt.";
+    else if (!Number.isInteger(qnt) || qnt < 1 || qnt > QNT_MAX) {
+      errors.qnt = `Qnt harus bilangan bulat 1–${QNT_MAX.toLocaleString("id-ID")}.`;
+    }
+  }
+  if (service.requireEmail) {
+    const email = values.email.trim();
+    if (!email) errors.email = "Masukkan email.";
+    else if (!EMAIL_PATTERN.test(email)) errors.email = "Format email tidak valid.";
+  }
+  if (service.requireUsername && !values.username.trim()) {
+    errors.username = "Masukkan username.";
+  }
+  return errors;
+}
 
 export function CreateOrderForm({
   services,
@@ -43,6 +71,13 @@ export function CreateOrderForm({
   const [imeiError, setImeiError] = React.useState<string>();
   const [notes, setNotes] = React.useState("");
   const [serviceError, setServiceError] = React.useState<string>();
+  const [extras, setExtras] = React.useState<ExtraValues>(EMPTY_EXTRAS);
+  const [extraErrors, setExtraErrors] = React.useState<ExtraErrors>({});
+
+  function updateExtra(key: keyof ExtraValues, value: string) {
+    setExtras((current) => ({ ...current, [key]: value }));
+    setExtraErrors((current) => ({ ...current, [key]: undefined }));
+  }
   const [submitting, setSubmitting] = React.useState(false);
 
   const serviceOptions = React.useMemo(() => {
@@ -60,14 +95,17 @@ export function CreateOrderForm({
     }));
   }, [services, priceFor]);
   const service = services.find((s) => s.id === serviceId) ?? null;
-  const inputType: InputType = service?.inputType ?? "imei";
+  const noDevice = service?.inputType === "none";
+  const inputType: InputType =
+    service?.inputType && service.inputType !== "none" ? service.inputType : "imei";
   const label = INPUT_TYPE_LABEL[inputType];
   const price = service ? priceFor[service.id] : null;
   const draftComplete =
+    !noDevice &&
     !inputLengthError(draft, inputType) &&
     !imeis.includes(draft) &&
     imeis.length < MAX_BULK_IMEIS;
-  const quantity = imeis.length + (draftComplete ? 1 : 0);
+  const quantity = noDevice ? 1 : imeis.length + (draftComplete ? 1 : 0);
   const total = price !== null ? price * Math.max(quantity, 1) : null;
   const balanceUsed = total !== null ? Math.min(Math.max(balance, 0), total) : 0;
   const due = total !== null ? total - balanceUsed : null;
@@ -79,9 +117,14 @@ export function CreateOrderForm({
     setServiceError(
       serviceId ? undefined : "Pilih layanan yang ingin Anda gunakan.",
     );
-    const finalImeis = draftComplete ? [...imeis, draft] : imeis;
+    const nextExtraErrors = service ? validateExtras(service, extras) : {};
+    setExtraErrors(nextExtraErrors);
+    const extrasInvalid = Object.keys(nextExtraErrors).length > 0;
+    const finalImeis = noDevice ? [] : draftComplete ? [...imeis, draft] : imeis;
     let problem: string | undefined;
-    if (draft && !draftComplete) {
+    if (noDevice) {
+      problem = undefined;
+    } else if (draft && !draftComplete) {
       const lengthProblem = inputLengthError(draft, inputType);
       problem = lengthProblem
         ? inputType === "imei"
@@ -92,7 +135,7 @@ export function CreateOrderForm({
       problem = `Masukkan ${label} perangkat Anda.`;
     }
     setImeiError(problem);
-    if (!serviceId || problem) return;
+    if (!serviceId || problem || extrasInvalid) return;
     if (draftComplete) {
       setImeis(finalImeis);
       setDraft("");
@@ -106,6 +149,9 @@ export function CreateOrderForm({
           serviceId,
           imeis: finalImeis,
           notes: notes.trim() || undefined,
+          ...(service?.requireQnt ? { qnt: extras.qnt.trim() } : {}),
+          ...(service?.requireEmail ? { email: extras.email.trim() } : {}),
+          ...(service?.requireUsername ? { username: extras.username.trim() } : {}),
         }),
       });
       const title = quantity > 1 ? `${quantity} order dibuat` : "Order dibuat";
@@ -140,12 +186,13 @@ export function CreateOrderForm({
         required
         hint="Harga mengikuti layanan yang dipilih."
       >
-        <Select
+        <Combobox
           id="service"
           value={serviceId}
           onValueChange={(value) => {
             const nextType = services.find((s) => s.id === value)?.inputType ?? "imei";
-            if (nextType !== inputType) {
+            setExtraErrors({});
+            if (nextType !== (service?.inputType ?? "imei")) {
               setImeis([]);
               setDraft("");
               setImeiError(undefined);
@@ -154,7 +201,7 @@ export function CreateOrderForm({
             setServiceError(undefined);
           }}
           invalid={Boolean(serviceError)}
-          placeholder="Pilih layanan"
+          placeholder="Pilih atau ketik nama layanan"
           options={serviceOptions}
         />
       </Field>
@@ -176,6 +223,7 @@ export function CreateOrderForm({
         </div>
       ) : null}
 
+      {noDevice ? null : (
       <Field
         label={label}
         htmlFor="imei"
@@ -202,6 +250,62 @@ export function CreateOrderForm({
           invalid={Boolean(imeiError)}
         />
       </Field>
+      )}
+
+      {service?.requireQnt ? (
+        <Field
+          label="Qnt"
+          htmlFor="orderQnt"
+          error={extraErrors.qnt}
+          required
+          hint="Jumlah yang dipesan. Tidak mengubah harga."
+        >
+          <Input
+            id="orderQnt"
+            type="number"
+            inputMode="numeric"
+            min={1}
+            max={QNT_MAX}
+            step={1}
+            className="font-data tabular"
+            value={extras.qnt}
+            invalid={Boolean(extraErrors.qnt)}
+            placeholder="1"
+            onChange={(event) => updateExtra("qnt", event.target.value)}
+          />
+        </Field>
+      ) : null}
+
+      {service?.requireUsername ? (
+        <Field label="Username" htmlFor="orderUsername" error={extraErrors.username} required>
+          <Input
+            id="orderUsername"
+            autoComplete="off"
+            spellCheck={false}
+            maxLength={100}
+            value={extras.username}
+            invalid={Boolean(extraErrors.username)}
+            onChange={(event) => updateExtra("username", event.target.value)}
+          />
+        </Field>
+      ) : null}
+
+      {service?.requireEmail ? (
+        <Field label="Email" htmlFor="orderEmail" error={extraErrors.email} required>
+          <Input
+            id="orderEmail"
+            type="email"
+            inputMode="email"
+            autoComplete="email"
+            spellCheck={false}
+            maxLength={254}
+            value={extras.email}
+            invalid={Boolean(extraErrors.email)}
+            placeholder="nama@contoh.com"
+            onChange={(event) => updateExtra("email", event.target.value)}
+          />
+        </Field>
+      ) : null}
 
       {ceir ? null : (
       <div

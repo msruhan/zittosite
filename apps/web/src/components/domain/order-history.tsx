@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/field";
+import { Combobox } from "@/components/ui/combobox";
 import { Select } from "@/components/ui/select";
 import { AutoRefreshStatus, useAutoRefresh } from "@/components/domain/auto-refresh";
 import { UserOrderTable } from "@/components/domain/user-order-table";
@@ -73,7 +74,7 @@ export function OrderHistory({
             className="pl-9"
           />
         </label>
-        <Select
+        <Combobox
           ariaLabel="Filter layanan"
           value={service}
           onValueChange={setService}

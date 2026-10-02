@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field, Input } from "@/components/ui/field";
 import { Select } from "@/components/ui/select";
+import { UserMenuSettings } from "@/components/domain/user-menu-settings";
 
 export function AdminSettingsForm() {
   const [productName, setProductName] = React.useState("ZITTOSITE");
@@ -32,6 +33,10 @@ export function AdminSettingsForm() {
         title="Settings"
         description="Konfigurasi sistem untuk panel Super Admin."
       />
+
+      <div className="mx-auto mb-4 max-w-2xl">
+        <UserMenuSettings />
+      </div>
 
       <form onSubmit={handleSubmit} className="mx-auto max-w-2xl space-y-4">
         <Card>

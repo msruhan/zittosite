@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import type { ReactNode } from "react";
+import { Suspense, type ReactNode } from "react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import {
@@ -22,18 +22,14 @@ import {
 } from "@/components/domain/insight-charts";
 import { cn } from "@/lib/utils";
 import {
-  TBody,
-  TD,
-  TH,
-  THead,
-  TR,
-  Table,
-  TableScroll,
-} from "@/components/ui/table";
+  RecentOrdersTable,
+  ServiceProfitTable,
+} from "@/components/domain/admin-dashboard-tables";
+import { ReportPeriodFilter } from "@/components/domain/report-period-filter";
 import { StatGrid, StatTile } from "@/components/domain/stat-tile";
 import { ApiError } from "@/lib/api";
 import { serverApi } from "@/lib/server-api";
-import { formatDateTime, formatRupiah } from "@/lib/format";
+import { formatRupiah } from "@/lib/format";
 import type { OrderDetail } from "@/lib/types";
 
 export const metadata: Metadata = {
@@ -55,7 +51,16 @@ type DashboardStats = {
 type Money = { revenue: number; cost: number; profit: number; orders: number };
 
 type DashboardInsights = {
-  finance: { today: Money; month: Money; prevMonth: Money; allTime: Money };
+  years: number[];
+  finance: {
+    /** Defaults to the current month when no filter is set. */
+    period: { year: number; month: number | null; label: string };
+    today: Money;
+    selected: Money;
+    /** The month (or year) before `period`. */
+    previous: Money;
+    allTime: Money;
+  };
   servicesWithoutCost: string[];
   profitSeries: (Money & { label: string })[];
   channelDaily: { label: string; web: number; telegram: number; api: number }[];
@@ -72,9 +77,11 @@ type DashboardInsights = {
   })[];
 };
 
-async function loadInsights(): Promise<DashboardInsights | null> {
+async function loadInsights(query: string): Promise<DashboardInsights | null> {
   try {
-    return await serverApi<DashboardInsights>("/admin/dashboard/insights");
+    return await serverApi<DashboardInsights>(
+      query ? `/admin/dashboard/insights?${query}` : "/admin/dashboard/insights",
+    );
   } catch (err) {
     if (err instanceof ApiError && err.status !== 401) return null;
     throw err;
@@ -150,23 +157,40 @@ function SummaryTile({
 }
 
 function FinanceSummaryCard({ insights }: { insights: DashboardInsights }) {
-  const { today, month, prevMonth, allTime } = insights.finance;
+  const { period, today, selected: month, previous, allTime } = insights.finance;
   const change =
-    prevMonth.profit > 0
-      ? Math.round(((month.profit - prevMonth.profit) / prevMonth.profit) * 1000) / 10
+    previous.profit > 0
+      ? Math.round(((month.profit - previous.profit) / previous.profit) * 1000) / 10
       : null;
-  const monthName = new Intl.DateTimeFormat("id-ID", {
-    timeZone: "Asia/Jakarta",
-    month: "long",
-    year: "numeric",
-  }).format(new Date());
 
   return (
     <Card>
       <CardBody className="p-6 sm:p-7">
+        <div className="mb-5 flex flex-wrap items-center justify-between gap-4 border-b border-hairline pb-5">
+          <div className="flex min-w-0 items-center gap-3">
+            <span className="grid size-10 shrink-0 place-items-center rounded-lg border border-cleared-edge bg-cleared-wash text-cleared-ink">
+              <CurrencyCircleDollar className="size-6" weight="regular" />
+            </span>
+            <div className="min-w-0">
+              <h2 className="text-title font-bold text-ink">Untung bersih</h2>
+              <p className="text-label text-ink-soft">Pendapatan dikurangi modal</p>
+            </div>
+          </div>
+          <Suspense fallback={null}>
+            <ReportPeriodFilter
+              years={insights.years}
+              year={period.year}
+              month={period.month}
+              allowAllTime={false}
+              compact
+            />
+          </Suspense>
+        </div>
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <p className="text-label text-ink-soft">Untung bersih · {monthName}</p>
+            <span className="inline-flex items-center rounded-full border border-action/15 bg-action-wash px-2.5 py-0.5 text-label font-bold text-action">
+              {period.label}
+            </span>
             <p
               className={cn(
                 "mt-2 font-data text-display",
@@ -191,7 +215,7 @@ function FinanceSummaryCard({ insights }: { insights: DashboardInsights }) {
                 <ArrowDownRight className="size-3.5" aria-hidden="true" />
               )}
               {change >= 0 ? "+" : ""}
-              {change}% vs bulan lalu
+              {change}% vs {period.month ? "bulan" : "tahun"} sebelumnya
             </span>
           ) : null}
         </div>
@@ -403,68 +427,35 @@ function InsightSections({ insights }: { insights: DashboardInsights }) {
           <Tag>30 hari</Tag>
         </CardHeader>
         <div className="mt-4 border-t border-hairline">
-          {insights.serviceProfit.length > 0 ? (
-            <TableScroll>
-              <Table>
-                <THead>
-                  <TR className="hover:bg-transparent">
-                    <TH>Layanan</TH>
-                    <TH className="text-right">Order</TH>
-                    <TH className="text-right">Pendapatan</TH>
-                    <TH className="text-right">Modal</TH>
-                    <TH className="text-right">Untung</TH>
-                    <TH className="text-right">Margin</TH>
-                  </TR>
-                </THead>
-                <TBody>
-                  {insights.serviceProfit.map((row) => (
-                    <TR key={row.id}>
-                      <TD className="font-medium text-ink">{row.name}</TD>
-                      <TD className="text-right">
-                        <DataValue>{row.orders}</DataValue>
-                      </TD>
-                      <TD className="text-right">
-                        <DataValue>{formatRupiah(row.revenue)}</DataValue>
-                      </TD>
-                      <TD className="text-right">
-                        <DataValue className="text-ink-soft">
-                          {formatRupiah(row.cost)}
-                        </DataValue>
-                      </TD>
-                      <TD className="text-right">
-                        <DataValue
-                          emphasis
-                          className={row.profit < 0 ? "text-refused-ink" : "text-cleared-ink"}
-                        >
-                          {formatRupiah(row.profit)}
-                        </DataValue>
-                      </TD>
-                      <TD className="text-right">
-                        <DataValue>{marginPct(row)}%</DataValue>
-                      </TD>
-                    </TR>
-                  ))}
-                </TBody>
-              </Table>
-            </TableScroll>
-          ) : (
-            <p className="py-10 text-center text-body text-ink-soft">
-              Belum ada order sukses 30 hari terakhir.
-            </p>
-          )}
+          <ServiceProfitTable rows={insights.serviceProfit} />
         </div>
       </Card>
     </>
   );
 }
 
-export default async function AdminDashboardPage() {
+function firstParam(value: string | string[] | undefined): string | undefined {
+  return Array.isArray(value) ? value[0] : value;
+}
+
+export default async function AdminDashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ tahun?: string | string[]; bulan?: string | string[] }>;
+}) {
+  const params = await searchParams;
+  const tahun = firstParam(params.tahun);
+  const bulan = firstParam(params.bulan);
+  const query = new URLSearchParams();
+  if (tahun) query.set("tahun", tahun);
+  if (tahun && bulan) query.set("bulan", bulan);
+
   let stats: DashboardStats;
   let insights: DashboardInsights | null;
   try {
     [stats, insights] = await Promise.all([
       serverApi<DashboardStats>("/admin/dashboard/stats"),
-      loadInsights(),
+      loadInsights(query.toString()),
     ]);
   } catch (err) {
     if (err instanceof ApiError && err.status === 401) redirect("/admin/login");
@@ -683,45 +674,7 @@ export default async function AdminDashboardPage() {
             </Link>
           </CardHeader>
           <div className="mt-4 border-t border-hairline">
-            <TableScroll>
-              <Table>
-                <THead>
-                  <TR className="hover:bg-transparent">
-                    <TH>Order ID</TH>
-                    <TH>User</TH>
-                    <TH>IMEI</TH>
-                    <TH>Status</TH>
-                    <TH>Dibuat</TH>
-                  </TR>
-                </THead>
-                <TBody>
-                  {stats.recentOrders.map((order) => (
-                    <TR key={order.id}>
-                      <TD>
-                        <Link
-                          href={`/admin/orders/${order.orderId}`}
-                          className="font-data text-action hover:underline"
-                        >
-                          {order.orderId}
-                        </Link>
-                      </TD>
-                      <TD>{order.user?.fullName ?? "-"}</TD>
-                      <TD>
-                        <DataValue>{order.imei}</DataValue>
-                      </TD>
-                      <TD>
-                        <StatusBadge status={order.status} />
-                      </TD>
-                      <TD>
-                        <DataValue className="text-ink-soft">
-                          {formatDateTime(order.createdAt)}
-                        </DataValue>
-                      </TD>
-                    </TR>
-                  ))}
-                </TBody>
-              </Table>
-            </TableScroll>
+            <RecentOrdersTable orders={stats.recentOrders} />
           </div>
         </Card>
       </div>

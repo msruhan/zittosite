@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { ArrowDownRight, ArrowUpRight } from "@phosphor-icons/react/dist/ssr";
@@ -16,6 +17,7 @@ import {
 } from "@/components/ui/table";
 import { DonutChart } from "@/components/domain/donut-chart";
 import { OrdersBarChart } from "@/components/domain/orders-bar-chart";
+import { ReportPeriodFilter } from "@/components/domain/report-period-filter";
 import { RevenueChart } from "@/components/domain/revenue-chart";
 import { StatGrid, StatTile } from "@/components/domain/stat-tile";
 import { ApiError } from "@/lib/api";
@@ -37,7 +39,8 @@ type Money = {
   orders: number;
 };
 
-type ReportsSummary = {
+type AllTimeReport = {
+  period: null;
   finance: {
     canSeeCost: boolean;
     today: Money;
@@ -54,6 +57,27 @@ type ReportsSummary = {
     ordersDone: number;
     waitingAction: number;
   };
+};
+
+/** Filtered by year (breakdown per month) or month (per week, charts per day). */
+type PeriodReport = {
+  period: { year: number; month: number | null; label: string };
+  finance: {
+    canSeeCost: boolean;
+    period: Money;
+    breakdown: { label: string; money: Money }[];
+  };
+  kpis: {
+    ordersCreated: number;
+    usersTotal: number;
+    usersActive: number;
+    ordersDone: number;
+    waitingAction: number;
+  };
+};
+
+type ReportsSummary = (AllTimeReport | PeriodReport) & {
+  years: number[];
   channelMix: { name: string; amount: number; color: string }[];
   weeklyBars: { label: string; orders: number }[];
   revenueSeries: { label: string; revenue: number; orders: number }[];
@@ -80,15 +104,32 @@ function marginPct(money: Money): number {
     : 0;
 }
 
-function FinanceTable({ finance }: { finance: ReportsSummary["finance"] }) {
-  const rows: Array<{ label: string; money: Money }> = [
-    { label: "Hari ini", money: finance.today },
-    { label: "Bulan ini", money: finance.month },
-    { label: "Bulan lalu", money: finance.prevMonth },
-    { label: "Semua waktu", money: finance.allTime },
-  ];
-  const showCost = finance.canSeeCost;
+type FinanceRow = { label: string; money: Money; total?: boolean };
 
+function financeRows(data: ReportsSummary): FinanceRow[] {
+  if (data.period) {
+    return [
+      ...data.finance.breakdown,
+      { label: `Total ${data.period.label}`, money: data.finance.period, total: true },
+    ];
+  }
+  return [
+    { label: "Hari ini", money: data.finance.today },
+    { label: "Bulan ini", money: data.finance.month },
+    { label: "Bulan lalu", money: data.finance.prevMonth },
+    { label: "Semua waktu", money: data.finance.allTime, total: true },
+  ];
+}
+
+function FinanceTable({
+  rows,
+  showCost,
+  periodLabel,
+}: {
+  rows: FinanceRow[];
+  showCost: boolean;
+  periodLabel: string | null;
+}) {
   return (
     <Card>
       <CardHeader className="items-start">
@@ -100,7 +141,7 @@ function FinanceTable({ finance }: { finance: ReportsSummary["finance"] }) {
               : "Omset = total harga jual dari order yang selesai."}
           </p>
         </div>
-        <Tag>WIB</Tag>
+        <Tag>{periodLabel ? `${periodLabel} · WIB` : "WIB"}</Tag>
       </CardHeader>
       <TableScroll>
         <Table>
@@ -119,8 +160,8 @@ function FinanceTable({ finance }: { finance: ReportsSummary["finance"] }) {
             </TR>
           </THead>
           <TBody>
-            {rows.map(({ label, money }) => (
-              <TR key={label} className={label === "Semua waktu" ? "bg-mist/50" : undefined}>
+            {rows.map(({ label, money, total }) => (
+              <TR key={label} className={total ? "bg-mist/50" : undefined}>
                 <TD className="font-medium text-ink">{label}</TD>
                 <TD className="text-right">
                   <DataValue>{money.orders}</DataValue>
@@ -157,10 +198,28 @@ function FinanceTable({ finance }: { finance: ReportsSummary["finance"] }) {
   );
 }
 
-export default async function AdminReportsPage() {
+function firstParam(value: string | string[] | undefined): string | undefined {
+  return Array.isArray(value) ? value[0] : value;
+}
+
+export default async function AdminReportsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ tahun?: string | string[]; bulan?: string | string[] }>;
+}) {
+  const params = await searchParams;
+  const tahun = firstParam(params.tahun);
+  const bulan = firstParam(params.bulan);
+  const query = new URLSearchParams();
+  if (tahun) query.set("tahun", tahun);
+  if (tahun && bulan) query.set("bulan", bulan);
+  const qs = query.toString();
+
   let data: ReportsSummary;
   try {
-    data = await serverApi<ReportsSummary>("/admin/reports/summary");
+    data = await serverApi<ReportsSummary>(
+      qs ? `/admin/reports/summary?${qs}` : "/admin/reports/summary",
+    );
   } catch (err) {
     if (err instanceof ApiError && err.status === 401) {
       redirect("/admin/login");
@@ -168,9 +227,18 @@ export default async function AdminReportsPage() {
     throw err;
   }
 
-  const { kpis, weeklyBars, finance } = data;
-  const { allTime, today } = finance;
-  const weekTotal = weeklyBars.reduce((sum, day) => sum + day.orders, 0);
+  const { kpis, weeklyBars, finance, period } = data;
+  const canSeeCost = finance.canSeeCost;
+  const headline = period ? data.finance.period : data.finance.allTime;
+  const today = period ? null : data.finance.today;
+  const periodLabel = period?.label ?? null;
+  const chartScope = period
+    ? period.month
+      ? `per hari · ${period.label}`
+      : `per bulan · ${period.label}`
+    : "7 hari terakhir";
+
+  const barTotal = weeklyBars.reduce((sum, day) => sum + day.orders, 0);
   const prevHalf = weeklyBars
     .slice(0, 3)
     .reduce((sum, day) => sum + day.orders, 0);
@@ -187,7 +255,20 @@ export default async function AdminReportsPage() {
     <>
       <PageHeader
         title="Reports"
-        description="Omset, modal, keuntungan, distribusi kanal, dan volume order mingguan."
+        description={
+          periodLabel
+            ? `Omset, modal, keuntungan, dan volume order periode ${periodLabel}.`
+            : "Omset, modal, keuntungan, distribusi kanal, dan volume order mingguan."
+        }
+        actions={
+          <Suspense fallback={null}>
+            <ReportPeriodFilter
+              years={data.years}
+              year={period?.year ?? null}
+              month={period?.month ?? null}
+            />
+          </Suspense>
+        }
       />
 
       <div className="space-y-5 sm:space-y-6">
@@ -195,30 +276,38 @@ export default async function AdminReportsPage() {
           <StatTile
             index={0}
             tone="cleared"
-            label="Total omset"
-            value={formatRupiah(allTime.revenue)}
+            label={period ? "Omset" : "Total omset"}
+            value={formatRupiah(headline.revenue)}
             hint="Total harga jual dari order Done. Order gagal atau di-refund tidak dihitung."
-            caption={`Hari ini ${formatRupiah(today.revenue)}`}
+            caption={
+              today
+                ? `Hari ini ${formatRupiah(today.revenue)}`
+                : `${periodLabel} · ${headline.orders} order sukses`
+            }
             href="/admin/orders"
           />
-          {finance.canSeeCost ? (
+          {canSeeCost ? (
             <>
               <StatTile
                 index={1}
                 tone="hold"
-                label="Total modal"
-                value={formatRupiah(allTime.cost ?? 0)}
+                label={period ? "Modal" : "Total modal"}
+                value={formatRupiah(headline.cost ?? 0)}
                 hint="Total harga modal yang dibayar ke operator atau Supplier API untuk order tersebut."
-                caption={`Hari ini ${formatRupiah(today.cost ?? 0)}`}
+                caption={today ? `Hari ini ${formatRupiah(today.cost ?? 0)}` : periodLabel ?? undefined}
                 href="/admin/services"
               />
               <StatTile
                 index={2}
                 tone="action"
-                label="Total keuntungan"
-                value={formatRupiah(allTime.profit ?? 0)}
+                label={period ? "Keuntungan" : "Total keuntungan"}
+                value={formatRupiah(headline.profit ?? 0)}
                 hint="Omset dikurangi modal."
-                caption={`Margin ${marginPct(allTime)}% · hari ini ${formatRupiah(today.profit ?? 0)}`}
+                caption={
+                  today
+                    ? `Margin ${marginPct(headline)}% · hari ini ${formatRupiah(today.profit ?? 0)}`
+                    : `Margin ${marginPct(headline)}% · ${periodLabel}`
+                }
                 href="/admin/orders"
               />
             </>
@@ -238,30 +327,34 @@ export default async function AdminReportsPage() {
             tone="working"
             label="Order selesai"
             value={kpis.ordersDone}
-            hint="Order berstatus Done."
+            hint={period ? "Order Done yang selesai dalam periode ini." : "Order berstatus Done."}
             caption={
-              finance.canSeeCost
-                ? `${kpis.waitingAction} menunggu aksi · ${kpis.usersTotal} user`
-                : `${kpis.waitingAction} menunggu aksi`
+              period
+                ? `${data.kpis.ordersCreated} order masuk · ${kpis.waitingAction} menunggu aksi`
+                : canSeeCost
+                  ? `${kpis.waitingAction} menunggu aksi · ${kpis.usersTotal} user`
+                  : `${kpis.waitingAction} menunggu aksi`
             }
             href="/admin/orders"
           />
         </StatGrid>
 
-        <FinanceTable finance={finance} />
+        <FinanceTable rows={financeRows(data)} showCost={canSeeCost} periodLabel={periodLabel} />
 
         <div className="grid gap-4 lg:grid-cols-2">
           <Card>
             <CardHeader>
               <CardTitle>Kanal order</CardTitle>
-              <Tag>7 hari</Tag>
+              <Tag>{periodLabel ?? "7 hari"}</Tag>
             </CardHeader>
             <CardBody className="pt-2">
               {data.channelMix.length > 0 ? (
                 <DonutChart data={data.channelMix} centerLabel="Order" />
               ) : (
                 <p className="py-10 text-center text-body text-ink-soft">
-                  Belum ada order 7 hari terakhir.
+                  {periodLabel
+                    ? `Belum ada order di ${periodLabel}.`
+                    : "Belum ada order 7 hari terakhir."}
                 </p>
               )}
             </CardBody>
@@ -272,27 +365,31 @@ export default async function AdminReportsPage() {
               <div className="min-w-0">
                 <CardTitle>Volume order</CardTitle>
                 <p className="mt-1 text-body font-medium text-ink-soft">
-                  Performa order 7 hari terakhir
+                  Order masuk {chartScope}
                 </p>
               </div>
               <div className="text-right">
                 <p className="font-data tabular text-metric font-bold text-ink">
-                  {formatCompactNumber(weekTotal)}
+                  {formatCompactNumber(barTotal)}
                 </p>
-                <p
-                  className={cn(
-                    "mt-0.5 inline-flex items-center gap-1 text-body font-medium",
-                    trendUp ? "text-cleared-ink" : "text-refused-ink",
-                  )}
-                >
-                  {trendUp ? (
-                    <ArrowUpRight className="size-3.5" aria-hidden="true" />
-                  ) : (
-                    <ArrowDownRight className="size-3.5" aria-hidden="true" />
-                  )}
-                  {trendUp ? "+" : ""}
-                  {weekTrend}%
-                </p>
+                {period ? (
+                  <p className="mt-0.5 text-body font-medium text-ink-soft">total order</p>
+                ) : (
+                  <p
+                    className={cn(
+                      "mt-0.5 inline-flex items-center gap-1 text-body font-medium",
+                      trendUp ? "text-cleared-ink" : "text-refused-ink",
+                    )}
+                  >
+                    {trendUp ? (
+                      <ArrowUpRight className="size-3.5" aria-hidden="true" />
+                    ) : (
+                      <ArrowDownRight className="size-3.5" aria-hidden="true" />
+                    )}
+                    {trendUp ? "+" : ""}
+                    {weekTrend}%
+                  </p>
+                )}
               </div>
             </CardHeader>
             <CardBody className="pt-2">
@@ -304,8 +401,8 @@ export default async function AdminReportsPage() {
         <div className="grid gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
           <Card>
             <CardHeader>
-              <CardTitle>Omset 7 hari</CardTitle>
-              <Tag>Area</Tag>
+              <CardTitle>{period ? "Omset" : "Omset 7 hari"}</CardTitle>
+              <Tag>{period ? chartScope : "Area"}</Tag>
             </CardHeader>
             <CardBody className="pt-2">
               <RevenueChart data={data.revenueSeries} />
@@ -315,7 +412,7 @@ export default async function AdminReportsPage() {
           <Card>
             <CardHeader>
               <CardTitle>Bauran layanan</CardTitle>
-              <Tag>Donut</Tag>
+              <Tag>{periodLabel ?? "Donut"}</Tag>
             </CardHeader>
             <CardBody className="pt-2">
               {data.serviceMix.length > 0 ? (

@@ -7,6 +7,7 @@ import {
   Headers,
   Param,
   Patch,
+  Put,
   Post,
   Query,
   Req,
@@ -20,7 +21,7 @@ import { AdminServicesService } from "./admin-services.service";
 import { AdminOrdersService } from "./admin-orders.service";
 import { OrdersService } from "../orders/orders.service";
 import { AdminAdminsService } from "./admin-admins.service";
-import { AdminReportsService } from "./admin-reports.service";
+import { AdminReportsService, parseReportPeriod } from "./admin-reports.service";
 import { AdminTotpService } from "./admin-totp.service";
 import { AuditLogService } from "../security/audit-log.service";
 import { SENSITIVE_THROTTLE } from "../security/throttle";
@@ -28,6 +29,8 @@ import { parseAdjustment } from "../orders/balance";
 import { type PriceAdjustment, ROUND_TO } from "./service-group-pricing";
 import { parseUsdCents, parseUsdRate } from "../orders/usd-pricing";
 import { UsdRateService } from "../orders/usd-rate.service";
+import { USER_MENU_KEYS, parseUserMenusInput } from "../orders/user-menus";
+import { UserMenusService } from "../orders/user-menus.service";
 import {
   optBoolean,
   optEnum,
@@ -44,7 +47,7 @@ type Json = Record<string, unknown>;
 
 const TOTP_HEADER = "x-totp-code";
 const FULFILLMENT_CHANNELS = ["telegram", "whatsapp", "supplier"] as const;
-const INPUT_TYPES = ["imei", "sn", "ecid"] as const;
+const INPUT_TYPES = ["imei", "sn", "ecid", "none"] as const;
 const SERVICE_MENUS = ["ceir", "special"] as const;
 const USER_ROLES = ["customer", "testing"] as const;
 const WIB_OFFSET_MS = 7 * 60 * 60 * 1000;
@@ -79,6 +82,7 @@ export class AdminOpsController {
     private readonly audit: AuditLogService,
     private readonly customerOrders: OrdersService,
     private readonly usdRate: UsdRateService,
+    private readonly userMenus: UserMenusService,
   ) {}
 
   @Get("dashboard/stats")
@@ -88,13 +92,17 @@ export class AdminOpsController {
 
   @Get("dashboard/insights")
   @UseGuards(SuperAdminGuard)
-  dashboardInsights() {
-    return this.reports.insights();
+  dashboardInsights(@Query("tahun") tahun?: string, @Query("bulan") bulan?: string) {
+    return this.reports.insights(parseReportPeriod(tahun, bulan));
   }
 
   @Get("reports/summary")
-  reportsSummary(@Req() req: AdminReq) {
-    return this.reports.summary(req.admin.sub);
+  reportsSummary(
+    @Req() req: AdminReq,
+    @Query("tahun") tahun?: string,
+    @Query("bulan") bulan?: string,
+  ) {
+    return this.reports.summary(req.admin.sub, parseReportPeriod(tahun, bulan));
   }
 
   @Get("activity")
@@ -246,6 +254,9 @@ export class AdminOpsController {
       menu: optEnum(body.menu, SERVICE_MENUS, "Menu layanan"),
       priceUsdCents: parseUsdCents(body.priceUsd, "Harga USD"),
       costUsdCents: parseUsdCents(body.costPriceUsd, "Harga modal USD"),
+      requireQnt: optBoolean(body.requireQnt, "Field Qnt"),
+      requireEmail: optBoolean(body.requireEmail, "Field Email"),
+      requireUsername: optBoolean(body.requireUsername, "Field Username"),
     });
     this.audit.record("admin.service.created", {
       actorId: req.admin.sub,
@@ -278,6 +289,9 @@ export class AdminOpsController {
       menu: optEnum(body.menu, SERVICE_MENUS, "Menu layanan"),
       priceUsdCents: parseUsdCents(body.priceUsd, "Harga USD"),
       costUsdCents: parseUsdCents(body.costPriceUsd, "Harga modal USD"),
+      requireQnt: optBoolean(body.requireQnt, "Field Qnt"),
+      requireEmail: optBoolean(body.requireEmail, "Field Email"),
+      requireUsername: optBoolean(body.requireUsername, "Field Username"),
     };
     const service = await this.services.update(id, input);
     this.audit.record("admin.service.updated", {
@@ -289,6 +303,9 @@ export class AdminOpsController {
       active: input.active,
       fulfillmentChannel: input.fulfillmentChannel,
       inputType: input.inputType,
+      requireQnt: input.requireQnt,
+      requireEmail: input.requireEmail,
+      requireUsername: input.requireUsername,
       menu: input.menu,
       assignedAdmins: input.assignedAdminIds?.join(","),
     });
@@ -389,6 +406,25 @@ export class AdminOpsController {
       } dari ${adjustment.base === "cost" ? "harga modal" : "harga jual"}`,
     });
     return result;
+  }
+
+  @Get("user-menus")
+  @UseGuards(SuperAdminGuard)
+  getUserMenus() {
+    return this.userMenus.get();
+  }
+
+  @Put("user-menus")
+  @UseGuards(SuperAdminGuard)
+  async setUserMenus(@Req() req: AdminReq, @Body() body: Json) {
+    const menus = await this.userMenus.set(parseUserMenusInput(body), req.admin.sub);
+    this.audit.record("admin.user_menus.updated", {
+      actorId: req.admin.sub,
+      summary: USER_MENU_KEYS.map(
+        (key) => `${menus[key].label} (${menus[key].enabled ? "aktif" : "nonaktif"})`,
+      ).join(", "),
+    });
+    return menus;
   }
 
   @Get("usd-rate")

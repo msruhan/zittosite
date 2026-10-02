@@ -5,6 +5,8 @@ import { OrderHistory } from "@/components/domain/order-history";
 import { ApiError } from "@/lib/api";
 import { serverApi } from "@/lib/server-api";
 import type { OrderDetail } from "@/lib/types";
+import { loadUserMenus } from "@/lib/server-user-menus";
+import type { UserMenus } from "@/lib/user-menus";
 
 export const metadata: Metadata = {
   title: "Layanan Spesial",
@@ -12,8 +14,12 @@ export const metadata: Metadata = {
 
 export default async function SpecialOrdersPage() {
   let orders: OrderDetail[] = [];
+  let menus: UserMenus;
   try {
-    orders = await serverApi<OrderDetail[]>("/orders?via=special");
+    [orders, menus] = await Promise.all([
+      serverApi<OrderDetail[]>("/orders?via=special"),
+      loadUserMenus(),
+    ]);
   } catch (err) {
     if (err instanceof ApiError && err.status === 401) redirect("/login");
     throw err;
@@ -22,8 +28,8 @@ export default async function SpecialOrdersPage() {
   return (
     <>
       <PageHeader
-        title="Layanan Spesial"
-        description="Order Layanan Spesial Anda yang diproses otomatis oleh Supplier API."
+        title={menus.special.label}
+        description={`Order ${menus.special.label} Anda yang diproses otomatis oleh Supplier API.`}
       />
       <OrderHistory
         orders={orders}

@@ -12,7 +12,7 @@ import { StatusBadge, Tag } from "@/components/ui/status-badge";
 import { TicketStub } from "@/components/ui/ticket-stub";
 import { DashboardMonthFilter } from "@/components/domain/dashboard-month-filter";
 import { StatGrid, StatTile } from "@/components/domain/stat-tile";
-import { UserOrderTable } from "@/components/domain/user-order-table";
+import { SearchableUserOrderTable } from "@/components/domain/searchable-user-order-table";
 import { ORDER_STATUS } from "@/lib/status";
 import { ApiError } from "@/lib/api";
 import { serverApi } from "@/lib/server-api";
@@ -268,7 +268,7 @@ export default async function UserDashboardPage({
           </CardHeader>
           <div className="mt-4 border-t border-hairline">
             {recent.length > 0 ? (
-              <UserOrderTable orders={recent} />
+              <SearchableUserOrderTable orders={recent} />
             ) : (
               <EmptyState
                 icon={<Package weight="regular" />}

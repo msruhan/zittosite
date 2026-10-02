@@ -56,6 +56,15 @@ npm run api:dev   # :4000
 npm run web:dev   # :3000
 ```
 
+### Supplier & layanan dummy (local)
+
+```bash
+npm run supplier:mock    # Dhru Fusion palsu di http://localhost:4100 (biarkan jalan)
+npm run db:seed:dummy    # supplier "Dummy Supplier (local)" + 11 layanan [Dummy]
+```
+
+Mock memproses order ~15 detik (`MOCK_SUPPLIER_DELAY_MS`). Karakter terakhir IMEI/SN/ECID menentukan hasil: `0` langsung ditolak, `9` ditolak setelah diproses, selain itu sukses. Layanan tanpa IMEI selalu sukses.
+
 Isi `TELEGRAM_*` di `.env` agar bot + OAuth aktif (`TELEGRAM_BOT_TOKEN`, `TELEGRAM_BOT_USERNAME`, OAuth client/secret, `TELEGRAM_OAUTH_REDIRECT_URI`, `TELEGRAM_MODE=polling`, `WEB_PUBLIC_URL`).
 
 ## Seed accounts

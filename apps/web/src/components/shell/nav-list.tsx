@@ -24,11 +24,13 @@ export function NavList({
   onNavigate,
   sectionLabel = "Menu",
   hideHrefs,
+  labels,
 }: {
   variant: NavVariant;
   onNavigate?: () => void;
   sectionLabel?: string;
   hideHrefs?: string[];
+  labels?: Record<string, string>;
 }) {
   const pathname = usePathname();
   const hidden = new Set(hideHrefs ?? []);
@@ -64,7 +66,7 @@ export function NavList({
                     weight="regular"
                     className="size-5 shrink-0"
                   />
-                  <span>{item.label}</span>
+                  <span>{labels?.[item.href] ?? item.label}</span>
                 </Link>
               </li>
             );

@@ -5,6 +5,8 @@ import { OrderHistory } from "@/components/domain/order-history";
 import { ApiError } from "@/lib/api";
 import { serverApi } from "@/lib/server-api";
 import type { OrderDetail } from "@/lib/types";
+import { loadUserMenus } from "@/lib/server-user-menus";
+import type { UserMenus } from "@/lib/user-menus";
 
 export const metadata: Metadata = {
   title: "Order Ceir",
@@ -12,8 +14,12 @@ export const metadata: Metadata = {
 
 export default async function OrderCeirPage() {
   let orders: OrderDetail[] = [];
+  let menus: UserMenus;
   try {
-    orders = await serverApi<OrderDetail[]>("/orders?via=ceir");
+    [orders, menus] = await Promise.all([
+      serverApi<OrderDetail[]>("/orders?via=ceir"),
+      loadUserMenus(),
+    ]);
   } catch (err) {
     if (err instanceof ApiError && err.status === 401) redirect("/login");
     throw err;
@@ -22,7 +28,7 @@ export default async function OrderCeirPage() {
   return (
     <>
       <PageHeader
-        title="Order Ceir"
+        title={menus.ceir.label}
         description="Order Anda untuk layanan Ceir yang diproses otomatis oleh Supplier API."
       />
       <OrderHistory

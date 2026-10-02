@@ -12,6 +12,8 @@ import { TopupController } from "./topup.controller";
 import { TopupService } from "./topup.service";
 import { SupplierDispatch } from "./supplier-dispatch";
 import { UsdRateService } from "./usd-rate.service";
+import { UserMenusController } from "./user-menus.controller";
+import { UserMenusService } from "./user-menus.service";
 
 @Module({
   imports: [
@@ -21,8 +23,15 @@ import { UsdRateService } from "./usd-rate.service";
     forwardRef(() => AdminNotifyModule),
     WhatsappModule,
   ],
-  controllers: [OrdersController, ServicesController, TopupController],
-  providers: [OrdersService, OrderExpiryService, TopupService, SupplierDispatch, UsdRateService],
-  exports: [OrdersService, TopupService, SupplierDispatch, UsdRateService],
+  controllers: [OrdersController, ServicesController, TopupController, UserMenusController],
+  providers: [
+    OrdersService,
+    OrderExpiryService,
+    TopupService,
+    SupplierDispatch,
+    UsdRateService,
+    UserMenusService,
+  ],
+  exports: [OrdersService, TopupService, SupplierDispatch, UsdRateService, UserMenusService],
 })
 export class OrdersModule {}

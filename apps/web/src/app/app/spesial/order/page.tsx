@@ -8,6 +8,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { CreateOrderForm } from "@/components/domain/create-order-form";
 import { ApiError } from "@/lib/api";
 import { serverApi } from "@/lib/server-api";
+import { requireUserMenu } from "@/lib/server-user-menus";
 import type { Service, User } from "@/lib/types";
 
 export const metadata: Metadata = {
@@ -33,6 +34,7 @@ const STEPS = [
 ];
 
 export default async function CreateSpecialOrderPage() {
+  const menu = await requireUserMenu("special");
   let services: Service[] = [];
   let balance = 0;
   try {
@@ -58,10 +60,10 @@ export default async function CreateSpecialOrderPage() {
         className="mb-3 inline-flex items-center gap-1.5 text-body font-medium text-ink-soft hover:text-ink"
       >
         <ArrowLeft className="size-4" aria-hidden="true" />
-        Layanan Spesial
+        Riwayat {menu.label}
       </Link>
       <PageHeader
-        title="Buat order Layanan Spesial"
+        title={menu.label}
         description="Pilih layanan, masukkan data perangkat yang diminta (IMEI, SN, atau ECID), lalu bayar. Order diproses otomatis."
       />
 

@@ -13,6 +13,8 @@
     "db:up": "docker compose up -d postgres",
     "db:migrate": "npm run prisma:migrate --workspace=@zittosite/api",
     "db:seed": "npm run prisma:seed --workspace=@zittosite/api",
+    "db:seed:dummy": "npm run seed:dummy --workspace=@zittosite/api",
+    "supplier:mock": "npm run mock:supplier --workspace=@zittosite/api",
     "build": "npm run build --workspace=web",
     "start": "npm run start --workspace=web",
     "lint": "npm run lint --workspace=web",

@@ -1,5 +1,6 @@
+import { CeirHistoryTable } from "@/components/domain/ceir-history-table";
 import { cn } from "@/lib/utils";
-import { formatCeirAction, parseCeirResult, type CeirResultLine } from "@/lib/ceir-result";
+import { parseCeirResult, type CeirResultLine } from "@/lib/ceir-result";
 
 const NEGATIVE = /not\s*found|tidak|error|failed|gagal|invalid|block|blokir|expired/i;
 
@@ -38,7 +39,6 @@ export function CeirResultView({
   }
 
   const { lines, history } = parsed;
-  const showImsi = history.some((event) => event.imsi);
 
   return (
     <div className={cn("space-y-4", className)}>
@@ -70,65 +70,7 @@ export function CeirResultView({
         </dl>
       ) : null}
 
-      {history.length ? (
-        <div className="min-w-0">
-          <p className="mb-2 text-label font-bold uppercase tracking-[0.08em] text-ink-soft">
-            Riwayat
-            <span className="ml-1.5 font-normal normal-case tracking-normal text-ink-faint">
-              · {history.length} entri
-            </span>
-          </p>
-          <div className="overflow-x-auto overscroll-x-contain rounded-md border border-hairline">
-            <table className="w-max min-w-full border-collapse text-left text-label">
-              <thead>
-                <tr className="bg-mist/50">
-                  <Th className="w-8 text-center">No</Th>
-                  <Th>Tanggal</Th>
-                  {showImsi ? <Th>IMSI</Th> : null}
-                  <Th>Aksi</Th>
-                  <Th>Catatan</Th>
-                </tr>
-              </thead>
-              <tbody>
-                {history.map((event, index) => (
-                  <tr
-                    key={`${event.date}-${index}`}
-                    className="border-t border-hairline/70 align-top"
-                  >
-                    <Td className="text-center text-ink-faint">{index + 1}</Td>
-                    <Td className="font-data tabular text-ink">{event.date}</Td>
-                    {showImsi ? (
-                      <Td className="font-data tabular text-ink-soft">{event.imsi ?? "—"}</Td>
-                    ) : null}
-                    <Td className="font-bold lowercase text-ink">
-                      {formatCeirAction(event.action)}
-                    </Td>
-                    <Td className="text-ink-soft">{event.note ?? "—"}</Td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      ) : null}
+      {history.length ? <CeirHistoryTable history={history} /> : null}
     </div>
   );
-}
-
-function Th({ className, children }: { className?: string; children: React.ReactNode }) {
-  return (
-    <th
-      scope="col"
-      className={cn(
-        "whitespace-nowrap px-3 py-2 text-label font-bold uppercase tracking-[0.04em] text-ink-soft",
-        className,
-      )}
-    >
-      {children}
-    </th>
-  );
-}
-
-function Td({ className, children }: { className?: string; children: React.ReactNode }) {
-  return <td className={cn("whitespace-nowrap px-3 py-2", className)}>{children}</td>;
 }

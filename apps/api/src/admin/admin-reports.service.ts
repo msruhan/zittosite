@@ -99,11 +99,107 @@ function formatWeekdayNarrow(dayStart: Date): string {
   }).format(dayStart);
 }
 
+/** Reports filter: a whole year, or one month of it (1–12). */
+export type ReportPeriod = { year: number; month: number | null };
+
+type Bucket = { label: string; start: Date; end: Date };
+
+/** `tahun` (YYYY) and optional `bulan` (1–12); anything invalid means "all time". */
+export function parseReportPeriod(tahun?: string, bulan?: string): ReportPeriod | undefined {
+  const year = Number(tahun);
+  const current = Number(jakartaYmd(new Date()).slice(0, 4));
+  if (!/^\d{4}$/.test(tahun ?? "") || year < 2000 || year > current + 1) return undefined;
+  const month = Number(bulan);
+  return {
+    year,
+    month: /^\d{1,2}$/.test(bulan ?? "") && month >= 1 && month <= 12 ? month : null,
+  };
+}
+
+function jakartaMonthStartOf(year: number, month: number): Date {
+  return new Date(`${year}-${String(month).padStart(2, "0")}-01T00:00:00+07:00`);
+}
+
+function nextMonthStart(year: number, month: number): Date {
+  return month === 12 ? jakartaMonthStartOf(year + 1, 1) : jakartaMonthStartOf(year, month + 1);
+}
+
+function formatMonthShort(start: Date): string {
+  return new Intl.DateTimeFormat("id-ID", { timeZone: TZ, month: "short" }).format(start);
+}
+
+function formatPeriodLabel(period: ReportPeriod): string {
+  if (!period.month) return `Tahun ${period.year}`;
+  return new Intl.DateTimeFormat("id-ID", { timeZone: TZ, month: "long", year: "numeric" }).format(
+    jakartaMonthStartOf(period.year, period.month),
+  );
+}
+
+function periodRange(period: ReportPeriod): { start: Date; end: Date } {
+  return period.month
+    ? { start: jakartaMonthStartOf(period.year, period.month), end: nextMonthStart(period.year, period.month) }
+    : { start: jakartaMonthStartOf(period.year, 1), end: jakartaMonthStartOf(period.year + 1, 1) };
+}
+
+function monthBuckets(year: number): Bucket[] {
+  return Array.from({ length: 12 }, (_, i) => {
+    const start = jakartaMonthStartOf(year, i + 1);
+    return { label: formatMonthShort(start), start, end: nextMonthStart(year, i + 1) };
+  });
+}
+
+function dayBuckets(start: Date, end: Date): Bucket[] {
+  const buckets: Bucket[] = [];
+  for (let day = start; day < end; day = addJakartaDays(day, 1)) {
+    buckets.push({ label: jakartaYmd(day).slice(8).replace(/^0/, ""), start: day, end: addJakartaDays(day, 1) });
+  }
+  return buckets;
+}
+
+/** Days 1–7, 8–14, 15–21, 22–28, 29–end of a month. */
+function weekBuckets(start: Date, end: Date): Bucket[] {
+  const month = formatMonthShort(start);
+  const buckets: Bucket[] = [];
+  for (let from = start, firstDay = 1; from < end; firstDay += 7) {
+    const to = addJakartaDays(from, 7) < end ? addJakartaDays(from, 7) : end;
+    const lastDay = Number(jakartaYmd(addJakartaDays(to, -1)).slice(8));
+    buckets.push({ label: `${firstDay}–${lastDay} ${month}`, start: from, end: to });
+    from = to;
+  }
+  return buckets;
+}
+
+/** The month or year right before `period`. */
+function previousPeriod(period: ReportPeriod): ReportPeriod {
+  if (!period.month) return { year: period.year - 1, month: null };
+  return period.month === 1
+    ? { year: period.year - 1, month: 12 }
+    : { year: period.year, month: period.month - 1 };
+}
+
+function bucketIndexOf(buckets: Bucket[], at: Date): number {
+  return buckets.findIndex((b) => at >= b.start && at < b.end);
+}
+
 @Injectable()
 export class AdminReportsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async summary(viewerId: string) {
+  /** Years that have orders, newest first; always includes the current year. */
+  private async reportYears(): Promise<number[]> {
+    const current = Number(jakartaYmd(new Date()).slice(0, 4));
+    const first = await this.prisma.order.findFirst({
+      where: { isTest: false },
+      orderBy: { createdAt: "asc" },
+      select: { createdAt: true },
+    });
+    const from = first ? Math.min(Number(jakartaYmd(first.createdAt).slice(0, 4)), current) : current;
+    return Array.from({ length: current - from + 1 }, (_, i) => current - i);
+  }
+
+  async summary(viewerId: string, period?: ReportPeriod) {
+    if (period) return this.periodSummary(viewerId, period);
+    const years = await this.reportYears();
     const now = new Date();
     const todayStart = jakartaDayStart(now);
     const windowStart = addJakartaDays(todayStart, -6);
@@ -286,6 +382,8 @@ export class AdminReportsService {
       .sort((a, b) => b.handledCount - a.handledCount);
 
     return {
+      years,
+      period: null,
       finance: {
         canSeeCost,
         today: visible(today),
@@ -317,24 +415,174 @@ export class AdminReportsService {
     };
   }
 
-  /** Super Admin dashboard: cost/profit and channel breakdowns (WIB calendar). */
-  async insights() {
+  /**
+   * Reports for one year (breakdown per month) or one month (breakdown per
+   * week, charts per day). Sales count by completion date, orders by creation date.
+   */
+  private async periodSummary(viewerId: string, period: ReportPeriod) {
+    const { start, end } = periodRange(period);
+    const tableBuckets = period.month ? weekBuckets(start, end) : monthBuckets(period.year);
+    const chartBuckets = period.month ? dayBuckets(start, end) : monthBuckets(period.year);
+    const inRange = { gte: start, lt: end };
+
+    const [
+      years,
+      viewer,
+      earned,
+      created,
+      paidInvoices,
+      admins,
+      services,
+      usersTotal,
+      usersActive,
+      waitingAction,
+    ] = await Promise.all([
+      this.reportYears(),
+      this.prisma.admin.findUnique({ where: { id: viewerId }, select: { role: true } }),
+      this.prisma.order.findMany({
+        where: { ...EARNED_ORDER, completedAt: inRange },
+        select: { price: true, costPrice: true, completedAt: true },
+      }),
+      this.prisma.order.findMany({
+        where: { isTest: false, createdAt: inRange },
+        select: { createdAt: true, channel: true, status: true },
+      }),
+      this.prisma.paymentInvoice.findMany({
+        where: { purpose: "order", isTest: false, paymentStatus: "paid", paidAt: inRange },
+        select: { orders: { select: { service: { select: { name: true } } }, take: 1 } },
+      }),
+      this.prisma.admin.findMany({
+        include: {
+          _count: {
+            select: { assignedOrders: { where: { isTest: false, createdAt: inRange } } },
+          },
+        },
+        orderBy: { fullName: "asc" },
+      }),
+      this.prisma.service.findMany({
+        orderBy: { name: "asc" },
+        select: { id: true, name: true, active: true, estimate: true, price: true },
+      }),
+      this.prisma.user.count({ where: { role: "customer" } }),
+      this.prisma.user.count({ where: { status: "active", role: "customer" } }),
+      this.prisma.order.count({ where: { status: "waiting_action", isTest: false } }),
+    ]);
+    const canSeeCost = viewer?.role === "super_admin";
+    const visible = (money: Money) =>
+      canSeeCost ? money : { ...money, cost: null, profit: null };
+
+    const total = emptyMoney();
+    const tableMoney = tableBuckets.map(() => emptyMoney());
+    const chartMoney = chartBuckets.map(() => emptyMoney());
+    for (const sale of earned) {
+      const at = sale.completedAt!;
+      addSale(total, sale);
+      const t = bucketIndexOf(tableBuckets, at);
+      if (t >= 0) addSale(tableMoney[t]!, sale);
+      const c = bucketIndexOf(chartBuckets, at);
+      if (c >= 0) addSale(chartMoney[c]!, sale);
+    }
+
+    const ordersPerChart = chartBuckets.map(() => 0);
+    const channelCount = new Map<OrderChannel, number>();
+    const statusCount = new Map<OrderStatus, number>();
+    for (const order of created) {
+      const c = bucketIndexOf(chartBuckets, order.createdAt);
+      if (c >= 0) ordersPerChart[c]! += 1;
+      channelCount.set(order.channel, (channelCount.get(order.channel) ?? 0) + 1);
+      statusCount.set(order.status, (statusCount.get(order.status) ?? 0) + 1);
+    }
+
+    const serviceTotals = new Map<string, number>();
+    for (const inv of paidInvoices) {
+      const name = inv.orders[0]?.service?.name ?? "Lainnya";
+      serviceTotals.set(name, (serviceTotals.get(name) ?? 0) + 1);
+    }
+
+    return {
+      years,
+      period: { year: period.year, month: period.month, label: formatPeriodLabel(period) },
+      finance: {
+        canSeeCost,
+        period: visible(total),
+        breakdown: tableBuckets.map((bucket, i) => ({
+          label: bucket.label,
+          money: visible(tableMoney[i]!),
+        })),
+      },
+      kpis: {
+        ordersCreated: created.length,
+        usersTotal,
+        usersActive,
+        ordersDone: total.orders,
+        waitingAction,
+      },
+      channelMix: CHANNELS.map((c) => ({
+        name: c.name,
+        amount: channelCount.get(c.key) ?? 0,
+        color: CHANNEL_COLORS[c.name]!,
+      })).filter((item) => item.amount > 0),
+      weeklyBars: chartBuckets.map((bucket, i) => ({ label: bucket.label, orders: ordersPerChart[i]! })),
+      revenueSeries: chartBuckets.map((bucket, i) => ({
+        label: bucket.label,
+        revenue: chartMoney[i]!.revenue,
+        orders: chartMoney[i]!.orders,
+      })),
+      serviceMix: [...serviceTotals.entries()]
+        .sort((a, b) => b[1] - a[1])
+        .map(([name, amount], index) => ({
+          name,
+          amount,
+          color: SERVICE_PALETTE[index % SERVICE_PALETTE.length]!,
+        })),
+      byStatus: ALL_STATUSES.map((status) => ({ status, count: statusCount.get(status) ?? 0 })),
+      adminPerformance: admins
+        .map((admin) => {
+          const handle = admin.telegramUsername?.trim();
+          return {
+            id: admin.id,
+            fullName: admin.fullName,
+            telegramHandle: handle ? (handle.startsWith("@") ? handle : `@${handle}`) : null,
+            handledCount: admin._count.assignedOrders,
+          };
+        })
+        .sort((a, b) => b.handledCount - a.handledCount),
+      services,
+    };
+  }
+
+  private async earnedMoney(where: Prisma.OrderWhereInput = {}): Promise<Money> {
+    const agg = await this.prisma.order.aggregate({
+      where: { ...EARNED_ORDER, ...where },
+      _sum: { price: true, costPrice: true },
+      _count: { _all: true },
+    });
+    const revenue = agg._sum.price ?? 0;
+    const cost = agg._sum.costPrice ?? 0;
+    return { revenue, cost, profit: revenue - cost, orders: agg._count._all };
+  }
+
+  /**
+   * Super Admin dashboard: cost/profit and channel breakdowns (WIB calendar).
+   * The finance card covers `period` (default: the current month) and the one before it.
+   */
+  async insights(period?: ReportPeriod) {
     const now = new Date();
     const todayStart = jakartaDayStart(now);
     const dailyStart = addJakartaDays(todayStart, -13);
     const mixStart = addJakartaDays(todayStart, -29);
-    const monthStart = jakartaMonthStart(now);
-    const prevMonthStart = jakartaMonthStart(addJakartaDays(monthStart, -1));
-    const earnedFrom = prevMonthStart < mixStart ? prevMonthStart : mixStart;
+    const [currentYear, currentMonth] = jakartaYmd(now).split("-").map(Number);
+    const selectedPeriod = period ?? { year: currentYear!, month: currentMonth! };
+    const selectedRange = periodRange(selectedPeriod);
+    const previousRange = periodRange(previousPeriod(selectedPeriod));
 
-    const [allTime, earned, created, services] = await Promise.all([
-      this.prisma.order.aggregate({
-        where: EARNED_ORDER,
-        _sum: { price: true, costPrice: true },
-        _count: { _all: true },
-      }),
+    const [years, allTime, selected, previous, earned, created, services] = await Promise.all([
+      this.reportYears(),
+      this.earnedMoney(),
+      this.earnedMoney({ completedAt: { gte: selectedRange.start, lt: selectedRange.end } }),
+      this.earnedMoney({ completedAt: { gte: previousRange.start, lt: previousRange.end } }),
       this.prisma.order.findMany({
-        where: { ...EARNED_ORDER, completedAt: { gte: earnedFrom } },
+        where: { ...EARNED_ORDER, completedAt: { gte: mixStart } },
         select: {
           price: true,
           costPrice: true,
@@ -355,8 +603,6 @@ export class AdminReportsService {
     ]);
 
     const today = emptyMoney();
-    const month = emptyMoney();
-    const prevMonth = emptyMoney();
     const dayStarts = Array.from({ length: 14 }, (_, i) => addJakartaDays(dailyStart, i));
     const daily = dayStarts.map(() => emptyMoney());
     const byChannel = new Map<OrderChannel, Money>(CHANNELS.map((c) => [c.key, emptyMoney()]));
@@ -366,8 +612,6 @@ export class AdminReportsService {
     for (const sale of earned) {
       const at = sale.completedAt!;
       if (at >= todayStart) addSale(today, sale);
-      if (at >= monthStart) addSale(month, sale);
-      else if (at >= prevMonthStart) addSale(prevMonth, sale);
       const dayIndex = dayIndexOf(dayStarts, at);
       if (dayIndex >= 0) addSale(daily[dayIndex]!, sale);
       if (at >= mixStart) {
@@ -402,20 +646,18 @@ export class AdminReportsService {
     const userById = new Map(topUserRows.map((u) => [u.id, u]));
     const serviceById = new Map(services.map((s) => [s.id, s]));
 
-    const allRevenue = allTime._sum.price ?? 0;
-    const allCost = allTime._sum.costPrice ?? 0;
-
     return {
+      years,
       finance: {
-        today,
-        month,
-        prevMonth,
-        allTime: {
-          revenue: allRevenue,
-          cost: allCost,
-          profit: allRevenue - allCost,
-          orders: allTime._count._all,
+        period: {
+          year: selectedPeriod.year,
+          month: selectedPeriod.month,
+          label: formatPeriodLabel(selectedPeriod),
         },
+        today,
+        selected,
+        previous,
+        allTime,
       },
       servicesWithoutCost: services
         .filter((s) => s.active && s.costPrice === 0)

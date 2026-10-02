@@ -2,7 +2,14 @@ import { HttpException, Injectable, Logger } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service";
 import { OrdersService } from "../orders/orders.service";
 import { InsufficientBalanceException } from "../orders/balance";
-import { INPUT_TYPE_LABEL, type InputType, parseImeiList } from "../orders/imei-list";
+import { INPUT_TYPE_LABEL, parseImeiList } from "../orders/imei-list";
+import {
+  type ExtraFieldFlags,
+  NO_DEVICE_VALUE,
+  type OrderExtras,
+  type ServiceInputType,
+  parseOrderExtras,
+} from "../orders/special-fields";
 import { ApiKeysService, type ApiCaller } from "./api-keys.service";
 import { RateWindow } from "./rate-window";
 import {
@@ -31,8 +38,8 @@ type ServiceRow = {
   price: number;
   estimate: string;
   description: string;
-  inputType: InputType;
-};
+  inputType: ServiceInputType;
+} & ExtraFieldFlags;
 
 class DhruFailure extends Error {}
 
@@ -149,7 +156,14 @@ export class DhruService {
     const ref = params.ID || params.SERVICEID || "";
     const service = services.find((s) => s.code === ref.toLowerCase() || s.id === ref);
     if (!service) throw new DhruFailure("Service not found");
+    const extras = parseOrderExtras(service, {
+      qnt: params.QNT || params.QUANTITY,
+      email: params.EMAIL,
+      username: params.USERNAME,
+    });
+    if (!extras.ok) throw new DhruFailure(extras.errors.join(" "));
     const type = service.inputType;
+    if (type === "none") return { service, imei: NO_DEVICE_VALUE, extras: extras.extras };
     const raw =
       type === "sn"
         ? params.SN || params.SERIALNUMBER || params.IMEI
@@ -158,14 +172,22 @@ export class DhruService {
           : params.IMEI;
     const parsed = parseImeiList([raw ?? ""], type);
     if (!parsed.ok) throw new DhruFailure(`Invalid ${INPUT_TYPE_LABEL[type]}`);
-    return { service, imei: parsed.imeis[0]! };
+    return { service, imei: parsed.imeis[0]!, extras: extras.extras };
   }
 
-  private async create(caller: ApiCaller, serviceId: string, imei: string) {
+  private async create(
+    caller: ApiCaller,
+    serviceId: string,
+    imei: string,
+    extras: OrderExtras,
+  ) {
     try {
       return await this.orders.createOrder(caller.userId, {
         serviceId,
         imeis: [imei],
+        qnt: extras.quantity ?? undefined,
+        email: extras.email ?? undefined,
+        username: extras.username ?? undefined,
         channel: "api",
         apiKeyId: caller.apiKeyId,
         balanceOnly: true,
@@ -185,8 +207,8 @@ export class DhruService {
     if (!this.placements.take(caller.apiKeyId)) {
       return dhruError("Too many requests", "order_rate_limited");
     }
-    const { service, imei } = this.resolveLine(await this.services(caller), params);
-    const order = await this.create(caller, service.id, imei);
+    const { service, imei, extras } = this.resolveLine(await this.services(caller), params);
+    const order = await this.create(caller, service.id, imei, extras);
     return dhruSuccess({ MESSAGE: "Order Placed Successfully", REFERENCEID: order.orderId });
   }
 
@@ -205,7 +227,7 @@ export class DhruService {
       try {
         return { params, ...this.resolveLine(services, params), error: null };
       } catch (err) {
-        return { params, service: null, imei: null, error: (err as Error).message };
+        return { params, service: null, imei: null, extras: null, error: (err as Error).message };
       }
     });
     const total = lines.reduce((sum, line) => sum + (line.service?.price ?? 0), 0);
@@ -218,12 +240,12 @@ export class DhruService {
     const results: Record<string, unknown>[] = [];
     for (const line of lines) {
       const echo = { IMEI: line.params.IMEI ?? "", ID: line.params.ID ?? line.params.SERVICEID ?? "" };
-      if (!line.service || !line.imei) {
+      if (!line.service || !line.imei || !line.extras) {
         results.push({ ...echo, ERROR: line.error });
         continue;
       }
       try {
-        const order = await this.create(caller, line.service.id, line.imei);
+        const order = await this.create(caller, line.service.id, line.imei, line.extras);
         results.push({ ...echo, MESSAGE: "Order Placed Successfully", REFERENCEID: order.orderId });
       } catch (err) {
         if (!(err instanceof DhruFailure)) throw err;

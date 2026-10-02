@@ -6,7 +6,7 @@ import { StatusBadge } from "@/components/ui/status-badge";
 import { CancelOrderButton } from "@/components/domain/cancel-order-button";
 import { CeirResultView } from "@/components/domain/ceir-result-view";
 import { parseCeirResult } from "@/lib/ceir-result";
-import { INPUT_TYPE_LABEL } from "@/lib/imei-list";
+import { deviceLabel, orderExtraRows } from "@/lib/order-fields";
 import { formatDateTime, formatRupiah } from "@/lib/format";
 import type { OrderDetail } from "@/lib/types";
 
@@ -36,9 +36,16 @@ export function CeirOrderDetail({ order }: { order: OrderDetail }) {
       <CardBody className="pt-3">
         <dl className="divide-y divide-hairline">
           <DetailRow label="Layanan">{order.service.name}</DetailRow>
-          <DetailRow label={INPUT_TYPE_LABEL[order.service.inputType ?? "imei"]}>
-            <DataValue>{order.imei}</DataValue>
-          </DetailRow>
+          {deviceLabel(order.service.inputType) ? (
+            <DetailRow label={deviceLabel(order.service.inputType)!}>
+              <DataValue>{order.imei}</DataValue>
+            </DetailRow>
+          ) : null}
+          {orderExtraRows(order).map((row) => (
+            <DetailRow key={row.label} label={row.label}>
+              <DataValue className="break-all">{row.value}</DataValue>
+            </DetailRow>
+          ))}
           <DetailRow label="Harga">
             <DataValue>{formatRupiah(order.price)}</DataValue>
           </DetailRow>

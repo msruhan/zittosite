@@ -6,6 +6,7 @@ import { Card, CardBody } from "@/components/ui/card";
 import { CreateOrderForm } from "@/components/domain/create-order-form";
 import { ApiError } from "@/lib/api";
 import { serverApi } from "@/lib/server-api";
+import { requireUserMenu } from "@/lib/server-user-menus";
 import type { Service, User } from "@/lib/types";
 
 export const metadata: Metadata = {
@@ -13,6 +14,7 @@ export const metadata: Metadata = {
 };
 
 export default async function CreateOrderPage() {
+  const menu = await requireUserMenu("order");
   let services: Service[] = [];
   let balance = 0;
   try {
@@ -34,7 +36,7 @@ export default async function CreateOrderPage() {
   return (
     <>
       <PageHeader
-        title="Buat order"
+        title={menu.label}
         description="Pilih layanan, masukkan IMEI perangkat, lalu selesaikan pembayaran. Nomor tiket Anda terbit begitu order dibuat."
       />
 

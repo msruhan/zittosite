@@ -3,6 +3,7 @@ import type { Supplier } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
 import { OrdersService } from "../orders/orders.service";
 import { SupplierDispatch } from "../orders/supplier-dispatch";
+import { supplierExtraFields } from "../orders/special-fields";
 import { SupplierRequestError, supplierInputFields } from "./dhru-supplier-client";
 import { supplierClient } from "./suppliers.service";
 
@@ -134,8 +135,11 @@ export class SupplierWorkerService implements OnModuleInit, OnModuleDestroy {
       try {
         const reply = await supplierClient(supplier).placeOrder(
           order.service.supplierServiceId!,
-          order.imei,
-          supplierInputFields(order.service.inputType, order.imei),
+          order.service.inputType === "none" ? null : order.imei,
+          {
+            ...supplierInputFields(order.service.inputType, order.imei),
+            ...supplierExtraFields(order),
+          },
         );
         if (reply.ok) {
           await this.prisma.order.update({

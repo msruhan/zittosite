@@ -30,6 +30,9 @@ export class OrdersController {
       imei: optString(body.imei, "IMEI", 32),
       imeis: optStringList(body.imeis, "IMEI", 20, 32),
       notes: optString(body.notes, "Catatan", 500),
+      qnt: typeof body.qnt === "number" ? body.qnt : optString(body.qnt, "Qnt", 12),
+      email: optString(body.email, "Email", 254),
+      username: optString(body.username, "Username", 100),
       channel: "web",
     });
   }

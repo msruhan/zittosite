@@ -15,6 +15,8 @@ interface AppShellProps {
   variant: NavVariant;
   navLabel?: string;
   hideHrefs?: string[];
+  /** Label overrides by nav href. */
+  navLabels?: Record<string, string>;
   topbarRight?: React.ReactNode;
   /** Full-width strip under the top bar (e.g. the announcement ticker). */
   banner?: React.ReactNode;
@@ -25,11 +27,13 @@ function SidebarBody({
   variant,
   navLabel,
   hideHrefs,
+  navLabels,
   onNavigate,
 }: {
   variant: NavVariant;
   navLabel?: string;
   hideHrefs?: string[];
+  navLabels?: Record<string, string>;
   onNavigate?: () => void;
 }) {
   return (
@@ -41,6 +45,7 @@ function SidebarBody({
           variant={variant}
           sectionLabel={navLabel ?? "Menu"}
           hideHrefs={hideHrefs}
+          labels={navLabels}
           onNavigate={onNavigate}
         />
 
@@ -56,6 +61,7 @@ export function AppShell({
   variant,
   navLabel,
   hideHrefs,
+  navLabels,
   topbarRight,
   banner,
   children,
@@ -76,6 +82,7 @@ export function AppShell({
           variant={variant}
           navLabel={navLabel}
           hideHrefs={hideHrefs}
+          navLabels={navLabels}
         />
       </aside>
 
@@ -114,6 +121,7 @@ export function AppShell({
               variant={variant}
               navLabel={navLabel}
               hideHrefs={hideHrefs}
+              navLabels={navLabels}
               onNavigate={closeDrawer}
             />
           </DialogPrimitive.Content>
@@ -149,7 +157,7 @@ export function AppShell({
           {banner}
 
           <main className="paper-ground min-h-[calc(100dvh-3.5rem)]">
-            <div className="mx-auto w-full max-w-[1280px] px-4 py-6 sm:px-6 sm:py-8">
+            <div className="mx-auto w-full max-w-[1280px] px-4 py-6 sm:px-6 sm:py-8 min-[1920px]:max-w-none min-[1920px]:px-10">
               {children}
             </div>
           </main>

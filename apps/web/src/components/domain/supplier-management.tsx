@@ -11,11 +11,13 @@ import { DataValue } from "@/components/ui/data-value";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Field, Input } from "@/components/ui/field";
+import { SearchInput } from "@/components/ui/search-input";
 import { Select } from "@/components/ui/select";
 import { Tag } from "@/components/ui/status-badge";
 import { TBody, TD, TH, THead, TR, Table, TableScroll } from "@/components/ui/table";
 import { ApiError, api } from "@/lib/api";
 import { formatDateTime } from "@/lib/format";
+import { matchesSearch } from "@/lib/search";
 import type { Supplier } from "@/lib/types";
 
 type SupplierDraft = {
@@ -38,6 +40,10 @@ export function SupplierManagement({ initialSuppliers }: { initialSuppliers: Sup
   const [deleting, setDeleting] = React.useState<Supplier | null>(null);
   const [testingId, setTestingId] = React.useState<string | null>(null);
   const [busy, setBusy] = React.useState(false);
+  const [query, setQuery] = React.useState("");
+  const filtered = suppliers.filter((supplier) =>
+    matchesSearch(query, [supplier.name, supplier.baseUrl, supplier.username]),
+  );
 
   async function reload() {
     setSuppliers(await api<Supplier[]>("/admin/suppliers"));
@@ -103,10 +109,28 @@ export function SupplierManagement({ initialSuppliers }: { initialSuppliers: Sup
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-end">{addButton}</div>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+        <SearchInput
+          value={query}
+          onChange={setQuery}
+          label="Cari supplier"
+          placeholder="Cari nama, URL, atau username"
+        />
+        {addButton}
+      </div>
 
       <Card>
-        {suppliers.length ? (
+        {suppliers.length && !filtered.length ? (
+          <EmptyState
+            title="Tidak ada supplier yang cocok"
+            description={`Tidak ada supplier yang cocok dengan "${query.trim()}".`}
+            action={
+              <Button variant="secondary" onClick={() => setQuery("")}>
+                Reset pencarian
+              </Button>
+            }
+          />
+        ) : suppliers.length ? (
           <TableScroll>
             <Table>
               <THead>
@@ -120,7 +144,7 @@ export function SupplierManagement({ initialSuppliers }: { initialSuppliers: Sup
                 </TR>
               </THead>
               <TBody>
-                {suppliers.map((supplier) => (
+                {filtered.map((supplier) => (
                   <TR key={supplier.id}>
                     <TD>
                       <p className="font-medium text-ink">{supplier.name}</p>

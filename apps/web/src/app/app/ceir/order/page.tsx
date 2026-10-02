@@ -8,6 +8,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { CreateOrderForm } from "@/components/domain/create-order-form";
 import { ApiError } from "@/lib/api";
 import { serverApi } from "@/lib/server-api";
+import { requireUserMenu } from "@/lib/server-user-menus";
 import type { Service, User } from "@/lib/types";
 
 export const metadata: Metadata = {
@@ -33,6 +34,7 @@ const STEPS = [
 ];
 
 export default async function CreateCeirOrderPage() {
+  const menu = await requireUserMenu("ceir");
   let services: Service[] = [];
   let balance = 0;
   try {
@@ -58,11 +60,11 @@ export default async function CreateCeirOrderPage() {
         className="mb-3 inline-flex items-center gap-1.5 text-body font-medium text-ink-soft hover:text-ink"
       >
         <ArrowLeft className="size-4" aria-hidden="true" />
-        Order Ceir
+        Riwayat {menu.label}
       </Link>
       <PageHeader
-        title="Buat order Ceir"
-        description="Pilih layanan Ceir, masukkan IMEI, lalu bayar. Order diproses otomatis dan hasilnya tampil di Order Ceir."
+        title={menu.label}
+        description={`Pilih layanan Ceir, masukkan IMEI, lalu bayar. Order diproses otomatis dan hasilnya tampil di ${menu.label}.`}
       />
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,20rem)]">

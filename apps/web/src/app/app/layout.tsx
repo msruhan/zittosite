@@ -7,6 +7,12 @@ import { AdsRunnerTicker } from "@/components/domain/ads-runner-ticker";
 import { ApiError } from "@/lib/api";
 import { serverApi } from "@/lib/server-api";
 import type { OrderDetail, RunningAd, User } from "@/lib/types";
+import { loadUserMenus } from "@/lib/server-user-menus";
+import {
+  disabledUserMenuHrefs,
+  userMenuNavLabels,
+  type UserMenus,
+} from "@/lib/user-menus";
 
 export default async function UserPortalLayout({
   children,
@@ -16,11 +22,13 @@ export default async function UserPortalLayout({
   let user: User;
   let orders: OrderDetail[] = [];
   let ads: RunningAd[] = [];
+  let menus: UserMenus;
   try {
     user = await serverApi<User>("/me");
-    [orders, ads] = await Promise.all([
+    [orders, ads, menus] = await Promise.all([
       serverApi<OrderDetail[]>("/orders"),
       serverApi<RunningAd[]>("/running-ads").catch(() => []),
+      loadUserMenus(),
     ]);
   } catch (err) {
     if (err instanceof ApiError && err.status === 401) {
@@ -44,7 +52,11 @@ export default async function UserPortalLayout({
   return (
     <AppShell
       variant="user"
-      hideHrefs={user.apiEnabled ? undefined : ["/app/api", "/app/docs"]}
+      hideHrefs={[
+        ...disabledUserMenuHrefs(menus),
+        ...(user.apiEnabled ? [] : ["/app/api", "/app/docs"]),
+      ]}
+      navLabels={userMenuNavLabels(menus)}
       banner={<AdsRunnerTicker items={ads} />}
       topbarRight={
         <>

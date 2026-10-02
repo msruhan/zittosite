@@ -46,6 +46,9 @@ export function serializeService(
     via: service.fulfillmentChannel === "supplier" ? "supplier" : "manual",
     menu: service.fulfillmentChannel === "supplier" ? service.menu : null,
     inputType: service.inputType,
+    requireQnt: service.requireQnt,
+    requireEmail: service.requireEmail,
+    requireUsername: service.requireUsername,
   };
 }
 
@@ -151,6 +154,9 @@ export function serializeOrderListItem(
     channel: order.channel,
     imei: order.imei,
     notes: order.notes,
+    quantity: order.quantity,
+    email: order.email,
+    username: order.username,
     status: order.status,
     statusReason: order.statusReason,
     isTest: order.isTest,

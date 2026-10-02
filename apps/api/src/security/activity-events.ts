@@ -365,6 +365,11 @@ export const ACTIVITY_EVENTS = {
     summary: ({ fields }) =>
       `Mengubah kurs Layanan Spesial dari ${rp(fields.previous)} ke ${rp(fields.rate)} per $1 (${fields.serviceCount ?? 0} layanan dihitung ulang)`,
   },
+  "admin.user_menus.updated": {
+    category: "service",
+    label: "Menu user diubah",
+    summary: ({ fields }) => `Mengatur menu user: ${fields.summary ?? ""}`,
+  },
   "admin.supplier.created": {
     category: "service",
     label: "Supplier API ditambahkan",

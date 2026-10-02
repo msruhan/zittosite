@@ -27,6 +27,7 @@ import {
 } from "../payments/sayabayar.client";
 import { serializeOrderListItem, serializeService } from "./orders.serializer";
 import { parseImeiList } from "./imei-list";
+import { NO_DEVICE_VALUE, parseOrderExtras } from "./special-fields";
 import {
   type OrderVia,
   orderViaWhere,
@@ -34,6 +35,8 @@ import {
 } from "./supplier-routed";
 import { SupplierDispatch } from "./supplier-dispatch";
 import { TopupService } from "./topup.service";
+import { menuOfService } from "./user-menus";
+import { UserMenusService } from "./user-menus.service";
 import {
   applyBalance,
   InsufficientBalanceException,
@@ -89,6 +92,7 @@ export class OrdersService {
     private readonly whatsappNotify: WhatsappNotifyService,
     private readonly topups: TopupService,
     private readonly supplierDispatch: SupplierDispatch,
+    private readonly userMenus: UserMenusService,
   ) {}
 
   async listServices(userId: string, via?: OrderVia) {
@@ -198,6 +202,10 @@ export class OrdersService {
       imei?: string;
       imeis?: string[] | string;
       notes?: string;
+      /** Layanan Spesial extra fields; only those the service requires are kept. */
+      qnt?: number | string;
+      email?: string;
+      username?: string;
       channel?: OrderChannel;
       apiKeyId?: string;
       balanceOnly?: boolean;
@@ -235,9 +243,23 @@ export class OrdersService {
     if (!service || !service.active) {
       throw new BadRequestException("Layanan tidak tersedia.");
     }
-    const parsed = parseImeiList(input.imeis ?? String(input.imei ?? ""), service.inputType);
-    if (!parsed.ok) throw new BadRequestException(parsed.errors.join(" "));
-    const imeis = parsed.imeis;
+    if (channel === "web") {
+      const menu = (await this.userMenus.get())[menuOfService(service)];
+      if (!menu.enabled) {
+        throw new BadRequestException(`Menu ${menu.label} sedang dinonaktifkan.`);
+      }
+    }
+    let imeis: string[];
+    if (service.inputType === "none") {
+      imeis = [NO_DEVICE_VALUE];
+    } else {
+      const parsed = parseImeiList(input.imeis ?? String(input.imei ?? ""), service.inputType);
+      if (!parsed.ok) throw new BadRequestException(parsed.errors.join(" "));
+      imeis = parsed.imeis;
+    }
+    const parsedExtras = parseOrderExtras(service, input);
+    if (!parsedExtras.ok) throw new BadRequestException(parsedExtras.errors.join(" "));
+    const extras = parsedExtras.extras;
     const groupPrice = user.groupId
       ? await this.prisma.userGroupPrice.findUnique({
           where: { groupId_serviceId: { groupId: user.groupId, serviceId } },
@@ -344,6 +366,7 @@ export class OrdersService {
             channel,
             imei,
             notes,
+            ...extras,
             status: "waiting_payment",
             price,
             costPrice: service.costPrice,

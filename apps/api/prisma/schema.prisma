@@ -79,6 +79,8 @@ enum ServiceInputType {
   imei
   sn
   ecid
+  /// Layanan Spesial without a device value; the order carries only Qnt/Email/Username.
+  none
 }
 
 /// User menu for supplier services: Order Ceir or Layanan Spesial.
@@ -346,6 +348,10 @@ model Service {
   serviceGroup       ServiceGroup?       @relation(fields: [serviceGroupId], references: [id], onDelete: SetNull)
   /// What the user enters per order. Only Layanan Spesial services may use SN/ECID.
   inputType          ServiceInputType    @default(imei) @map("input_type")
+  /// Layanan Spesial only: extra fields the user must fill per order, forwarded to the supplier.
+  requireQnt         Boolean             @default(false) @map("require_qnt")
+  requireEmail       Boolean             @default(false) @map("require_email")
+  requireUsername    Boolean             @default(false) @map("require_username")
   createdAt          DateTime            @default(now()) @map("created_at")
   updatedAt          DateTime            @updatedAt @map("updated_at")
   supplier           Supplier?           @relation(fields: [supplierId], references: [id], onDelete: SetNull)
@@ -413,8 +419,13 @@ model Order {
   userId                String                      @map("user_id")
   serviceId             String                      @map("service_id")
   channel               OrderChannel                @default(web)
+  /// Device value (IMEI/SN/ECID); "-" when the service's inputType is `none`.
   imei                  String
   notes                 String?
+  /// Extra Layanan Spesial fields (Service.requireQnt/Email/Username); informational, not priced.
+  quantity              Int?
+  email                 String?
+  username              String?
   status                OrderStatus                 @default(waiting_payment)
   /// Snapshot of the user's testing role at creation; excluded from statistics.
   isTest                Boolean                     @default(false) @map("is_test")

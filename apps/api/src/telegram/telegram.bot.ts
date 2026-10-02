@@ -61,6 +61,7 @@ import {
   MAX_BULK_IMEIS,
   parseImeiList,
 } from "../orders/imei-list";
+import { needsExtraInput } from "../orders/special-fields";
 
 type BotCommandDef = { command: string; description: string };
 
@@ -962,7 +963,9 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
         await this.replyPendingOrder(ctx, pending);
         return;
       }
-      const services = await this.orders.listServices(actor.user.id);
+      const services = (await this.orders.listServices(actor.user.id)).filter(
+        (service) => !needsExtraInput(service),
+      );
       if (!services.length) {
         await this.replyHtml(ctx, "Belum ada layanan aktif.", {
           reply_markup: backToMenuKeyboard(),
@@ -1223,6 +1226,14 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
       await ctx.answerCallbackQuery({ text: "Layanan tidak ditemukan", show_alert: true });
       return;
     }
+    if (service.inputType === "none" || needsExtraInput(service)) {
+      await ctx.answerCallbackQuery({
+        text: "Layanan ini butuh data tambahan dan hanya bisa dipesan lewat website.",
+        show_alert: true,
+      });
+      return;
+    }
+    const inputType = service.inputType;
     const chatId = String(ctx.chat?.id ?? "");
     this.sessions.set(chatId, {
       kind: "user_imei",
@@ -1230,9 +1241,9 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
       serviceCode: service.code ?? serviceCode,
       serviceName: service.name,
       price: service.price,
-      inputType: service.inputType,
+      inputType,
     });
-    const label = INPUT_TYPE_LABEL[service.inputType];
+    const label = INPUT_TYPE_LABEL[inputType];
     await ctx.answerCallbackQuery();
     await this.replyHtml(
       ctx,
