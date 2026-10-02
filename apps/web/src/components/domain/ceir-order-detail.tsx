@@ -4,6 +4,8 @@ import { Card, CardBody, CardHeader, DetailRow } from "@/components/ui/card";
 import { DataValue, TicketId } from "@/components/ui/data-value";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { CancelOrderButton } from "@/components/domain/cancel-order-button";
+import { CeirResultView } from "@/components/domain/ceir-result-view";
+import { parseCeirResult } from "@/lib/ceir-result";
 import { INPUT_TYPE_LABEL } from "@/lib/imei-list";
 import { formatDateTime, formatRupiah } from "@/lib/format";
 import type { OrderDetail } from "@/lib/types";
@@ -47,7 +49,9 @@ export function CeirOrderDetail({ order }: { order: OrderDetail }) {
           </DetailRow>
         </dl>
 
-        {result ? (
+        {order.result && parseCeirResult(order.result.resultNote) ? (
+          <CeirResultView text={order.result.resultNote} className="mt-4" />
+        ) : result ? (
           <div className="mt-4 flex items-baseline justify-between gap-4 rounded-md border border-hairline bg-mist px-4 py-3">
             <span className="text-body text-ink-soft">Hasil</span>
             <DataValue emphasis className="whitespace-pre-line text-right">

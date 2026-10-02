@@ -19,6 +19,7 @@ import {
 import { OrderStepper } from "@/components/domain/order-stepper";
 import { CancelOrderButton } from "@/components/domain/cancel-order-button";
 import { CeirOrderDetail } from "@/components/domain/ceir-order-detail";
+import { CeirResultView } from "@/components/domain/ceir-result-view";
 import { ApiError } from "@/lib/api";
 import { serverApi } from "@/lib/server-api";
 import { orderMenu } from "@/lib/order-routes";
@@ -150,7 +151,7 @@ export default async function OrderDetailPage({
             <ResultBadge status={order.result.resultStatus} />
           </CardHeader>
           <CardBody className="pt-3">
-            <p className="whitespace-pre-line text-body text-ink">{order.result.resultNote}</p>
+            <CeirResultView text={order.result.resultNote} />
             {order.result.resultData ? (
               <dl className="mt-4 divide-y divide-hairline border-t border-hairline">
                 {Object.entries(order.result.resultData).map(([key, value]) => (

@@ -20,6 +20,7 @@ import { OrderStepper } from "@/components/domain/order-stepper";
 import { AdminOrderStatusOverride } from "@/components/domain/admin-order-status-override";
 import { AdminCancelOrder } from "@/components/domain/admin-cancel-order";
 import { AdminOrderReason } from "@/components/domain/admin-order-reason";
+import { CeirResultView } from "@/components/domain/ceir-result-view";
 import { Avatar } from "@/components/shell/user-chip";
 import { ORDER_STATUS } from "@/lib/status";
 import { INPUT_TYPE_LABEL } from "@/lib/imei-list";
@@ -243,9 +244,7 @@ export default async function AdminOrderDetailPage({
                 <ResultBadge status={order.result.resultStatus} />
               </CardHeader>
               <CardBody className="pt-4">
-                <p className="max-w-[70ch] whitespace-pre-line text-body text-ink">
-                  {order.result.resultNote}
-                </p>
+                <CeirResultView text={order.result.resultNote} />
                 <p className="mt-3 border-t border-hairline pt-3 text-body text-ink-soft">
                   Dikirim{" "}
                   <span className="font-data tabular">
