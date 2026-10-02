@@ -10,6 +10,7 @@ import { Field, Input, Textarea } from "@/components/ui/field";
 import { Combobox } from "@/components/ui/combobox";
 import { DataValue } from "@/components/ui/data-value";
 import { ImeiChipInput } from "@/components/domain/imei-chip-input";
+import { RichDescription } from "@/components/domain/rich-description";
 import { ApiError, api } from "@/lib/api";
 import { formatRupiah } from "@/lib/format";
 import {
@@ -213,8 +214,8 @@ export function CreateOrderForm({
             weight="regular"
             className="mt-0.5 size-4 shrink-0 text-ink-soft"
           />
-          <div className="space-y-1">
-            <p className="text-body text-ink">{service.description}</p>
+          <div className="min-w-0 flex-1 space-y-1">
+            <RichDescription text={service.description} />
             <p className="text-body text-ink-soft">
               Estimasi pengerjaan{" "}
               <span className="font-data tabular">{service.estimate}</span>

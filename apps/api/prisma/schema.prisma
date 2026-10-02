@@ -663,3 +663,15 @@ model RunningAd {
   @@index([isActive, sortOrder])
   @@map("running_ads")
 }
+
+/// Images uploaded by Super Admin for rich service descriptions, served at /media/:id.
+model MediaAsset {
+  id        String   @id @default(cuid())
+  mimeType  String   @map("mime_type")
+  data      Bytes
+  size      Int
+  createdBy String?  @map("created_by")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("media_assets")
+}

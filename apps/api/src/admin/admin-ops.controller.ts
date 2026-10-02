@@ -23,6 +23,7 @@ import { OrdersService } from "../orders/orders.service";
 import { AdminAdminsService } from "./admin-admins.service";
 import { AdminReportsService, parseReportPeriod } from "./admin-reports.service";
 import { AdminTotpService } from "./admin-totp.service";
+import { RICH_DESCRIPTION_MAX } from "./rich-description";
 import { AuditLogService } from "../security/audit-log.service";
 import { SENSITIVE_THROTTLE } from "../security/throttle";
 import { parseAdjustment } from "../orders/balance";
@@ -241,7 +242,7 @@ export class AdminOpsController {
     const service = await this.services.create({
       code: optString(body.code, "Code", 40),
       name: optString(body.name, "Nama", 120),
-      description: optString(body.description, "Deskripsi", 1000),
+      description: optString(body.description, "Deskripsi", RICH_DESCRIPTION_MAX),
       price: optNonNegativeInt(body.price, "Harga"),
       costPrice: optNonNegativeInt(body.costPrice, "Harga modal"),
       estimate: optString(body.estimate, "Estimasi", 60),
@@ -276,7 +277,7 @@ export class AdminOpsController {
   ) {
     const input = {
       name: optString(body.name, "Nama", 120),
-      description: optString(body.description, "Deskripsi", 1000),
+      description: optString(body.description, "Deskripsi", RICH_DESCRIPTION_MAX),
       price: optNonNegativeInt(body.price, "Harga"),
       costPrice: optNonNegativeInt(body.costPrice, "Harga modal"),
       estimate: optString(body.estimate, "Estimasi", 60),

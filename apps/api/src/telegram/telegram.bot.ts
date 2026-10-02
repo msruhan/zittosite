@@ -62,6 +62,15 @@ import {
   parseImeiList,
 } from "../orders/imei-list";
 import { needsExtraInput } from "../orders/special-fields";
+import { UserMenusService } from "../orders/user-menus.service";
+import {
+  ORDER_CATEGORIES,
+  type OrderCategory,
+  categoryLabel,
+  categoryOfService,
+  pageOf,
+  parseOrderCategory,
+} from "./order-picker";
 
 type BotCommandDef = { command: string; description: string };
 
@@ -207,6 +216,7 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
     private readonly invites: AdminTelegramInviteService,
     private readonly recap: OrderRecapService,
     private readonly topups: TopupService,
+    private readonly userMenus: UserMenusService,
   ) {}
 
   getBot(): Bot | null {
@@ -559,6 +569,13 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
           await this.handleDoneSkip(ctx, data.slice("ord:dskip:".length));
         } else if (data.startsWith("ord:rs:")) {
           await this.handleDoneStatus(ctx, data.slice("ord:rs:".length));
+        } else if (data === "uord:cats") {
+          await this.showOrderPicker(ctx, true);
+        } else if (data.startsWith("uord:cat:")) {
+          const [rawKey, rawPage] = data.slice("uord:cat:".length).split(":");
+          const key = parseOrderCategory(rawKey ?? "");
+          if (key) await this.showOrderCategory(ctx, key, Number(rawPage));
+          else await ctx.answerCallbackQuery();
         } else if (data.startsWith("uord:svc:")) {
           await this.handleUserServicePick(ctx, data.slice("uord:svc:".length));
         } else if (data.startsWith("uord:qris:")) {
@@ -947,7 +964,64 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
     );
   }
 
-  private async showOrderPicker(ctx: Context) {
+  /** Services orderable in the bot: those needing website-only extra fields are left out. */
+  private async botServices(userId: string) {
+    return (await this.orders.listServices(userId)).filter((service) => !needsExtraInput(service));
+  }
+
+  /** Callback navigation edits the picker in place; commands send a new message. */
+  private async sendOrEdit(ctx: Context, html: string, keyboard: InlineKeyboard, edit: boolean) {
+    if (edit && ctx.callbackQuery) {
+      await ctx.answerCallbackQuery().catch(() => undefined);
+      const edited = await ctx
+        .editMessageText(html, { parse_mode: TELEGRAM_PARSE_MODE, reply_markup: keyboard })
+        .then(() => true)
+        .catch(() => false);
+      if (edited) return;
+    }
+    await this.replyHtml(ctx, html, { reply_markup: keyboard });
+  }
+
+  private async showOrderCategory(ctx: Context, key: OrderCategory, page: number) {
+    const actor = await this.requireMember(ctx);
+    if (!actor) return;
+    const [services, menus] = await Promise.all([
+      this.botServices(actor.user.id),
+      this.userMenus.get(),
+    ]);
+    const inCategory = services
+      .filter((service) => categoryOfService(service) === key)
+      .sort(
+        (a, b) =>
+          (a.group ?? "").localeCompare(b.group ?? "") || a.name.localeCompare(b.name),
+      );
+    if (!inCategory.length) {
+      await ctx.answerCallbackQuery({ text: "Belum ada layanan di kategori ini", show_alert: true });
+      return;
+    }
+    const view = pageOf(inCategory, page);
+    const keyboard = new InlineKeyboard();
+    for (const service of view.items) {
+      keyboard
+        .text(`${service.name} — ${formatRp(service.price)}`, `uord:svc:${service.code ?? service.id}`)
+        .row();
+    }
+    if (view.pages > 1) {
+      if (view.page > 1) keyboard.text("◀️ Sebelumnya", `uord:cat:${key}:${view.page - 1}`);
+      if (view.page < view.pages) keyboard.text("Berikutnya ▶️", `uord:cat:${key}:${view.page + 1}`);
+      keyboard.row();
+    }
+    keyboard.text("⬅️ Jenis layanan", "uord:cats").text("🏠 Menu", "menu:home");
+    const pageNote = view.pages > 1 ? ` · halaman ${view.page}/${view.pages}` : "";
+    await this.sendOrEdit(
+      ctx,
+      `📦 <b>${escapeHtml(categoryLabel(key, menus))}</b>\nPilih layanan (${inCategory.length}${pageNote}):`,
+      keyboard,
+      true,
+    );
+  }
+
+  private async showOrderPicker(ctx: Context, edit = false) {
     const actor = await this.requireMemberOrAdmin(ctx);
     if (!actor) return;
     if (actor.kind === "admin") {
@@ -963,28 +1037,28 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
         await this.replyPendingOrder(ctx, pending);
         return;
       }
-      const services = (await this.orders.listServices(actor.user.id)).filter(
-        (service) => !needsExtraInput(service),
-      );
+      const [services, menus] = await Promise.all([
+        this.botServices(actor.user.id),
+        this.userMenus.get(),
+      ]);
       if (!services.length) {
         await this.replyHtml(ctx, "Belum ada layanan aktif.", {
           reply_markup: backToMenuKeyboard(),
         });
         return;
       }
-      const keyboard = new InlineKeyboard();
+      const counts = new Map<OrderCategory, number>();
       for (const service of services) {
-        keyboard
-          .text(
-            `${service.name} — ${formatRp(service.price)}`,
-            `uord:svc:${service.code ?? service.id}`,
-          )
-          .row();
+        const key = categoryOfService(service);
+        counts.set(key, (counts.get(key) ?? 0) + 1);
+      }
+      const keyboard = new InlineKeyboard();
+      for (const key of ORDER_CATEGORIES) {
+        const count = counts.get(key);
+        if (count) keyboard.text(`${categoryLabel(key, menus)} (${count})`, `uord:cat:${key}:1`).row();
       }
       keyboard.text("⬅️ Menu", "menu:home");
-      await this.replyHtml(ctx, "📦 <b>Buat order</b>\nPilih layanan:", {
-        reply_markup: keyboard,
-      });
+      await this.sendOrEdit(ctx, "📦 <b>Buat order</b>\nPilih jenis layanan:", keyboard, edit);
     } catch (err: any) {
       await this.replyHtml(
         ctx,

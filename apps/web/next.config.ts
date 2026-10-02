@@ -13,7 +13,8 @@ const contentSecurityPolicy = [
   "default-src 'self'",
   `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""}`,
   "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data: blob:",
+  // Service descriptions embed images uploaded to the API or linked from https hosts.
+  `img-src 'self' data: blob: ${apiOrigin} https:`,
   "font-src 'self' data:",
   `connect-src 'self' ${apiOrigin}${isDev ? " ws: wss:" : ""}`,
   "frame-ancestors 'none'",

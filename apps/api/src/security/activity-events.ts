@@ -365,6 +365,12 @@ export const ACTIVITY_EVENTS = {
     summary: ({ fields }) =>
       `Mengubah kurs Layanan Spesial dari ${rp(fields.previous)} ke ${rp(fields.rate)} per $1 (${fields.serviceCount ?? 0} layanan dihitung ulang)`,
   },
+  "admin.media.uploaded": {
+    category: "service",
+    label: "Gambar diunggah",
+    summary: ({ fields }) =>
+      `Mengunggah gambar deskripsi layanan (${Math.round(Number(fields.size ?? 0) / 1024)} KB)`,
+  },
   "admin.user_menus.updated": {
     category: "service",
     label: "Menu user diubah",

@@ -17,6 +17,7 @@ import { isSpecialService } from "../orders/supplier-routed";
 import { usdCentsToIdr } from "../orders/usd-pricing";
 import { UsdRateService } from "../orders/usd-rate.service";
 import { type PriceAdjustment, adjustedPrice, adjustmentError } from "./service-group-pricing";
+import { sanitizeDescription } from "./rich-description";
 
 function serializeGroup(group: {
   id: string;
@@ -158,7 +159,7 @@ export class AdminServicesService {
     menu?: ServiceMenu;
   } & SupplierRoute & UsdPrices & ExtraFieldInput) {
     const name = String(input.name ?? "").trim();
-    const description = String(input.description ?? "").trim() || name;
+    const description = sanitizeDescription(String(input.description ?? "")) || name;
     const estimate = String(input.estimate ?? "").trim() || "—";
     if (!name) {
       throw new BadRequestException("Nama layanan wajib.");
@@ -303,7 +304,7 @@ export class AdminServicesService {
         data: {
           ...(input.name != null ? { name: String(input.name).trim() } : {}),
           ...(input.description != null
-            ? { description: String(input.description).trim() }
+            ? { description: sanitizeDescription(String(input.description)) }
             : {}),
           ...(input.estimate != null
             ? { estimate: String(input.estimate).trim() }

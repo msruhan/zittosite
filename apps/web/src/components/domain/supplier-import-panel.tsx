@@ -17,6 +17,7 @@ import {
   usdCentsToIdr,
 } from "@/lib/format";
 import type { InputType } from "@/lib/imei-list";
+import { RICH_DESCRIPTION_MAX } from "@/lib/rich-text";
 import { cn } from "@/lib/utils";
 import {
   SERVICE_MENU_LABEL,
@@ -50,16 +51,10 @@ function uniqueCode(base: string, taken: Set<string>): string {
   }
 }
 
-function plainText(html: string): string {
-  return html
-    .replace(/<br\s*\/?>/gi, "\n")
-    .replace(/<[^>]+>/g, " ")
-    .replace(/&nbsp;/g, " ")
-    .replace(/&amp;/g, "&")
-    .replace(/[ \t]+/g, " ")
-    .replace(/\n\s*\n+/g, "\n")
-    .trim()
-    .slice(0, 1000);
+/** Supplier INFO keeps its formatting; the API sanitizes it into the rich-text subset. */
+function supplierDescription(info: string, name: string): string {
+  const text = info.trim();
+  return text && text.length <= RICH_DESCRIPTION_MAX ? text : name.slice(0, 1000);
 }
 
 /**
@@ -207,7 +202,7 @@ export function SupplierImportPanel({
           body: JSON.stringify({
             code,
             name: svc.name.slice(0, 120),
-            description: plainText(svc.info) || svc.name.slice(0, 1000),
+            description: supplierDescription(svc.info ?? "", svc.name),
             ...(usd
               ? { priceUsd: priceFor(svc) / 100, costPriceUsd: costFor(svc) / 100 }
               : { price: priceFor(svc), costPrice: costFor(svc) }),

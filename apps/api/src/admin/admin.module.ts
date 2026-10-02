@@ -13,12 +13,19 @@ import { AdminReportsService } from "./admin-reports.service";
 import { SuperAdminGuard } from "./super-admin.guard";
 import { AdminGroupsController } from "./admin-groups.controller";
 import { AdminGroupsService } from "./admin-groups.service";
+import { AdminMediaController, MediaController } from "./media.controller";
 import { OrdersModule } from "../orders/orders.module";
 import { AdminNotifyModule } from "../telegram/admin-notify.module";
 
 @Module({
   imports: [PrismaModule, OrdersModule, AdminNotifyModule],
-  controllers: [AdminAuthController, AdminOpsController, AdminGroupsController],
+  controllers: [
+    AdminAuthController,
+    AdminOpsController,
+    AdminGroupsController,
+    AdminMediaController,
+    MediaController,
+  ],
   providers: [
     AdminGroupsService,
     AdminAuthService,

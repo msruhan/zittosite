@@ -32,6 +32,8 @@ import {
   usdCentsToIdr,
 } from "@/lib/format";
 import { ApiError, api } from "@/lib/api";
+import { RICH_DESCRIPTION_MAX, descriptionToPlain, isBlankRichText } from "@/lib/rich-text";
+import { RichTextEditor } from "@/components/ui/rich-text-editor";
 import { cn } from "@/lib/utils";
 import {
   SERVICE_MENU_LABEL,
@@ -116,7 +118,7 @@ export function ServiceManagement({
     return tabServices.filter(
       (service) =>
         service.name.toLowerCase().includes(needle) ||
-        service.description.toLowerCase().includes(needle) ||
+        descriptionToPlain(service.description).toLowerCase().includes(needle) ||
         (service.code ?? "").toLowerCase().includes(needle),
     );
   }, [tabServices, query]);
@@ -338,7 +340,7 @@ export function ServiceManagement({
                         <div className="max-w-md">
                           <p className="font-medium text-ink">{service.name}</p>
                           <p className="mt-0.5 line-clamp-2 text-body text-ink-soft">
-                            {service.description}
+                            {descriptionToPlain(service.description)}
                           </p>
                         </div>
                       </TD>
@@ -733,6 +735,7 @@ function ServiceFormDialog({
     estimate?: string;
     supplier?: string;
     fields?: string;
+    description?: string;
   }>({});
   const costPrice = draft.costPrice ?? 0;
   const margin = draft.price - costPrice;
@@ -772,6 +775,9 @@ function ServiceFormDialog({
     if (!draft.estimate.trim()) {
       nextErrors.estimate = "Masukkan estimasi pengerjaan.";
     }
+    if (draft.description.length > RICH_DESCRIPTION_MAX) {
+      nextErrors.description = "Deskripsi terlalu panjang. Kurangi teks atau gambar dari URL luar.";
+    }
     if (
       special &&
       draft.inputType === "none" &&
@@ -791,7 +797,7 @@ function ServiceFormDialog({
         priceUsdCents: special ? priceUsdCents : null,
         costUsdCents: special ? costUsdCents : null,
         name: draft.name.trim(),
-        description: draft.description.trim(),
+        description: isBlankRichText(draft.description) ? "" : draft.description.trim(),
         estimate: draft.estimate.trim(),
       });
     } finally {
@@ -803,7 +809,13 @@ function ServiceFormDialog({
 
   return (
     <DialogContent
-      className={creating ? "max-w-2xl" : undefined}
+      className={
+        !importing && draft.fulfillmentChannel === "supplier"
+          ? "max-w-3xl"
+          : creating
+            ? "max-w-2xl"
+            : undefined
+      }
       title={creating ? "Tambah layanan" : "Edit layanan"}
       description={
         importing
@@ -877,19 +889,36 @@ function ServiceFormDialog({
             }
           />
         </Field>
-        <Field label="Deskripsi" htmlFor="description">
-          <Textarea
-            id="description"
-            value={draft.description}
-            placeholder="Jelaskan singkat apa yang didapat user."
-            onChange={(event) =>
-              setDraft((current) => ({
-                ...current,
-                description: event.target.value,
-              }))
-            }
-          />
-        </Field>
+        {draft.fulfillmentChannel === "supplier" ? (
+          <Field
+            label="Deskripsi"
+            htmlFor="description"
+            error={errors.description}
+            hint="Tampil di halaman order user. Atur judul, font, warna, daftar, tautan, dan gambar."
+          >
+            <RichTextEditor
+              id="description"
+              value={draft.description}
+              invalid={Boolean(errors.description)}
+              placeholder="Jelaskan layanan, syarat, dan apa yang didapat user…"
+              onChange={(html) => setDraft((current) => ({ ...current, description: html }))}
+            />
+          </Field>
+        ) : (
+          <Field label="Deskripsi" htmlFor="description">
+            <Textarea
+              id="description"
+              value={draft.description}
+              placeholder="Jelaskan singkat apa yang didapat user."
+              onChange={(event) =>
+                setDraft((current) => ({
+                  ...current,
+                  description: event.target.value,
+                }))
+              }
+            />
+          </Field>
+        )}
         {special ? (
           <UsdPriceFields
             priceText={usdText.price}
