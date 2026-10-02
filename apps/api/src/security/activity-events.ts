@@ -337,6 +337,34 @@ export const ACTIVITY_EVENTS = {
     label: "Layanan dihapus",
     summary: ({ fields }) => `Menghapus layanan ${fields.serviceName ?? fields.serviceId ?? ""}`,
   },
+  "admin.service_group.created": {
+    category: "service",
+    label: "Grup layanan dibuat",
+    summary: ({ fields }) =>
+      `Membuat grup layanan "${fields.groupName ?? ""}" (${fields.serviceCount ?? 0} layanan)`,
+  },
+  "admin.service_group.updated": {
+    category: "service",
+    label: "Grup layanan diperbarui",
+    summary: ({ fields }) => `Memperbarui grup layanan "${fields.groupName ?? ""}"`,
+  },
+  "admin.service_group.deleted": {
+    category: "service",
+    label: "Grup layanan dihapus",
+    summary: ({ fields }) => `Menghapus grup layanan "${fields.groupName ?? ""}"`,
+  },
+  "admin.service_group.price_adjusted": {
+    category: "service",
+    label: "Harga grup diubah",
+    summary: ({ fields }) =>
+      `Mengubah harga ${fields.serviceCount ?? 0} layanan di grup "${fields.groupName ?? ""}" (${fields.adjustment ?? ""})`,
+  },
+  "admin.usd_rate.updated": {
+    category: "service",
+    label: "Kurs USD diubah",
+    summary: ({ fields }) =>
+      `Mengubah kurs Layanan Spesial dari ${rp(fields.previous)} ke ${rp(fields.rate)} per $1 (${fields.serviceCount ?? 0} layanan dihitung ulang)`,
+  },
   "admin.supplier.created": {
     category: "service",
     label: "Supplier API ditambahkan",

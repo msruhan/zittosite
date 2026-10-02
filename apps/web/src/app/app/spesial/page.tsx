@@ -7,13 +7,13 @@ import { serverApi } from "@/lib/server-api";
 import type { OrderDetail } from "@/lib/types";
 
 export const metadata: Metadata = {
-  title: "Order Ceir",
+  title: "Layanan Spesial",
 };
 
-export default async function OrderCeirPage() {
+export default async function SpecialOrdersPage() {
   let orders: OrderDetail[] = [];
   try {
-    orders = await serverApi<OrderDetail[]>("/orders?via=ceir");
+    orders = await serverApi<OrderDetail[]>("/orders?via=special");
   } catch (err) {
     if (err instanceof ApiError && err.status === 401) redirect("/login");
     throw err;
@@ -22,15 +22,15 @@ export default async function OrderCeirPage() {
   return (
     <>
       <PageHeader
-        title="Order Ceir"
-        description="Order Anda untuk layanan Ceir yang diproses otomatis oleh Supplier API."
+        title="Layanan Spesial"
+        description="Order Layanan Spesial Anda yang diproses otomatis oleh Supplier API."
       />
       <OrderHistory
         orders={orders}
         fetchedAt={new Date().toISOString()}
-        emptyTitle="Belum ada order Ceir"
-        emptyDescription="Order layanan Ceir yang Anda buat akan muncul di sini beserta status dan hasilnya."
-        createHref="/app/ceir/order"
+        emptyTitle="Belum ada order Layanan Spesial"
+        emptyDescription="Order Layanan Spesial yang Anda buat akan muncul di sini beserta status dan hasilnya."
+        createHref="/app/spesial/order"
       />
     </>
   );

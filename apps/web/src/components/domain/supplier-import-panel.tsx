@@ -9,9 +9,22 @@ import { Select } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Tag } from "@/components/ui/status-badge";
 import { ApiError, api } from "@/lib/api";
-import { formatRupiah } from "@/lib/format";
+import {
+  formatRupiah,
+  formatUsd,
+  parseUsdInput,
+  sanitizeUsdInput,
+  usdCentsToIdr,
+} from "@/lib/format";
+import type { InputType } from "@/lib/imei-list";
 import { cn } from "@/lib/utils";
-import type { Service, Supplier, SupplierRemoteService } from "@/lib/types";
+import {
+  SERVICE_MENU_LABEL,
+  type Service,
+  type ServiceMenu,
+  type Supplier,
+  type SupplierRemoteService,
+} from "@/lib/types";
 
 const CODE_MAX = 40;
 
@@ -52,11 +65,13 @@ function plainText(html: string): string {
 /**
  * "Tambah dari API": lists a supplier's services; ticked ones become local
  * services on the API Supplier route, priced at supplier cost plus markup.
+ * Layanan Spesial treat the supplier credit as USD; Order Ceir as Rupiah.
  */
 export function SupplierImportPanel({
   formId,
   suppliers,
   existingServices,
+  usdRate,
   onBusyChange,
   onSelectionChange,
   onImported,
@@ -64,6 +79,7 @@ export function SupplierImportPanel({
   formId: string;
   suppliers: Supplier[];
   existingServices: Service[];
+  usdRate: number;
   onBusyChange: (busy: boolean) => void;
   onSelectionChange: (count: number) => void;
   onImported: () => void | Promise<void>;
@@ -78,8 +94,10 @@ export function SupplierImportPanel({
   } | null>(null);
   const [query, setQuery] = React.useState("");
   const [selected, setSelected] = React.useState<Set<string>>(new Set());
-  const [markup, setMarkup] = React.useState(0);
+  const [markupText, setMarkupText] = React.useState("");
   const [online, setOnline] = React.useState(true);
+  const [menu, setMenu] = React.useState<ServiceMenu>("ceir");
+  const [inputType, setInputType] = React.useState<InputType>("imei");
 
   const current = loaded && loaded.supplierId === supplierId ? loaded : null;
   const rows = current?.rows ?? null;
@@ -164,7 +182,13 @@ export function SupplierImportPanel({
     });
   }
 
-  const priceFor = (svc: SupplierRemoteService) => Math.max(1, Math.round(svc.credit) + markup);
+  const usd = menu === "special";
+  const markup = usd ? (parseUsdInput(markupText) ?? 0) : Number(markupText) || 0;
+  /** Rupiah for Order Ceir, USD cents for Layanan Spesial. */
+  const costFor = (svc: SupplierRemoteService) =>
+    usd ? Math.round(svc.credit * 100) : Math.round(svc.credit);
+  const priceFor = (svc: SupplierRemoteService) => Math.max(1, costFor(svc) + markup);
+  const money = (amount: number) => (usd ? formatUsd(amount) : formatRupiah(amount));
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -184,14 +208,17 @@ export function SupplierImportPanel({
             code,
             name: svc.name.slice(0, 120),
             description: plainText(svc.info) || svc.name.slice(0, 1000),
-            price: priceFor(svc),
-            costPrice: Math.round(svc.credit),
+            ...(usd
+              ? { priceUsd: priceFor(svc) / 100, costPriceUsd: costFor(svc) / 100 }
+              : { price: priceFor(svc), costPrice: costFor(svc) }),
             estimate: (svc.time || "Sesuai supplier").slice(0, 60),
             active: online,
             fulfillmentChannel: "supplier",
             assignedAdminIds: [],
             supplierId,
             supplierServiceId: svc.id,
+            menu,
+            inputType: menu === "special" ? inputType : "imei",
           }),
         });
         created++;
@@ -201,7 +228,7 @@ export function SupplierImportPanel({
     }
     onBusyChange(false);
     if (created) {
-      toast.success(`${created} layanan ditambahkan`, {
+      toast.success(`${created} layanan ditambahkan ke ${SERVICE_MENU_LABEL[menu]}`, {
         description: failed.length ? `${failed.length} gagal. ${failed[0]}` : undefined,
       });
       await onImported();
@@ -240,19 +267,78 @@ export function SupplierImportPanel({
             }))}
           />
         </Field>
-        <Field label="Markup per order" htmlFor="import-markup" hint="Ditambahkan ke harga supplier.">
-          <Input
-            id="import-markup"
-            inputMode="numeric"
-            className="font-data tabular"
-            placeholder="0"
-            value={markup || ""}
-            onChange={(event) => {
-              const raw = event.target.value.replace(/\D/g, "");
-              setMarkup(raw ? Number(raw) : 0);
+        <Field
+          label={usd ? "Markup per order ($)" : "Markup per order"}
+          htmlFor="import-markup"
+          hint={
+            usd && markup > 0
+              ? `≈ ${formatRupiah(usdCentsToIdr(markup, usdRate))}`
+              : "Ditambahkan ke harga supplier."
+          }
+        >
+          <div className="relative">
+            <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-body text-ink-soft">
+              {usd ? "$" : "Rp"}
+            </span>
+            <Input
+              id="import-markup"
+              inputMode={usd ? "decimal" : "numeric"}
+              className={cn("font-data tabular", usd ? "pl-7" : "pl-10")}
+              placeholder={usd ? "0.00" : "0"}
+              value={markupText}
+              onChange={(event) =>
+                setMarkupText(
+                  usd
+                    ? sanitizeUsdInput(event.target.value)
+                    : event.target.value.replace(/\D/g, ""),
+                )
+              }
+            />
+          </div>
+        </Field>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Field
+          label="Tampilkan di menu"
+          htmlFor="import-menu"
+          hint={
+            menu === "ceir"
+              ? "User memesan lewat menu Order Ceir. Harga supplier dibaca sebagai Rupiah."
+              : `Harga supplier dibaca sebagai dolar (USD), kurs ${formatRupiah(usdRate)} per $1.`
+          }
+        >
+          <Select
+            id="import-menu"
+            value={menu}
+            onValueChange={(value) => {
+              setMenu(value as ServiceMenu);
+              setMarkupText("");
             }}
+            options={[
+              { value: "ceir", label: SERVICE_MENU_LABEL.ceir },
+              { value: "special", label: SERVICE_MENU_LABEL.special },
+            ]}
           />
         </Field>
+        {menu === "special" ? (
+          <Field
+            label="Field yang diisi user"
+            htmlFor="import-input-type"
+            hint="Berlaku untuk semua layanan yang dipilih."
+          >
+            <Select
+              id="import-input-type"
+              value={inputType}
+              onValueChange={(value) => setInputType(value as InputType)}
+              options={[
+                { value: "imei", label: "IMEI (15 digit)" },
+                { value: "sn", label: "SN (Serial Number)" },
+                { value: "ecid", label: "ECID" },
+              ]}
+            />
+          </Field>
+        ) : null}
       </div>
 
       <label className="relative block">
@@ -337,10 +423,12 @@ export function SupplierImportPanel({
                             ) : (
                               <>
                                 <span className="block font-data text-body font-bold text-ink">
-                                  {formatRupiah(priceFor(svc))}
+                                  {money(priceFor(svc))}
                                 </span>
                                 <span className="block font-data text-label text-ink-faint">
-                                  Modal {formatRupiah(Math.round(svc.credit))}
+                                  {usd
+                                    ? `≈ ${formatRupiah(usdCentsToIdr(priceFor(svc), usdRate))} · modal ${money(costFor(svc))}`
+                                    : `Modal ${money(costFor(svc))}`}
                                 </span>
                               </>
                             )}

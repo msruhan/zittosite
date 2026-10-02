@@ -27,7 +27,11 @@ import {
 } from "../payments/sayabayar.client";
 import { serializeOrderListItem, serializeService } from "./orders.serializer";
 import { parseImeiList } from "./imei-list";
-import { type OrderVia, orderViaWhere, serviceViaWhere } from "./supplier-routed";
+import {
+  type OrderVia,
+  orderViaWhere,
+  serviceViaWhere,
+} from "./supplier-routed";
 import { SupplierDispatch } from "./supplier-dispatch";
 import { TopupService } from "./topup.service";
 import {
@@ -99,19 +103,21 @@ export class OrdersService {
       include: {
         userPrices: { where: { userId }, select: { price: true } },
         groupPrices: { where: { groupId: groupId ?? "" }, select: { price: true } },
+        serviceGroup: { select: { name: true } },
       },
     });
-    return services.map(({ userPrices, groupPrices, ...service }) =>
-      serializeService(
-        service,
-        resolveUserPrice({
-          defaultPrice: service.price,
-          groupId,
-          groupPrice: groupPrices[0]?.price,
-          personalPrice: userPrices[0]?.price,
-        }),
-      ),
-    );
+    return services.map(({ userPrices, groupPrices, serviceGroup, ...service }) => {
+      const price = resolveUserPrice({
+        defaultPrice: service.price,
+        groupId,
+        groupPrice: groupPrices[0]?.price,
+        personalPrice: userPrices[0]?.price,
+      });
+      return {
+        ...serializeService(service, price),
+        group: serviceGroup?.name ?? null,
+      };
+    });
   }
 
   async listOrders(userId: string, q?: string, via?: OrderVia) {

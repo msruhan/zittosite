@@ -81,6 +81,12 @@ enum ServiceInputType {
   ecid
 }
 
+/// User menu for supplier services: Order Ceir or Layanan Spesial.
+enum ServiceMenu {
+  ceir
+  special
+}
+
 enum InvoicePurpose {
   order
   topup
@@ -330,7 +336,15 @@ model Service {
   supplierId         String?             @map("supplier_id")
   /// Remote Dhru SERVICEID at the supplier.
   supplierServiceId  String?             @map("supplier_service_id")
-  /// What the user enters per order. Only Layanan Spesial (non-Ceir supplier services) may use SN/ECID.
+  /// Which user menu lists a supplier service; ignored for Telegram/WhatsApp services.
+  menu               ServiceMenu         @default(ceir)
+  /// Layanan Spesial are priced in USD cents; price/costPrice hold the Rupiah value at the current rate.
+  priceUsdCents      Int?                @map("price_usd_cents")
+  costUsdCents       Int?                @map("cost_usd_cents")
+  /// Layanan Spesial only: admin grouping for bulk price edits and the user's service picker.
+  serviceGroupId     String?             @map("service_group_id")
+  serviceGroup       ServiceGroup?       @relation(fields: [serviceGroupId], references: [id], onDelete: SetNull)
+  /// What the user enters per order. Only Layanan Spesial services may use SN/ECID.
   inputType          ServiceInputType    @default(imei) @map("input_type")
   createdAt          DateTime            @default(now()) @map("created_at")
   updatedAt          DateTime            @updatedAt @map("updated_at")
@@ -340,7 +354,19 @@ model Service {
   userPrices         UserServicePrice[]
   groupPrices        UserGroupPrice[]
 
+  @@index([serviceGroupId])
   @@map("services")
+}
+
+/// Group of Layanan Spesial services; unrelated to UserGroup (user pricing tiers).
+model ServiceGroup {
+  id        String    @id @default(cuid())
+  name      String    @unique
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  services  Service[]
+
+  @@map("service_groups")
 }
 
 /// Pricing group of users; services without a group price use Service.price.

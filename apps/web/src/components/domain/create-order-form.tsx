@@ -45,6 +45,20 @@ export function CreateOrderForm({
   const [serviceError, setServiceError] = React.useState<string>();
   const [submitting, setSubmitting] = React.useState(false);
 
+  const serviceOptions = React.useMemo(() => {
+    const grouped = services.some((s) => s.group);
+    const ordered = grouped
+      ? [...services.filter((s) => s.group)]
+          .sort((a, b) => a.group!.localeCompare(b.group!))
+          .concat(services.filter((s) => !s.group))
+      : services;
+    return ordered.map((item) => ({
+      value: item.id,
+      label: item.name,
+      hint: formatRupiah(priceFor[item.id]),
+      group: grouped ? (item.group ?? "Lainnya") : undefined,
+    }));
+  }, [services, priceFor]);
   const service = services.find((s) => s.id === serviceId) ?? null;
   const inputType: InputType = service?.inputType ?? "imei";
   const label = INPUT_TYPE_LABEL[inputType];
@@ -141,11 +155,7 @@ export function CreateOrderForm({
           }}
           invalid={Boolean(serviceError)}
           placeholder="Pilih layanan"
-          options={services.map((item) => ({
-            value: item.id,
-            label: item.name,
-            hint: formatRupiah(priceFor[item.id]),
-          }))}
+          options={serviceOptions}
         />
       </Field>
 

@@ -4,11 +4,28 @@ import {
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
-import type { FulfillmentChannel, Prisma } from "@prisma/client";
+import type { FulfillmentChannel, Prisma, ServiceMenu } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
 import { serializeService } from "../orders/orders.serializer";
 import { type InputType, parseInputType } from "../orders/imei-list";
-import { isSpecialSupplierService } from "../orders/supplier-routed";
+import { isSpecialService } from "../orders/supplier-routed";
+import { usdCentsToIdr } from "../orders/usd-pricing";
+import { UsdRateService } from "../orders/usd-rate.service";
+import { type PriceAdjustment, adjustedPrice, adjustmentError } from "./service-group-pricing";
+
+function serializeGroup(group: {
+  id: string;
+  name: string;
+  createdAt: Date;
+  services: Array<{ id: string }>;
+}) {
+  return {
+    id: group.id,
+    name: group.name,
+    serviceIds: group.services.map((service) => service.id),
+    createdAt: group.createdAt.toISOString(),
+  };
+}
 
 const SERVICE_INCLUDE = {
   assignments: {
@@ -26,17 +43,20 @@ const SERVICE_INCLUDE = {
     orderBy: { createdAt: "asc" },
   },
   supplier: { select: { id: true, name: true } },
+  serviceGroup: { select: { id: true, name: true } },
 } satisfies Prisma.ServiceInclude;
 
 type SupplierRoute = { supplierId?: string | null; supplierServiceId?: string | null };
+/** Layanan Spesial only; ignored (and cleared) for every other service. */
+type UsdPrices = { priceUsdCents?: number; costUsdCents?: number };
 
 /** SN/ECID are only for Layanan Spesial; regular and Ceir services always take an IMEI. */
 function inputTypeFor(
-  route: { supplierServiceId: string | null },
+  service: { fulfillmentChannel: FulfillmentChannel; menu: ServiceMenu },
   requested: unknown,
   current: InputType = "imei",
 ): InputType {
-  if (!isSpecialSupplierService(route.supplierServiceId)) return "imei";
+  if (!isSpecialService(service)) return "imei";
   if (requested === undefined) return current;
   const type = parseInputType(requested);
   if (!type) throw new BadRequestException("Jenis input harus IMEI, SN, atau ECID.");
@@ -55,6 +75,11 @@ function serializeAdminService(service: ServiceWithAssignments) {
     supplierId: service.supplierId,
     supplierServiceId: service.supplierServiceId,
     supplierName: service.supplier?.name ?? null,
+    menu: service.menu,
+    priceUsdCents: service.priceUsdCents,
+    costUsdCents: service.costUsdCents,
+    serviceGroupId: service.serviceGroupId,
+    serviceGroupName: service.serviceGroup?.name ?? null,
     assignedAdmins: service.assignments.map(({ admin }) => ({
       id: admin.id,
       username: admin.username,
@@ -66,7 +91,20 @@ function serializeAdminService(service: ServiceWithAssignments) {
 
 @Injectable()
 export class AdminServicesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly usdRate: UsdRateService,
+  ) {}
+
+  private async usdPricing(priceUsdCents: number, costUsdCents: number) {
+    const rate = await this.usdRate.get();
+    return {
+      priceUsdCents,
+      costUsdCents,
+      price: usdCentsToIdr(priceUsdCents, rate),
+      costPrice: usdCentsToIdr(costUsdCents, rate),
+    };
+  }
 
   async list() {
     const rows = await this.prisma.service.findMany({
@@ -87,26 +125,35 @@ export class AdminServicesService {
     fulfillmentChannel?: FulfillmentChannel;
     assignedAdminIds?: string[];
     inputType?: unknown;
-  } & SupplierRoute) {
+    menu?: ServiceMenu;
+  } & SupplierRoute & UsdPrices) {
     const name = String(input.name ?? "").trim();
     const description = String(input.description ?? "").trim() || name;
     const estimate = String(input.estimate ?? "").trim() || "—";
-    const price = Number(input.price);
     if (!name) {
       throw new BadRequestException("Nama layanan wajib.");
-    }
-    if (!Number.isFinite(price) || price < 0) {
-      throw new BadRequestException("Harga tidak valid.");
-    }
-    const costPrice = Number(input.costPrice ?? 0);
-    if (!Number.isFinite(costPrice) || costPrice < 0) {
-      throw new BadRequestException("Harga modal tidak valid.");
     }
     const code = await this.uniqueCode(input.code || name);
     const adminIds = await this.validOperatorIds(input.assignedAdminIds ?? []);
     const fulfillmentChannel = input.fulfillmentChannel ?? "telegram";
     const route = await this.supplierRoute(fulfillmentChannel, input);
-    const inputType = inputTypeFor(route, input.inputType);
+    const menu = input.menu ?? "ceir";
+    const inputType = inputTypeFor({ fulfillmentChannel, menu }, input.inputType);
+    const special = isSpecialService({ fulfillmentChannel, menu });
+    if (special && input.priceUsdCents === undefined) {
+      throw new BadRequestException("Harga USD wajib untuk Layanan Spesial.");
+    }
+    const usd = special
+      ? await this.usdPricing(input.priceUsdCents!, input.costUsdCents ?? 0)
+      : null;
+    const price = usd ? usd.price : Number(input.price);
+    if (!Number.isFinite(price) || price < 0) {
+      throw new BadRequestException("Harga tidak valid.");
+    }
+    const costPrice = usd ? usd.costPrice : Number(input.costPrice ?? 0);
+    if (!Number.isFinite(costPrice) || costPrice < 0) {
+      throw new BadRequestException("Harga modal tidak valid.");
+    }
 
     const row = await this.prisma.service.create({
       data: {
@@ -119,7 +166,10 @@ export class AdminServicesService {
         active: input.active !== false,
         fulfillmentChannel,
         ...route,
+        menu,
         inputType,
+        priceUsdCents: usd?.priceUsdCents ?? null,
+        costUsdCents: usd?.costUsdCents ?? null,
         assignments: { create: adminIds.map((adminId) => ({ adminId })) },
       },
       include: SERVICE_INCLUDE,
@@ -155,24 +205,39 @@ export class AdminServicesService {
       fulfillmentChannel?: FulfillmentChannel;
       assignedAdminIds?: string[];
       inputType?: unknown;
-    } & SupplierRoute,
+      menu?: ServiceMenu;
+    } & SupplierRoute & UsdPrices,
   ) {
     const existing = await this.prisma.service.findUnique({ where: { id } });
     if (!existing) throw new NotFoundException("Layanan tidak ditemukan.");
-    const route = await this.supplierRoute(
-      input.fulfillmentChannel ?? existing.fulfillmentChannel,
-      input,
-      existing,
+    const fulfillmentChannel = input.fulfillmentChannel ?? existing.fulfillmentChannel;
+    const route = await this.supplierRoute(fulfillmentChannel, input, existing);
+    const menu = input.menu ?? existing.menu;
+    const inputType = inputTypeFor(
+      { fulfillmentChannel, menu },
+      input.inputType,
+      existing.inputType,
     );
-    const inputType = inputTypeFor(route, input.inputType, existing.inputType);
+    const special = isSpecialService({ fulfillmentChannel, menu });
+    const priceUsdCents = input.priceUsdCents ?? existing.priceUsdCents;
+    if (special && priceUsdCents === null) {
+      throw new BadRequestException("Harga USD wajib untuk Layanan Spesial.");
+    }
+    const usd = special
+      ? await this.usdPricing(priceUsdCents!, input.costUsdCents ?? existing.costUsdCents ?? 0)
+      : null;
 
-    const price =
-      input.price !== undefined ? Number(input.price) : existing.price;
+    const price = usd
+      ? usd.price
+      : input.price !== undefined
+        ? Number(input.price)
+        : existing.price;
     if (!Number.isFinite(price) || price < 0) {
       throw new BadRequestException("Harga tidak valid.");
     }
-    const costPrice =
-      input.costPrice !== undefined
+    const costPrice = usd
+      ? usd.costPrice
+      : input.costPrice !== undefined
         ? Number(input.costPrice)
         : existing.costPrice;
     if (!Number.isFinite(costPrice) || costPrice < 0) {
@@ -210,8 +275,10 @@ export class AdminServicesService {
           ...(input.estimate != null
             ? { estimate: String(input.estimate).trim() }
             : {}),
-          ...(input.price !== undefined ? { price } : {}),
-          ...(input.costPrice !== undefined ? { costPrice } : {}),
+          price,
+          costPrice,
+          priceUsdCents: usd?.priceUsdCents ?? null,
+          costUsdCents: usd?.costUsdCents ?? null,
           ...(typeof input.active === "boolean"
             ? { active: input.active }
             : {}),
@@ -219,12 +286,134 @@ export class AdminServicesService {
             ? { fulfillmentChannel: input.fulfillmentChannel }
             : {}),
           ...route,
+          menu,
           inputType,
+          ...(isSpecialService({ fulfillmentChannel, menu }) ? {} : { serviceGroupId: null }),
         },
         include: SERVICE_INCLUDE,
       });
     });
     return serializeAdminService(row);
+  }
+
+  async listGroups() {
+    const rows = await this.prisma.serviceGroup.findMany({
+      orderBy: { name: "asc" },
+      include: { services: { select: { id: true } } },
+    });
+    return rows.map(serializeGroup);
+  }
+
+  async createGroup(input: { name?: string; serviceIds?: string[] }) {
+    const name = await this.groupName(input.name);
+    const serviceIds = await this.specialServiceIds(input.serviceIds ?? []);
+    const row = await this.prisma.serviceGroup.create({
+      data: { name, services: { connect: serviceIds.map((id) => ({ id })) } },
+      include: { services: { select: { id: true } } },
+    });
+    return serializeGroup(row);
+  }
+
+  /** `serviceIds` replaces the membership; a service moves out of its previous group. */
+  async updateGroup(id: string, input: { name?: string; serviceIds?: string[] }) {
+    const existing = await this.prisma.serviceGroup.findUnique({ where: { id } });
+    if (!existing) throw new NotFoundException("Grup tidak ditemukan.");
+    const name = input.name !== undefined ? await this.groupName(input.name, id) : undefined;
+    const serviceIds =
+      input.serviceIds !== undefined ? await this.specialServiceIds(input.serviceIds) : undefined;
+    const row = await this.prisma.serviceGroup.update({
+      where: { id },
+      data: {
+        ...(name ? { name } : {}),
+        ...(serviceIds ? { services: { set: serviceIds.map((sid) => ({ id: sid })) } } : {}),
+      },
+      include: { services: { select: { id: true } } },
+    });
+    return serializeGroup(row);
+  }
+
+  /** Services stay; they just leave the group. */
+  async removeGroup(id: string) {
+    const existing = await this.prisma.serviceGroup.findUnique({ where: { id } });
+    if (!existing) throw new NotFoundException("Grup tidak ditemukan.");
+    await this.prisma.serviceGroup.delete({ where: { id } });
+    return { id: existing.id, name: existing.name };
+  }
+
+  /**
+   * Bulk-edits the USD selling price of every service in the group (amounts and
+   * rounding are in cents), then reprices them in Rupiah at the current rate.
+   */
+  async adjustGroupPrices(id: string, input: PriceAdjustment) {
+    const invalid = adjustmentError(input);
+    if (invalid) throw new BadRequestException(invalid);
+    const group = await this.prisma.serviceGroup.findUnique({
+      where: { id },
+      include: {
+        services: {
+          select: { id: true, name: true, priceUsdCents: true, costUsdCents: true },
+        },
+      },
+    });
+    if (!group) throw new NotFoundException("Grup tidak ditemukan.");
+    if (!group.services.length) throw new BadRequestException("Grup belum punya layanan.");
+    const unpriced = group.services.find((service) => service.priceUsdCents === null);
+    if (unpriced) {
+      throw new BadRequestException(`Isi dulu harga USD layanan ${unpriced.name}.`);
+    }
+
+    const rate = await this.usdRate.get();
+    const changes = group.services.map((service) => {
+      const before = service.priceUsdCents!;
+      const next = adjustedPrice({ price: before, costPrice: service.costUsdCents ?? 0 }, input);
+      return { id: service.id, name: service.name, before, next };
+    });
+    const tooLow = changes.find((change) => change.next < 1);
+    if (tooLow) {
+      throw new BadRequestException(`Harga ${tooLow.name} menjadi di bawah $0.01.`);
+    }
+    await this.prisma.$transaction(
+      changes.map((change) =>
+        this.prisma.service.update({
+          where: { id: change.id },
+          data: { priceUsdCents: change.next, price: usdCentsToIdr(change.next, rate) },
+        }),
+      ),
+    );
+    return {
+      groupId: group.id,
+      groupName: group.name,
+      changes: changes.map(({ id: serviceId, name, before, next }) => ({
+        serviceId,
+        name,
+        beforeUsdCents: before,
+        afterUsdCents: next,
+      })),
+    };
+  }
+
+  private async groupName(raw: unknown, ignoreId?: string): Promise<string> {
+    const name = String(raw ?? "").trim();
+    if (!name) throw new BadRequestException("Nama grup wajib.");
+    const taken = await this.prisma.serviceGroup.findFirst({
+      where: { name: { equals: name, mode: "insensitive" }, ...(ignoreId ? { NOT: { id: ignoreId } } : {}) },
+      select: { id: true },
+    });
+    if (taken) throw new ConflictException("Nama grup sudah dipakai.");
+    return name;
+  }
+
+  private async specialServiceIds(ids: string[]): Promise<string[]> {
+    const unique = [...new Set(ids)];
+    if (!unique.length) return [];
+    const found = await this.prisma.service.findMany({
+      where: { id: { in: unique }, fulfillmentChannel: "supplier", menu: "special" },
+      select: { id: true },
+    });
+    if (found.length !== unique.length) {
+      throw new BadRequestException("Grup hanya bisa berisi layanan di menu Layanan Spesial.");
+    }
+    return unique;
   }
 
   /** Supplier columns for the channel; clears them for non-supplier channels. */

@@ -11,7 +11,7 @@ import { serverApi } from "@/lib/server-api";
 import type { Service, User } from "@/lib/types";
 
 export const metadata: Metadata = {
-  title: "Buat Order Ceir",
+  title: "Buat Order Layanan Spesial",
 };
 
 const STEPS = [
@@ -27,17 +27,17 @@ const STEPS = [
   },
   {
     step: "03",
-    title: "Hasil tampil di Order Ceir",
-    body: "Status dan hasil pengecekan diperbarui otomatis pada order yang sama.",
+    title: "Hasil tampil di Layanan Spesial",
+    body: "Status dan hasil diperbarui otomatis pada order yang sama.",
   },
 ];
 
-export default async function CreateCeirOrderPage() {
+export default async function CreateSpecialOrderPage() {
   let services: Service[] = [];
   let balance = 0;
   try {
     const [list, me] = await Promise.all([
-      serverApi<Service[]>("/services?via=ceir"),
+      serverApi<Service[]>("/services?via=special"),
       serverApi<User>("/me"),
     ]);
     services = list;
@@ -54,15 +54,15 @@ export default async function CreateCeirOrderPage() {
   return (
     <>
       <Link
-        href="/app/ceir"
+        href="/app/spesial"
         className="mb-3 inline-flex items-center gap-1.5 text-body font-medium text-ink-soft hover:text-ink"
       >
         <ArrowLeft className="size-4" aria-hidden="true" />
-        Order Ceir
+        Layanan Spesial
       </Link>
       <PageHeader
-        title="Buat order Ceir"
-        description="Pilih layanan Ceir, masukkan IMEI, lalu bayar. Order diproses otomatis dan hasilnya tampil di Order Ceir."
+        title="Buat order Layanan Spesial"
+        description="Pilih layanan, masukkan data perangkat yang diminta (IMEI, SN, atau ECID), lalu bayar. Order diproses otomatis."
       />
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,20rem)]">
@@ -77,8 +77,8 @@ export default async function CreateCeirOrderPage() {
               />
             ) : (
               <EmptyState
-                title="Belum ada layanan Ceir"
-                description="Layanan Ceir belum tersedia saat ini. Silakan coba lagi nanti."
+                title="Belum ada Layanan Spesial"
+                description="Layanan Spesial belum tersedia saat ini. Silakan coba lagi nanti."
               />
             )}
           </CardBody>
@@ -112,8 +112,8 @@ export default async function CreateCeirOrderPage() {
               className="mt-0.5 size-4 shrink-0 text-cleared-ink"
             />
             <p className="text-body text-ink-soft">
-              IMEI Anda hanya ditampilkan sebagian pada daftar order dan hanya
-              dipakai untuk memproses pengecekan.
+              Data perangkat Anda hanya ditampilkan sebagian pada daftar order dan
+              hanya dipakai untuk memproses layanan.
             </p>
           </div>
         </aside>

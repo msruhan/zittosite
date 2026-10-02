@@ -21,18 +21,28 @@ import {
   Table,
   TableScroll,
 } from "@/components/ui/table";
+import { ServiceGroupPanel, UsdRateCard } from "@/components/domain/service-group-panel";
 import { SupplierImportPanel } from "@/components/domain/supplier-import-panel";
-import { formatRupiah } from "@/lib/format";
+import {
+  formatRupiah,
+  formatUsd,
+  parseUsdInput,
+  sanitizeUsdInput,
+  usdCentsToIdr,
+} from "@/lib/format";
 import { ApiError, api } from "@/lib/api";
-import { isSpecialSupplierService, type InputType } from "@/lib/imei-list";
+import type { InputType } from "@/lib/imei-list";
 import { cn } from "@/lib/utils";
-import type {
-  Admin,
-  FulfillmentChannel,
-  Service,
-  ServiceAssignee,
-  Supplier,
-  SupplierRemoteService,
+import {
+  SERVICE_MENU_LABEL,
+  type Admin,
+  type FulfillmentChannel,
+  type Service,
+  type ServiceAssignee,
+  type ServiceGroup,
+  type ServiceMenu,
+  type Supplier,
+  type SupplierRemoteService,
 } from "@/lib/types";
 
 const CHANNEL_LABEL: Record<FulfillmentChannel, string> = {
@@ -52,14 +62,20 @@ function toDraft(service: Service): ServiceDraft {
 
 export function ServiceManagement({
   initialServices,
+  initialGroups,
+  initialUsdRate,
   operators,
   suppliers,
 }: {
   initialServices: Service[];
+  initialGroups: ServiceGroup[];
+  initialUsdRate: number;
   operators: Admin[];
   suppliers: Supplier[];
 }) {
   const [services, setServices] = React.useState(initialServices);
+  const [groups, setGroups] = React.useState(initialGroups);
+  const [usdRate, setUsdRate] = React.useState(initialUsdRate);
   const [query, setQuery] = React.useState("");
   const [listTab, setListTab] = React.useState<CreateTab>("manual");
   const [editing, setEditing] = React.useState<ServiceDraft | null>(null);
@@ -82,6 +98,10 @@ export function ServiceManagement({
     () => services.filter((service) => service.fulfillmentChannel !== "supplier"),
     [services],
   );
+  const specialServices = React.useMemo(
+    () => apiServices.filter((service) => service.menu === "special"),
+    [apiServices],
+  );
   const tabServices = listTab === "api" ? apiServices : manualServices;
 
   const filtered = React.useMemo(() => {
@@ -96,7 +116,12 @@ export function ServiceManagement({
   }, [tabServices, query]);
 
   async function reload() {
-    setServices(await api<Service[]>("/admin/services"));
+    const [nextServices, nextGroups] = await Promise.all([
+      api<Service[]>("/admin/services"),
+      api<ServiceGroup[]>("/admin/service-groups"),
+    ]);
+    setServices(nextServices);
+    setGroups(nextGroups);
   }
 
   async function handleSave(next: ServiceDraft) {
@@ -115,7 +140,14 @@ export function ServiceManagement({
             assignedAdminIds: next.assignedAdminIds,
             supplierId: next.supplierId ?? null,
             supplierServiceId: next.supplierServiceId ?? null,
+            menu: next.menu ?? "ceir",
             inputType: next.inputType ?? "imei",
+            ...(next.priceUsdCents != null
+              ? {
+                  priceUsd: next.priceUsdCents / 100,
+                  costPriceUsd: (next.costUsdCents ?? 0) / 100,
+                }
+              : {}),
           }),
         });
       } else {
@@ -132,7 +164,14 @@ export function ServiceManagement({
             assignedAdminIds: next.assignedAdminIds,
             supplierId: next.supplierId ?? null,
             supplierServiceId: next.supplierServiceId ?? null,
+            menu: next.menu ?? "ceir",
             inputType: next.inputType ?? "imei",
+            ...(next.priceUsdCents != null
+              ? {
+                  priceUsd: next.priceUsdCents / 100,
+                  costPriceUsd: (next.costUsdCents ?? 0) / 100,
+                }
+              : {}),
           }),
         });
       }
@@ -244,6 +283,26 @@ export function ServiceManagement({
         </Button>
       </div>
 
+      {listTab === "api" ? (
+        <>
+          <UsdRateCard
+            key={usdRate}
+            rate={usdRate}
+            serviceCount={specialServices.length}
+            onSaved={async (rate) => {
+              setUsdRate(rate);
+              await reload();
+            }}
+          />
+          <ServiceGroupPanel
+            groups={groups}
+            services={specialServices}
+            usdRate={usdRate}
+            onChanged={reload}
+          />
+        </>
+      ) : null}
+
       <Card>
         {filtered.length > 0 ? (
           <>
@@ -272,7 +331,15 @@ export function ServiceManagement({
                         </div>
                       </TD>
                       <TD>
-                        <DataValue emphasis>
+                        {service.priceUsdCents != null ? (
+                          <DataValue emphasis className="block">
+                            {formatUsd(service.priceUsdCents)}
+                          </DataValue>
+                        ) : null}
+                        <DataValue
+                          emphasis={service.priceUsdCents == null}
+                          className={service.priceUsdCents != null ? "text-ink-soft" : undefined}
+                        >
                           {formatRupiah(service.price)}
                         </DataValue>
                         <p className="mt-0.5 whitespace-nowrap text-label text-ink-soft">
@@ -303,6 +370,12 @@ export function ServiceManagement({
                         <Tag className="border-hairline bg-mist text-ink">
                           {CHANNEL_LABEL[service.fulfillmentChannel ?? "telegram"]}
                         </Tag>
+                        {service.fulfillmentChannel === "supplier" ? (
+                          <p className="mt-1 whitespace-nowrap text-label text-ink-soft">
+                            Menu {SERVICE_MENU_LABEL[service.menu ?? "ceir"]}
+                            {service.serviceGroupName ? ` · ${service.serviceGroupName}` : ""}
+                          </p>
+                        ) : null}
                       </TD>
                       <TD>
                         {service.fulfillmentChannel === "whatsapp" ? (
@@ -417,6 +490,7 @@ export function ServiceManagement({
             creating={creating}
             initialTab={listTab}
             existingServices={services}
+            usdRate={usdRate}
             onCancel={() => {
               setEditing(null);
               setCreating(false);
@@ -611,6 +685,7 @@ function ServiceFormDialog({
   creating,
   initialTab,
   existingServices,
+  usdRate,
   onCancel,
   onSave,
   onImported,
@@ -621,6 +696,7 @@ function ServiceFormDialog({
   creating: boolean;
   initialTab: CreateTab;
   existingServices: Service[];
+  usdRate: number;
   onCancel: () => void;
   onSave: (service: ServiceDraft) => void | Promise<void>;
   onImported: () => void | Promise<void>;
@@ -647,6 +723,13 @@ function ServiceFormDialog({
   }>({});
   const costPrice = draft.costPrice ?? 0;
   const margin = draft.price - costPrice;
+  const special = draft.fulfillmentChannel === "supplier" && draft.menu === "special";
+  const [usdText, setUsdText] = React.useState(() => ({
+    price: service.priceUsdCents != null ? (service.priceUsdCents / 100).toFixed(2) : "",
+    cost: service.costUsdCents != null ? (service.costUsdCents / 100).toFixed(2) : "",
+  }));
+  const priceUsdCents = parseUsdInput(usdText.price);
+  const costUsdCents = parseUsdInput(usdText.cost) ?? 0;
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -654,11 +737,18 @@ function ServiceFormDialog({
     if (!draft.name.trim()) {
       nextErrors.name = "Masukkan nama layanan.";
     }
-    if (!draft.price || draft.price < 1) {
-      nextErrors.price = "Harga harus lebih dari Rp0.";
-    }
-    if (costPrice > draft.price) {
-      nextErrors.costPrice = "Harga modal melebihi harga jual.";
+    if (special) {
+      if (!priceUsdCents) nextErrors.price = "Harga harus lebih dari $0.";
+      else if (costUsdCents > priceUsdCents) {
+        nextErrors.costPrice = "Harga modal melebihi harga jual.";
+      }
+    } else {
+      if (!draft.price || draft.price < 1) {
+        nextErrors.price = "Harga harus lebih dari Rp0.";
+      }
+      if (costPrice > draft.price) {
+        nextErrors.costPrice = "Harga modal melebihi harga jual.";
+      }
     }
     if (
       draft.fulfillmentChannel === "supplier" &&
@@ -676,6 +766,8 @@ function ServiceFormDialog({
     try {
       await onSave({
         ...draft,
+        priceUsdCents: special ? priceUsdCents : null,
+        costUsdCents: special ? costUsdCents : null,
         name: draft.name.trim(),
         description: draft.description.trim(),
         estimate: draft.estimate.trim(),
@@ -741,6 +833,7 @@ function ServiceFormDialog({
           formId="supplier-import-form"
           suppliers={suppliers}
           existingServices={existingServices}
+          usdRate={usdRate}
           onBusyChange={setImportBusy}
           onSelectionChange={setImportCount}
           onImported={onImported}
@@ -775,6 +868,17 @@ function ServiceFormDialog({
             }
           />
         </Field>
+        {special ? (
+          <UsdPriceFields
+            priceText={usdText.price}
+            costText={usdText.cost}
+            usdRate={usdRate}
+            priceError={errors.price}
+            costError={errors.costPrice}
+            onChange={setUsdText}
+          />
+        ) : (
+          <>
         <Field label="Harga" htmlFor="price" required error={errors.price}>
           <Input
             id="price"
@@ -817,6 +921,8 @@ function ServiceFormDialog({
             }}
           />
         </Field>
+          </>
+        )}
         <Field
           label="Estimasi pengerjaan"
           htmlFor="estimate"
@@ -874,21 +980,55 @@ function ServiceFormDialog({
             suppliers={suppliers}
             supplierId={draft.supplierId ?? null}
             supplierServiceId={draft.supplierServiceId ?? null}
+            usd={special}
             error={errors.supplier}
-            onChange={(next) =>
+            onChange={(next) => {
               setDraft((current) => ({
                 ...current,
                 supplierId: next.supplierId,
                 supplierServiceId: next.supplierServiceId,
-                ...(next.credit !== undefined
+                ...(next.credit !== undefined && !special
                   ? { costPrice: Math.round(next.credit) }
                   : {}),
-              }))
-            }
+              }));
+              if (next.credit !== undefined && special) {
+                setUsdText((current) => ({ ...current, cost: next.credit!.toFixed(2) }));
+              }
+            }}
           />
         ) : null}
-        {draft.fulfillmentChannel === "supplier" &&
-        isSpecialSupplierService(draft.supplierServiceId) ? (
+        {draft.fulfillmentChannel === "supplier" ? (
+          <Field
+            label="Tampilkan di menu"
+            htmlFor="menu"
+            hint="Menu user tempat layanan ini bisa dipesan."
+          >
+            <Select
+              id="menu"
+              value={draft.menu ?? "ceir"}
+              onValueChange={(value) =>
+              {
+                setDraft((current) => ({
+                  ...current,
+                  menu: value as ServiceMenu,
+                  ...(value === "ceir" ? { inputType: "imei" as InputType } : {}),
+                }));
+                if (value === "special" && !usdText.price && draft.price > 0) {
+                  setUsdText({
+                    price: (draft.price / usdRate).toFixed(2),
+                    cost: costPrice > 0 ? (costPrice / usdRate).toFixed(2) : "",
+                  });
+                }
+              }
+              }
+              options={[
+                { value: "ceir", label: SERVICE_MENU_LABEL.ceir },
+                { value: "special", label: SERVICE_MENU_LABEL.special },
+              ]}
+            />
+          </Field>
+        ) : null}
+        {draft.fulfillmentChannel === "supplier" && draft.menu === "special" ? (
           <Field
             label="Field yang diisi user"
             htmlFor="inputType"
@@ -931,12 +1071,15 @@ function SupplierPicker({
   suppliers,
   supplierId,
   supplierServiceId,
+  usd,
   error,
   onChange,
 }: {
   suppliers: Supplier[];
   supplierId: string | null;
   supplierServiceId: string | null;
+  /** Layanan Spesial: the supplier credit is in USD. */
+  usd: boolean;
   error?: string;
   onChange: (next: {
     supplierId: string | null;
@@ -985,7 +1128,9 @@ function SupplierPicker({
   const selected = remote?.find((svc) => svc.id === supplierServiceId);
   const options: SelectOption[] = (remote ?? []).map((svc) => ({
     value: svc.id,
-    label: `${svc.name} — ${formatRupiah(Math.round(svc.credit))}`,
+    label: `${svc.name} — ${
+      usd ? formatUsd(Math.round(svc.credit * 100)) : formatRupiah(Math.round(svc.credit))
+    }`,
     group: svc.group,
   }));
   if (supplierServiceId && !selected) {
@@ -1038,6 +1183,96 @@ function SupplierPicker({
           />
         </Field>
       ) : null}
+    </div>
+  );
+}
+
+function UsdPriceFields({
+  priceText,
+  costText,
+  usdRate,
+  priceError,
+  costError,
+  onChange,
+}: {
+  priceText: string;
+  costText: string;
+  usdRate: number;
+  priceError?: string;
+  costError?: string;
+  onChange: (next: { price: string; cost: string }) => void;
+}) {
+  const price = parseUsdInput(priceText);
+  const cost = parseUsdInput(costText) ?? 0;
+  const margin = price !== null ? price - cost : null;
+  const rateLabel = `kurs ${formatRupiah(usdRate)} per $1`;
+
+  return (
+    <>
+      <Field
+        label="Harga (USD)"
+        htmlFor="priceUsd"
+        required
+        error={priceError}
+        hint={
+          price !== null
+            ? `User membayar ${formatRupiah(usdCentsToIdr(price, usdRate))} (${rateLabel}).`
+            : `Layanan Spesial dihargai dalam dolar; Rupiah dihitung dari ${rateLabel}.`
+        }
+      >
+        <UsdInput
+          id="priceUsd"
+          value={priceText}
+          invalid={Boolean(priceError)}
+          onChange={(value) => onChange({ price: value, cost: costText })}
+        />
+      </Field>
+      <Field
+        label="Harga modal (USD)"
+        htmlFor="costPriceUsd"
+        error={costError}
+        hint={
+          cost > 0 && margin !== null
+            ? `${formatRupiah(usdCentsToIdr(cost, usdRate))} · untung per order ${formatUsd(margin)} (${formatRupiah(usdCentsToIdr(margin, usdRate))}). Tidak terlihat oleh user.`
+            : "Harga dari supplier per order. Tidak terlihat oleh user."
+        }
+      >
+        <UsdInput
+          id="costPriceUsd"
+          value={costText}
+          invalid={Boolean(costError)}
+          onChange={(value) => onChange({ price: priceText, cost: value })}
+        />
+      </Field>
+    </>
+  );
+}
+
+function UsdInput({
+  id,
+  value,
+  invalid,
+  onChange,
+}: {
+  id: string;
+  value: string;
+  invalid: boolean;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <div className="relative">
+      <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-body text-ink-soft">
+        $
+      </span>
+      <Input
+        id={id}
+        inputMode="decimal"
+        className="pl-7 font-data tabular"
+        placeholder="0.00"
+        value={value}
+        invalid={invalid}
+        onChange={(event) => onChange(sanitizeUsdInput(event.target.value))}
+      />
     </div>
   );
 }

@@ -10,12 +10,6 @@ export const INPUT_TYPE_LABEL: Record<InputType, string> = {
   ecid: "ECID",
 };
 
-/** CeirBot's Layanan Ceir checks use `ceir-<code>` ids; every other supplier service is Layanan Spesial. */
-export function isSpecialSupplierService(supplierServiceId: string | null | undefined): boolean {
-  const id = supplierServiceId?.trim().toLowerCase();
-  return Boolean(id) && !id!.startsWith("ceir-");
-}
-
 const CODE_MIN = 4;
 const CODE_MAX = 40;
 

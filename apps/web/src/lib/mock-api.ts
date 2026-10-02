@@ -167,6 +167,15 @@ export async function mockApi<T>(
     return services as T;
   }
 
+  if (method === "GET" && p === "/admin/usd-rate") {
+    return { rate: 17_000 } as T;
+  }
+
+  if (method === "GET" && p === "/admin/service-groups") {
+    if (audience !== "admin") unauthorized();
+    return [] as T;
+  }
+
   if (method === "GET" && p === "/admin/admins") {
     if (audience !== "admin") unauthorized();
     return admins.map((a, i) => ({

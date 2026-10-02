@@ -67,7 +67,7 @@ export function PaymentPanel({
   checkoutUrl?: string | null;
   /** Invoice issued by SayaBayar; the webhook settles it, so poll for the result. */
   gateway?: boolean;
-  /** Where the order belongs (regular Order or Order Ceir) once paid or expired. */
+  /** Where the order belongs (regular Order, Order Ceir, or Layanan Spesial) once paid or expired. */
   menu?: OrderMenu;
   /** Supplier API orders run without an admin queue. */
   automated?: boolean;

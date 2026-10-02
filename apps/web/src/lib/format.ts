@@ -36,6 +36,35 @@ export function formatRupiah(amount: number): string {
   }).format(amount);
 }
 
+/** Layanan Spesial prices are stored as USD cents. */
+export function formatUsd(cents: number): string {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(cents / 100);
+}
+
+export const DEFAULT_USD_RATE = 17_000;
+
+export function usdCentsToIdr(cents: number, rate: number): number {
+  return Math.round((cents * rate) / 100);
+}
+
+/** Dollar input ("1.25" or "1,25") to cents; null when empty or invalid. */
+export function parseUsdInput(raw: string): number | null {
+  const dollars = Number(raw.replace(",", "."));
+  return raw.trim() && Number.isFinite(dollars) && dollars >= 0 ? Math.round(dollars * 100) : null;
+}
+
+/** Keeps digits and one decimal separator with at most two decimals. */
+export function sanitizeUsdInput(raw: string): string {
+  const cleaned = raw.replace(/[^\d.,]/g, "").replace(",", ".");
+  const [whole, ...rest] = cleaned.split(".");
+  return rest.length ? `${whole}.${rest.join("").slice(0, 2)}` : whole;
+}
+
 export function formatDateTime(iso: string): string {
   const p = jakartaParts(iso);
   return `${p.day} ${p.month} ${p.year}, ${p.hour}:${p.minute}`;

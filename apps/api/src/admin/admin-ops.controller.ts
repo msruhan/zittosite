@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -24,6 +25,9 @@ import { AdminTotpService } from "./admin-totp.service";
 import { AuditLogService } from "../security/audit-log.service";
 import { SENSITIVE_THROTTLE } from "../security/throttle";
 import { parseAdjustment } from "../orders/balance";
+import { type PriceAdjustment, ROUND_TO } from "./service-group-pricing";
+import { parseUsdCents, parseUsdRate } from "../orders/usd-pricing";
+import { UsdRateService } from "../orders/usd-rate.service";
 import {
   optBoolean,
   optEnum,
@@ -41,6 +45,7 @@ type Json = Record<string, unknown>;
 const TOTP_HEADER = "x-totp-code";
 const FULFILLMENT_CHANNELS = ["telegram", "whatsapp", "supplier"] as const;
 const INPUT_TYPES = ["imei", "sn", "ecid"] as const;
+const SERVICE_MENUS = ["ceir", "special"] as const;
 const USER_ROLES = ["customer", "testing"] as const;
 const WIB_OFFSET_MS = 7 * 60 * 60 * 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -73,6 +78,7 @@ export class AdminOpsController {
     private readonly totp: AdminTotpService,
     private readonly audit: AuditLogService,
     private readonly customerOrders: OrdersService,
+    private readonly usdRate: UsdRateService,
   ) {}
 
   @Get("dashboard/stats")
@@ -237,6 +243,9 @@ export class AdminOpsController {
       supplierId: optNullableString(body.supplierId, "Supplier", 40),
       supplierServiceId: optNullableString(body.supplierServiceId, "Layanan supplier", 120),
       inputType: optEnum(body.inputType, INPUT_TYPES, "Jenis input"),
+      menu: optEnum(body.menu, SERVICE_MENUS, "Menu layanan"),
+      priceUsdCents: parseUsdCents(body.priceUsd, "Harga USD"),
+      costUsdCents: parseUsdCents(body.costPriceUsd, "Harga modal USD"),
     });
     this.audit.record("admin.service.created", {
       actorId: req.admin.sub,
@@ -266,6 +275,9 @@ export class AdminOpsController {
       supplierId: optNullableString(body.supplierId, "Supplier", 40),
       supplierServiceId: optNullableString(body.supplierServiceId, "Layanan supplier", 120),
       inputType: optEnum(body.inputType, INPUT_TYPES, "Jenis input"),
+      menu: optEnum(body.menu, SERVICE_MENUS, "Menu layanan"),
+      priceUsdCents: parseUsdCents(body.priceUsd, "Harga USD"),
+      costUsdCents: parseUsdCents(body.costPriceUsd, "Harga modal USD"),
     };
     const service = await this.services.update(id, input);
     this.audit.record("admin.service.updated", {
@@ -277,6 +289,7 @@ export class AdminOpsController {
       active: input.active,
       fulfillmentChannel: input.fulfillmentChannel,
       inputType: input.inputType,
+      menu: input.menu,
       assignedAdmins: input.assignedAdminIds?.join(","),
     });
     return service;
@@ -292,6 +305,110 @@ export class AdminOpsController {
       serviceName: removed.name,
     });
     return { ok: true };
+  }
+
+  @Get("service-groups")
+  @UseGuards(SuperAdminGuard)
+  listServiceGroups() {
+    return this.services.listGroups();
+  }
+
+  @Post("service-groups")
+  @UseGuards(SuperAdminGuard)
+  async createServiceGroup(@Req() req: AdminReq, @Body() body: Json) {
+    const group = await this.services.createGroup({
+      name: optString(body.name, "Nama grup", 80),
+      serviceIds: optIdList(body.serviceIds, "Layanan", 500),
+    });
+    this.audit.record("admin.service_group.created", {
+      actorId: req.admin.sub,
+      groupId: group.id,
+      groupName: group.name,
+      serviceCount: group.serviceIds.length,
+    });
+    return group;
+  }
+
+  @Patch("service-groups/:id")
+  @UseGuards(SuperAdminGuard)
+  async updateServiceGroup(@Req() req: AdminReq, @Param("id") id: string, @Body() body: Json) {
+    const group = await this.services.updateGroup(id, {
+      name: optString(body.name, "Nama grup", 80),
+      serviceIds: optIdList(body.serviceIds, "Layanan", 500),
+    });
+    this.audit.record("admin.service_group.updated", {
+      actorId: req.admin.sub,
+      groupId: group.id,
+      groupName: group.name,
+      serviceCount: group.serviceIds.length,
+    });
+    return group;
+  }
+
+  @Delete("service-groups/:id")
+  @UseGuards(SuperAdminGuard)
+  async deleteServiceGroup(@Req() req: AdminReq, @Param("id") id: string) {
+    const removed = await this.services.removeGroup(id);
+    this.audit.record("admin.service_group.deleted", {
+      actorId: req.admin.sub,
+      groupId: removed.id,
+      groupName: removed.name,
+    });
+    return { ok: true };
+  }
+
+  @Post("service-groups/:id/adjust-price")
+  @UseGuards(SuperAdminGuard)
+  async adjustServiceGroupPrice(
+    @Req() req: AdminReq,
+    @Param("id") id: string,
+    @Body() body: Json,
+  ) {
+    const mode = optEnum(body.mode, ["amount", "percent"] as const, "Jenis perubahan") ?? "amount";
+    const value = Number(body.value);
+    const roundTo = Number(body.roundToCents ?? 1);
+    if (!ROUND_TO.includes(roundTo as PriceAdjustment["roundTo"])) {
+      throw new BadRequestException("Pembulatan tidak valid.");
+    }
+    const adjustment: PriceAdjustment = {
+      direction: optEnum(body.direction, ["increase", "decrease"] as const, "Arah perubahan") ?? "increase",
+      mode,
+      base: optEnum(body.base, ["price", "cost"] as const, "Dasar harga") ?? "price",
+      // The client sends dollars for "amount"; prices are stored in cents.
+      value: mode === "amount" ? Math.round(value * 100) : value,
+      roundTo: roundTo as PriceAdjustment["roundTo"],
+    };
+    const result = await this.services.adjustGroupPrices(id, adjustment);
+    this.audit.record("admin.service_group.price_adjusted", {
+      actorId: req.admin.sub,
+      groupId: result.groupId,
+      groupName: result.groupName,
+      serviceCount: result.changes.length,
+      adjustment: `${adjustment.direction === "increase" ? "+" : "−"}${
+        mode === "percent" ? `${value}%` : `$${value.toFixed(2)}`
+      } dari ${adjustment.base === "cost" ? "harga modal" : "harga jual"}`,
+    });
+    return result;
+  }
+
+  @Get("usd-rate")
+  @UseGuards(SuperAdminGuard)
+  async getUsdRate() {
+    return { rate: await this.usdRate.get() };
+  }
+
+  @Patch("usd-rate")
+  @UseGuards(SuperAdminGuard)
+  async setUsdRate(@Req() req: AdminReq, @Body() body: Json) {
+    const previous = await this.usdRate.get();
+    const result = await this.usdRate.set(parseUsdRate(body.rate), req.admin.sub);
+    this.audit.record("admin.usd_rate.updated", {
+      actorId: req.admin.sub,
+      previous,
+      rate: result.rate,
+      serviceCount: result.repriced,
+    });
+    return result;
   }
 
   @Get("orders")

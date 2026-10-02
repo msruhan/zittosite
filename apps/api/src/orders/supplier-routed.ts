@@ -1,4 +1,4 @@
-import type { Prisma } from "@prisma/client";
+import type { Prisma, ServiceMenu } from "@prisma/client";
 
 /**
  * Orders handled by an upstream Dhru supplier (e.g. CeirBot): already
@@ -8,27 +8,39 @@ export const SUPPLIER_ROUTED_ORDER: Prisma.OrderWhereInput = {
   OR: [{ supplierId: { not: null } }, { service: { fulfillmentChannel: "supplier" } }],
 };
 
-/** Website split: "supplier" = Order Ceir, "manual" = regular orders (Telegram/WhatsApp). */
-export type OrderVia = "supplier" | "manual";
+/**
+ * Website split: "manual" = regular orders (Telegram/WhatsApp), "supplier" = every
+ * supplier order, "ceir" / "special" = supplier orders under Order Ceir / Layanan Spesial.
+ */
+export type OrderVia = "supplier" | "manual" | "ceir" | "special";
+
+const VIAS: readonly OrderVia[] = ["supplier", "manual", "ceir", "special"];
 
 export function parseVia(value?: string): OrderVia | undefined {
-  return value === "supplier" || value === "manual" ? value : undefined;
+  return VIAS.find((via) => via === value);
+}
+
+function menuOf(via: OrderVia): ServiceMenu | undefined {
+  return via === "ceir" || via === "special" ? via : undefined;
 }
 
 export function orderViaWhere(via?: OrderVia): Prisma.OrderWhereInput {
-  if (via === "supplier") return { AND: [SUPPLIER_ROUTED_ORDER] };
+  if (!via) return {};
   if (via === "manual") return { NOT: SUPPLIER_ROUTED_ORDER };
-  return {};
+  const menu = menuOf(via);
+  return { AND: [SUPPLIER_ROUTED_ORDER, ...(menu ? [{ service: { menu } }] : [])] };
 }
 
-/** CeirBot's Layanan Ceir checks use `ceir-<code>` ids; every other supplier service is Layanan Spesial. */
-export function isSpecialSupplierService(supplierServiceId: string | null | undefined): boolean {
-  const id = supplierServiceId?.trim().toLowerCase();
-  return Boolean(id) && !id!.startsWith("ceir-");
+export function isSpecialService(service: {
+  fulfillmentChannel: string;
+  menu: ServiceMenu;
+}): boolean {
+  return service.fulfillmentChannel === "supplier" && service.menu === "special";
 }
 
 export function serviceViaWhere(via?: OrderVia): Prisma.ServiceWhereInput {
-  if (via === "supplier") return { fulfillmentChannel: "supplier" };
+  if (!via) return {};
   if (via === "manual") return { fulfillmentChannel: { not: "supplier" } };
-  return {};
+  const menu = menuOf(via);
+  return { fulfillmentChannel: "supplier", ...(menu ? { menu } : {}) };
 }

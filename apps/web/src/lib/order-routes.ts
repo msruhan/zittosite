@@ -18,7 +18,14 @@ const CEIR: OrderMenu = {
   createHref: "/app/ceir/order",
 };
 
-/** Supplier API services are created under Order Ceir; all orders share one history. */
-export function orderMenu(service?: Pick<Service, "via"> | null): OrderMenu {
-  return service?.via === "supplier" ? CEIR : REGULAR;
+const SPECIAL: OrderMenu = {
+  listHref: "/app/riwayat",
+  listLabel: "Riwayat order",
+  createHref: "/app/spesial/order",
+};
+
+/** Supplier API services are created under Order Ceir or Layanan Spesial; all orders share one history. */
+export function orderMenu(service?: Pick<Service, "via" | "menu"> | null): OrderMenu {
+  if (service?.via !== "supplier") return REGULAR;
+  return service.menu === "special" ? SPECIAL : CEIR;
 }
