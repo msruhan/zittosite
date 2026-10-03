@@ -86,6 +86,7 @@ export function ServiceManagement({
   const [usdRate, setUsdRate] = React.useState(initialUsdRate);
   const [query, setQuery] = React.useState("");
   const [supplierFilter, setSupplierFilter] = React.useState("all");
+  const [groupFilter, setGroupFilter] = React.useState("all");
   const [listTab, setListTab] = React.useState<CreateTab>("manual");
   const [editing, setEditing] = React.useState<ServiceDraft | null>(null);
   const [creating, setCreating] = React.useState(false);
@@ -133,10 +134,36 @@ export function ServiceManagement({
       ? supplierFilter
       : "all";
 
+  const groupOptions = React.useMemo<SelectOption[]>(() => {
+    const counts = new Map<string, number>();
+    let ungrouped = 0;
+    for (const service of specialServices) {
+      if (service.serviceGroupId) {
+        counts.set(service.serviceGroupId, (counts.get(service.serviceGroupId) ?? 0) + 1);
+      } else {
+        ungrouped += 1;
+      }
+    }
+    return [
+      { value: "all", label: "Semua grup" },
+      ...groups
+        .filter((group) => counts.has(group.id))
+        .map((group) => ({ value: group.id, label: `${group.name} (${counts.get(group.id)})` })),
+      ...(ungrouped ? [{ value: "none", label: `Tanpa grup (${ungrouped})` }] : []),
+    ];
+  }, [specialServices, groups]);
+  const activeGroup =
+    listTab === "api" && groupOptions.some((o) => o.value === groupFilter) ? groupFilter : "all";
+
   const filtered = React.useMemo(() => {
     const needle = query.trim().toLowerCase();
     return tabServices.filter((service) => {
       if (activeSupplier !== "all" && service.supplierId !== activeSupplier) return false;
+      if (activeGroup === "none") {
+        if (service.menu !== "special" || service.serviceGroupId) return false;
+      } else if (activeGroup !== "all" && service.serviceGroupId !== activeGroup) {
+        return false;
+      }
       if (!needle) return true;
       return (
         service.name.toLowerCase().includes(needle) ||
@@ -144,7 +171,7 @@ export function ServiceManagement({
         (service.code ?? "").toLowerCase().includes(needle)
       );
     });
-  }, [tabServices, query, activeSupplier]);
+  }, [tabServices, query, activeSupplier, activeGroup]);
 
   async function reload() {
     const [nextServices, nextGroups] = await Promise.all([
@@ -341,13 +368,22 @@ export function ServiceManagement({
           />
         </label>
         {listTab === "api" ? (
-          <Select
-            ariaLabel="Filter Supplier API"
-            value={activeSupplier}
-            onValueChange={setSupplierFilter}
-            options={supplierOptions}
-            className="sm:w-64"
-          />
+          <>
+            <Select
+              ariaLabel="Filter Supplier API"
+              value={activeSupplier}
+              onValueChange={setSupplierFilter}
+              options={supplierOptions}
+              className="sm:w-64"
+            />
+            <Select
+              ariaLabel="Filter Grup Layanan Spesial"
+              value={activeGroup}
+              onValueChange={setGroupFilter}
+              options={groupOptions}
+              className="sm:w-64"
+            />
+          </>
         ) : null}
       </div>
 
