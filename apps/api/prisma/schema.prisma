@@ -137,6 +137,7 @@ model User {
   identities      UserIdentity[]
   linkTokens      TelegramLinkToken[]
   orders          Order[]
+  servicePrices   UserServicePrice[]
   balanceEntries  BalanceEntry[]
   topupInvoices   PaymentInvoice[]
 
@@ -341,6 +342,7 @@ model Service {
   supplier           Supplier?           @relation(fields: [supplierId], references: [id], onDelete: SetNull)
   orders             Order[]
   assignments        ServiceAssignment[]
+  userPrices         UserServicePrice[]
   groupPrices        UserGroupPrice[]
 
   @@index([serviceGroupId])
@@ -369,6 +371,21 @@ model UserGroup {
   prices      UserGroupPrice[]
 
   @@map("user_groups")
+}
+
+/// Per-user exception; wins over the user's group price and the service default.
+model UserServicePrice {
+  userId    String   @map("user_id")
+  serviceId String   @map("service_id")
+  price     Int
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  service   Service  @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+
+  @@id([userId, serviceId])
+  @@index([serviceId])
+  @@map("user_service_prices")
 }
 
 model UserGroupPrice {

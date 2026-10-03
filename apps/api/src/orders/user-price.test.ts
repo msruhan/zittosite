@@ -13,3 +13,19 @@ test("group members pay the group price, else the default", () => {
   );
   assert.equal(resolveUserPrice({ defaultPrice: 150_000, groupId: "g1" }), 150_000);
 });
+
+test("a user's own price wins over the group and the default", () => {
+  assert.equal(
+    resolveUserPrice({
+      defaultPrice: 150_000,
+      groupId: "g1",
+      groupPrice: 130_000,
+      userPrice: 120_000,
+    }),
+    120_000,
+  );
+  assert.equal(
+    resolveUserPrice({ defaultPrice: 150_000, groupId: null, userPrice: 160_000 }),
+    160_000,
+  );
+});

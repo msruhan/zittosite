@@ -149,6 +149,8 @@ export interface User {
   /** Admin Users page only: pricing group; without one the user pays default prices. */
   groupId?: string | null;
   groupName?: string | null;
+  /** Admin Users page only: the user's own prices; they win over the group price. */
+  customPrices?: UserServicePrice[];
   creditBalance?: number;
   /** `testing` accounts order normally but are left out of statistics. */
   role?: "customer" | "testing";

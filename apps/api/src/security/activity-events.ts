@@ -255,6 +255,14 @@ export const ACTIVITY_EVENTS = {
       return `Memperbarui data user ${target ?? ""}${extra.length ? ` (${extra.join(", ")})` : ""}`;
     },
   },
+  "admin.user.prices_updated": {
+    category: "user",
+    label: "Harga khusus user diubah",
+    summary: ({ fields, target }) =>
+      `Mengatur harga khusus ${target ?? ""} (${fields.pricesSet ?? 0} diatur, ${
+        fields.pricesRemoved ?? 0
+      } kembali ke harga group/default)`,
+  },
   "admin.user.deleted": {
     category: "user",
     label: "User dihapus",

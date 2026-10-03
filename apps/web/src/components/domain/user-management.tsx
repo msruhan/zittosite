@@ -265,6 +265,15 @@ export function UserManagement({
                         ) : (
                           <p className="whitespace-nowrap text-ink-soft">Tanpa group</p>
                         )}
+                        {user.customPrices?.length ? (
+                          <button
+                            type="button"
+                            onClick={() => setViewingPrices(user)}
+                            className="mt-1 block whitespace-nowrap text-label font-medium text-hold-ink underline-offset-2 hover:underline"
+                          >
+                            + {user.customPrices.length} harga khusus
+                          </button>
+                        ) : null}
                       </TD>
                       <TD className="whitespace-nowrap">
                         <div className="flex items-center gap-1">
@@ -320,8 +329,8 @@ export function UserManagement({
                           <Button
                             size="icon"
                             variant="ghost"
-                            aria-label={`Lihat harga ${user.fullName}`}
-                            title="Lihat harga layanan user ini"
+                            aria-label={`Harga ${user.fullName}`}
+                            title="Lihat & atur harga layanan user ini"
                             onClick={() => setViewingPrices(user)}
                           >
                             <Eye className="size-4 text-action" />
@@ -409,6 +418,10 @@ export function UserManagement({
             user={viewingPrices}
             services={services}
             groups={groups}
+            onChanged={(next) => {
+              setUsers((list) => list.map((u) => (u.id === next.id ? next : u)));
+              setViewingPrices(next);
+            }}
             onClose={() => setViewingPrices(null)}
           />
         ) : null}
@@ -720,7 +733,8 @@ function UserFormDialog({
           ) : (
             "Tanpa group: user membayar harga default semua layanan."
           )}{" "}
-          Atur harga di menu Groups.
+          Harga group diatur di menu Groups; pengecualian untuk user ini lewat ikon mata di
+          tabel user.
         </p>
         <Field
           label="Role"

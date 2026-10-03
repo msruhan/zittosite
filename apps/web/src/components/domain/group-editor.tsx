@@ -71,6 +71,17 @@ export function GroupEditor({
   const apiServices = React.useMemo(() => services.filter((s) => s.via === "supplier"), [services]);
   const priced = React.useMemo(() => new Set(group.prices.map((p) => p.serviceId)), [group]);
   const pricedIn = (list: Service[]) => list.filter((s) => priced.has(s.id)).length;
+  const exceptions = React.useMemo(() => {
+    const memberIds = new Set(group.members.map((m) => m.id));
+    const map = new Map<string, string[]>();
+    for (const user of users) {
+      if (!memberIds.has(user.id)) continue;
+      for (const p of user.customPrices ?? []) {
+        map.set(p.serviceId, [...(map.get(p.serviceId) ?? []), user.username]);
+      }
+    }
+    return map;
+  }, [group.members, users]);
 
   function changed(next: UserGroup) {
     setGroup(next);
@@ -173,13 +184,19 @@ export function GroupEditor({
         <PriceStep
           group={group}
           services={manualServices}
+          exceptions={exceptions}
           onChanged={changed}
           title="Harga service manual"
           description="Layanan yang diproses admin. Centang satu atau beberapa layanan, lalu tentukan harganya untuk group ini."
         />
       </div>
       <div role="tabpanel" hidden={step !== "api"}>
-        <ApiPriceStep group={group} services={apiServices} onChanged={changed} />
+        <ApiPriceStep
+          group={group}
+          services={apiServices}
+          exceptions={exceptions}
+          onChanged={changed}
+        />
       </div>
 
       <div className="flex items-center justify-between gap-3 border-t border-hairline pt-4">
@@ -345,10 +362,12 @@ function MemberStep({
 function ApiPriceStep({
   group,
   services,
+  exceptions,
   onChanged,
 }: {
   group: UserGroup;
   services: Service[];
+  exceptions: Map<string, string[]>;
   onChanged: (group: UserGroup) => void;
 }) {
   const suppliers = React.useMemo(() => {
@@ -399,6 +418,7 @@ function ApiPriceStep({
           key={supplier.id}
           group={group}
           services={scoped}
+          exceptions={exceptions}
           onChanged={onChanged}
           grouped
           title={`Harga service ${supplier.name}`}
@@ -424,6 +444,7 @@ function ApiPriceStep({
 function PriceStep({
   group,
   services,
+  exceptions,
   onChanged,
   title,
   description,
@@ -431,6 +452,8 @@ function PriceStep({
 }: {
   group: UserGroup;
   services: Service[];
+  /** Service id → usernames of members with their own price for it. */
+  exceptions: Map<string, string[]>;
   onChanged: (group: UserGroup) => void;
   title: string;
   description: string;
@@ -589,8 +612,11 @@ function PriceStep({
                               checked={selected.has(service.id)}
                               onChange={(event) => setMany([service.id], event.target.checked)}
                             />
-                            <span className="min-w-0 flex-1 truncate text-body text-ink">
-                              {service.name}
+                            <span className="min-w-0 flex-1">
+                              <span className="block truncate text-body text-ink">
+                                {service.name}
+                              </span>
+                              <ExceptionNote users={exceptions.get(service.id)} />
                             </span>
                             {!service.active ? (
                               <Tag className="border-hairline bg-mist text-ink-soft">Offline</Tag>
@@ -666,6 +692,7 @@ function PriceStep({
                     key={`${service.id}:${priceOf.get(service.id)}`}
                     service={service}
                     price={priceOf.get(service.id)!}
+                    exceptionUsers={exceptions.get(service.id)}
                     selected={selected.has(service.id)}
                     busy={busy}
                     onSelect={(checked) => setMany([service.id], checked)}
@@ -682,9 +709,22 @@ function PriceStep({
   );
 }
 
+function ExceptionNote({ users }: { users?: string[] }) {
+  if (!users?.length) return null;
+  return (
+    <span
+      className="block truncate text-label font-medium text-hold-ink"
+      title={`Harga khusus user tetap berlaku: ${users.map((u) => `@${u}`).join(", ")}`}
+    >
+      {users.length} member punya harga khusus
+    </span>
+  );
+}
+
 function PricedRow({
   service,
   price,
+  exceptionUsers,
   selected,
   busy,
   onSelect,
@@ -693,6 +733,7 @@ function PricedRow({
 }: {
   service: Service;
   price: number;
+  exceptionUsers?: string[];
   selected: boolean;
   busy: boolean;
   onSelect: (checked: boolean) => void;
@@ -732,6 +773,7 @@ function PricedRow({
         ) : (
           <span className="text-label text-ink-faint">Sama dengan default</span>
         )}
+        <ExceptionNote users={exceptionUsers} />
       </span>
       <DataValue className="hidden text-right text-ink-soft md:block">
         {formatRupiah(service.price)}
@@ -783,20 +825,25 @@ function PricedRow({
   );
 }
 
-function BulkPriceBar({
+export function BulkPriceBar({
   chosen,
   priceOf,
   busy,
   onClear,
   onApply,
   onReset,
+  resetLabel = "default",
+  className,
 }: {
+  /** `price` is the starting point for "naikkan/diskon" rules. */
   chosen: Service[];
   priceOf: Map<string, number>;
   busy: boolean;
   onClear: () => void;
   onApply: (set: { serviceId: string; price: number }[]) => Promise<boolean>;
   onReset: (ids: string[]) => Promise<boolean>;
+  resetLabel?: string;
+  className?: string;
 }) {
   const [rule, setRule] = React.useState<GroupPriceRule>("price_up");
   const [unit, setUnit] = React.useState<GroupPriceAdjustment["unit"]>("percent");
@@ -826,7 +873,12 @@ function BulkPriceBar({
   }
 
   return (
-    <div className="sticky bottom-4 z-10 rounded-lg border border-action bg-surface shadow-lifted">
+    <div
+      className={cn(
+        "sticky bottom-4 z-10 rounded-lg border border-action bg-surface shadow-lifted",
+        className,
+      )}
+    >
       <div className="flex items-center justify-between gap-3 border-b border-hairline px-4 py-2.5">
         <p className="text-body font-medium text-ink">
           Atur harga <span className="font-data text-action">{chosen.length}</span> layanan
@@ -846,7 +898,10 @@ function BulkPriceBar({
               setRule(v as GroupPriceRule);
               setRaw("");
             }}
-            options={GROUP_PRICE_RULES}
+            options={GROUP_PRICE_RULES.map((r) => ({
+              ...r,
+              label: r.label.replace("harga default", `harga ${resetLabel}`),
+            }))}
           />
         </Field>
         <Field
@@ -958,7 +1013,7 @@ function BulkPriceBar({
             onClick={() => void onReset(alreadySet.map((s) => s.id))}
           >
             <ArrowCounterClockwise aria-hidden="true" />
-            Kembalikan {alreadySet.length} ke default
+            Kembalikan {alreadySet.length} ke {resetLabel}
           </Button>
         ) : null}
       </div>

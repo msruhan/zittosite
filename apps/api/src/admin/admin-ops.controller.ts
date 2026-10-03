@@ -40,6 +40,7 @@ import {
   optNonNegativeInt,
   optNullableNonNegativeInt,
   optNullableString,
+  optServicePrices,
   optString,
 } from "../security/input";
 
@@ -191,6 +192,28 @@ export class AdminOpsController {
       });
     }
     return user;
+  }
+
+  @Put("users/:id/prices")
+  @UseGuards(SuperAdminGuard)
+  async updateUserPrices(
+    @Req() req: AdminReq,
+    @Param("id") id: string,
+    @Body() body: Json,
+  ) {
+    const set = optServicePrices(body.set, "Harga user", 1000) ?? [];
+    const setIds = new Set(set.map((p) => p.serviceId));
+    const remove = (optIdList(body.remove, "Layanan", 1000) ?? []).filter(
+      (s) => !setIds.has(s),
+    );
+    const result = await this.users.updatePrices(id, { set, remove });
+    this.audit.record("admin.user.prices_updated", {
+      actorId: req.admin.sub,
+      userId: id,
+      pricesSet: result.saved,
+      pricesRemoved: result.removed,
+    });
+    return result.user;
   }
 
   @Post("users/:id/balance")

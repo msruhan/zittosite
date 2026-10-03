@@ -15,12 +15,14 @@ import { passwordPolicyError } from "../security/password";
 const managedUserInclude = {
   identities: { where: { provider: "telegram" } },
   group: { select: { id: true, name: true } },
+  servicePrices: { select: { serviceId: true, price: true } },
 } satisfies Prisma.UserInclude;
 
 function serializeManagedUser(
   user: User & {
     identities: UserIdentity[];
     group: { id: string; name: string } | null;
+    servicePrices: { serviceId: string; price: number }[];
   },
 ) {
   const telegram = user.identities[0];
@@ -34,6 +36,7 @@ function serializeManagedUser(
       : null,
     groupId: user.groupId,
     groupName: user.group?.name ?? null,
+    customPrices: user.servicePrices,
   };
 }
 
@@ -165,6 +168,57 @@ export class AdminUsersService {
       apiAccessChanged:
         typeof input.apiEnabled === "boolean" &&
         input.apiEnabled !== existing.apiEnabled,
+    };
+  }
+
+  /**
+   * Sets or clears the user's own prices. A price equal to what the user would pay anyway
+   * (group price or default) is not stored, so exceptions never duplicate the group.
+   */
+  async updatePrices(
+    id: string,
+    input: { set: { serviceId: string; price: number }[]; remove: string[] },
+  ) {
+    const existing = await this.prisma.user.findUnique({ where: { id } });
+    if (!existing) throw new NotFoundException("User tidak ditemukan.");
+    const ids = input.set.map((p) => p.serviceId);
+    const services = await this.prisma.service.findMany({
+      where: { id: { in: ids } },
+      select: {
+        id: true,
+        price: true,
+        groupPrices: {
+          where: { groupId: existing.groupId ?? "" },
+          select: { price: true },
+        },
+      },
+    });
+    if (services.length !== new Set(ids).size) {
+      throw new BadRequestException("Layanan tidak ditemukan.");
+    }
+    const basePrice = new Map(
+      services.map((s) => [s.id, s.groupPrices[0]?.price ?? s.price]),
+    );
+    const save = input.set.filter((p) => p.price !== basePrice.get(p.serviceId));
+    const touched = [...new Set([...input.remove, ...ids])];
+
+    const user = await this.prisma.$transaction(async (tx) => {
+      if (touched.length) {
+        await tx.userServicePrice.deleteMany({
+          where: { userId: id, serviceId: { in: touched } },
+        });
+      }
+      if (save.length) {
+        await tx.userServicePrice.createMany({
+          data: save.map((p) => ({ ...p, userId: id })),
+        });
+      }
+      return tx.user.findUniqueOrThrow({ where: { id }, include: managedUserInclude });
+    });
+    return {
+      user: serializeManagedUser(user),
+      saved: save.length,
+      removed: input.remove.length + input.set.length - save.length,
     };
   }
 

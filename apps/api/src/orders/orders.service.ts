@@ -107,14 +107,16 @@ export class OrdersService {
       orderBy: { name: "asc" },
       include: {
         groupPrices: { where: { groupId: groupId ?? "" }, select: { price: true } },
+        userPrices: { where: { userId }, select: { price: true } },
         serviceGroup: { select: { name: true } },
       },
     });
-    return services.map(({ groupPrices, serviceGroup, ...service }) => {
+    return services.map(({ groupPrices, userPrices, serviceGroup, ...service }) => {
       const price = resolveUserPrice({
         defaultPrice: service.price,
         groupId,
         groupPrice: groupPrices[0]?.price,
+        userPrice: userPrices[0]?.price,
       });
       return {
         ...serializeService(service, price),
@@ -259,17 +261,24 @@ export class OrdersService {
     const parsedExtras = parseOrderExtras(service, input);
     if (!parsedExtras.ok) throw new BadRequestException(parsedExtras.errors.join(" "));
     const extras = parsedExtras.extras;
-    const groupPrice = user.groupId
-      ? await this.prisma.userGroupPrice.findUnique({
-          where: { groupId_serviceId: { groupId: user.groupId, serviceId } },
-          select: { price: true },
-        })
-      : null;
+    const [groupPrice, userPrice] = await Promise.all([
+      user.groupId
+        ? this.prisma.userGroupPrice.findUnique({
+            where: { groupId_serviceId: { groupId: user.groupId, serviceId } },
+            select: { price: true },
+          })
+        : null,
+      this.prisma.userServicePrice.findUnique({
+        where: { userId_serviceId: { userId, serviceId } },
+        select: { price: true },
+      }),
+    ]);
 
     const price = resolveUserPrice({
       defaultPrice: service.price,
       groupId: user.groupId,
       groupPrice: groupPrice?.price,
+      userPrice: userPrice?.price,
     });
     const total = price * imeis.length;
     if (balanceOnly && user.creditBalance < total) {
