@@ -4,29 +4,21 @@ import {
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
-import type {
-  Prisma,
-  User,
-  UserIdentity,
-  UserServicePrice,
-} from "@prisma/client";
+import type { Prisma, User, UserIdentity } from "@prisma/client";
 import * as bcrypt from "bcryptjs";
 import { randomUUID } from "crypto";
 import { PrismaService } from "../prisma/prisma.service";
 import { applyBalance } from "../orders/balance";
 import { serializeUser } from "../orders/orders.serializer";
 import { passwordPolicyError } from "../security/password";
-import type { ServicePriceInput } from "../security/input";
 
 const managedUserInclude = {
-  servicePrices: true,
   identities: { where: { provider: "telegram" } },
   group: { select: { id: true, name: true } },
 } satisfies Prisma.UserInclude;
 
 function serializeManagedUser(
   user: User & {
-    servicePrices: UserServicePrice[];
     identities: UserIdentity[];
     group: { id: string; name: string } | null;
   },
@@ -40,10 +32,6 @@ function serializeManagedUser(
           chatReady: Boolean(telegram.chatId),
         }
       : null,
-    customPrices: user.servicePrices.map(({ serviceId, price }) => ({
-      serviceId,
-      price,
-    })),
     groupId: user.groupId,
     groupName: user.group?.name ?? null,
   };
@@ -84,7 +72,6 @@ export class AdminUsersService {
     fullName?: string;
     password?: string;
     telegramHandle?: string | null;
-    customPrices?: ServicePriceInput[];
     groupId?: string | null;
     role?: "customer" | "testing";
     botAccess?: boolean;
@@ -102,32 +89,21 @@ export class AdminUsersService {
     if (policyError) throw new BadRequestException(policyError);
     const exists = await this.prisma.user.findUnique({ where: { username } });
     if (exists) throw new ConflictException("Username sudah dipakai.");
-    await this.assertServicesExist(input.customPrices);
     await this.assertGroupExists(input.groupId);
 
-    const user = await this.prisma.$transaction(async (tx) => {
-      const created = await tx.user.create({
-        data: {
-          username,
-          fullName,
-          passwordHash: await bcrypt.hash(password, 10),
-          telegramHandle: input.telegramHandle?.trim() || null,
-          botAccess: input.botAccess !== false,
-          apiEnabled: input.apiEnabled === true,
-          status: "active",
-          groupId: input.groupId || null,
-          role: input.role ?? "customer",
-        },
-      });
-      await this.replacePrices(
-        tx,
-        created.id,
-        input.groupId ? [] : input.customPrices,
-      );
-      return tx.user.findUniqueOrThrow({
-        where: { id: created.id },
-        include: managedUserInclude,
-      });
+    const user = await this.prisma.user.create({
+      data: {
+        username,
+        fullName,
+        passwordHash: await bcrypt.hash(password, 10),
+        telegramHandle: input.telegramHandle?.trim() || null,
+        botAccess: input.botAccess !== false,
+        apiEnabled: input.apiEnabled === true,
+        status: "active",
+        groupId: input.groupId || null,
+        role: input.role ?? "customer",
+      },
+      include: managedUserInclude,
     });
     return serializeManagedUser(user);
   }
@@ -137,7 +113,6 @@ export class AdminUsersService {
     input: {
       fullName?: string;
       telegramHandle?: string | null;
-      customPrices?: ServicePriceInput[];
       groupId?: string | null;
       role?: "customer" | "testing";
       status?: "active" | "suspended";
@@ -152,39 +127,30 @@ export class AdminUsersService {
     const password = input.password ? String(input.password) : "";
     const policyError = password ? passwordPolicyError(password) : null;
     if (policyError) throw new BadRequestException(policyError);
-    await this.assertServicesExist(input.customPrices);
     await this.assertGroupExists(input.groupId);
-    const nextGroupId =
-      input.groupId === undefined ? existing.groupId : input.groupId || null;
     const passwordHash = password ? await bcrypt.hash(password, 10) : null;
 
-    const user = await this.prisma.$transaction(async (tx) => {
-      await tx.user.update({
-        where: { id },
-        data: {
-          ...(input.fullName != null
-            ? { fullName: String(input.fullName).trim() }
-            : {}),
-          ...(input.telegramHandle !== undefined
-            ? { telegramHandle: input.telegramHandle?.trim() || null }
-            : {}),
-          ...(input.status ? { status: input.status } : {}),
-          ...(input.role ? { role: input.role } : {}),
-          ...(typeof input.botAccess === "boolean"
-            ? { botAccess: input.botAccess }
-            : {}),
-          ...(typeof input.apiEnabled === "boolean"
-            ? { apiEnabled: input.apiEnabled }
-            : {}),
-          ...(passwordHash ? { passwordHash } : {}),
-          ...(input.groupId !== undefined ? { groupId: nextGroupId } : {}),
-        },
-      });
-      await this.replacePrices(tx, id, nextGroupId ? [] : input.customPrices);
-      return tx.user.findUniqueOrThrow({
-        where: { id },
-        include: managedUserInclude,
-      });
+    const user = await this.prisma.user.update({
+      where: { id },
+      data: {
+        ...(input.fullName != null
+          ? { fullName: String(input.fullName).trim() }
+          : {}),
+        ...(input.telegramHandle !== undefined
+          ? { telegramHandle: input.telegramHandle?.trim() || null }
+          : {}),
+        ...(input.status ? { status: input.status } : {}),
+        ...(input.role ? { role: input.role } : {}),
+        ...(typeof input.botAccess === "boolean"
+          ? { botAccess: input.botAccess }
+          : {}),
+        ...(typeof input.apiEnabled === "boolean"
+          ? { apiEnabled: input.apiEnabled }
+          : {}),
+        ...(passwordHash ? { passwordHash } : {}),
+        ...(input.groupId !== undefined ? { groupId: input.groupId || null } : {}),
+      },
+      include: managedUserInclude,
     });
 
     if (input.status === "suspended" || password) {
@@ -260,34 +226,5 @@ export class AdminUsersService {
     if (!groupId) return;
     const group = await this.prisma.userGroup.findUnique({ where: { id: groupId } });
     if (!group) throw new BadRequestException("Group tidak ditemukan.");
-  }
-
-  private async assertServicesExist(prices?: ServicePriceInput[]) {
-    if (!prices?.length) return;
-    const found = await this.prisma.service.count({
-      where: { id: { in: prices.map((p) => p.serviceId) } },
-    });
-    if (found !== prices.length) {
-      throw new BadRequestException("Layanan pada harga khusus tidak ditemukan.");
-    }
-  }
-
-  /** `undefined` leaves prices untouched; an array replaces the whole set. */
-  private async replacePrices(
-    tx: Prisma.TransactionClient,
-    userId: string,
-    prices?: ServicePriceInput[],
-  ) {
-    if (prices === undefined) return;
-    await tx.userServicePrice.deleteMany({ where: { userId } });
-    if (prices.length) {
-      await tx.userServicePrice.createMany({
-        data: prices.map(({ serviceId, price }) => ({
-          userId,
-          serviceId,
-          price,
-        })),
-      });
-    }
   }
 }

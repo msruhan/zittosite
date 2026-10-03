@@ -93,7 +93,26 @@ export class AdminGroupsService {
     }
   }
 
-  /** Replaces the member list; joining users lose their personal prices. */
+  /** Upserts `set` and drops `remove` (back to the service default); other prices stay. */
+  async updatePrices(id: string, input: { set: ServicePriceInput[]; remove: string[] }) {
+    await this.findOrThrow(id);
+    await this.assertServicesExist(input.set);
+    const touched = [...new Set([...input.remove, ...input.set.map((p) => p.serviceId)])];
+    const group = await this.prisma.$transaction(async (tx) => {
+      if (touched.length) {
+        await tx.userGroupPrice.deleteMany({ where: { groupId: id, serviceId: { in: touched } } });
+      }
+      if (input.set.length) {
+        await tx.userGroupPrice.createMany({
+          data: input.set.map((p) => ({ ...p, groupId: id })),
+        });
+      }
+      return tx.userGroup.findUniqueOrThrow({ where: { id }, include: groupInclude });
+    });
+    return serializeGroup(group);
+  }
+
+  /** Replaces the member list. */
   async setMembers(id: string, userIds: string[]) {
     await this.findOrThrow(id);
     const unique = [...new Set(userIds)];
@@ -106,7 +125,6 @@ export class AdminGroupsService {
       });
       if (unique.length) {
         await tx.user.updateMany({ where: { id: { in: unique } }, data: { groupId: id } });
-        await tx.userServicePrice.deleteMany({ where: { userId: { in: unique } } });
       }
       return tx.userGroup.findUniqueOrThrow({ where: { id }, include: groupInclude });
     });

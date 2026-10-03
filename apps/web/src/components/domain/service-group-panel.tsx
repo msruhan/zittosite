@@ -476,7 +476,7 @@ function PriceAdjustDialog({
     <DialogContent
       className="max-w-2xl"
       title={`Atur harga · ${group.name}`}
-      description={`Harga jual USD semua layanan di grup ini diubah sekaligus, lalu dikonversi ke Rupiah dengan kurs ${formatRupiah(usdRate)} per $1. Harga khusus per grup user atau per user tidak ikut berubah.`}
+      description={`Harga jual USD semua layanan di grup ini diubah sekaligus, lalu dikonversi ke Rupiah dengan kurs ${formatRupiah(usdRate)} per $1. Harga di menu Groups tidak ikut berubah.`}
       footer={
         <>
           <Button type="button" variant="ghost" onClick={onCancel}>

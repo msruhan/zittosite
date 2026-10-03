@@ -146,9 +146,7 @@ export interface User {
   telegramHandle: string | null;
   /** Admin Users page only: the Telegram account actually linked via login/bot. */
   telegramLinked?: { label: string; chatReady: boolean } | null;
-  /** Admin Users page only: per-service overrides; missing services use the service price. */
-  customPrices?: UserServicePrice[];
-  /** Admin Users page only: pricing group; while set, personal prices do not apply. */
+  /** Admin Users page only: pricing group; without one the user pays default prices. */
   groupId?: string | null;
   groupName?: string | null;
   creditBalance?: number;

@@ -82,7 +82,6 @@ export const users: User[] = [
     username: "fajri",
     fullName: "Muhammad Al Fajri",
     telegramHandle: "@alfajri",
-    customPrices: [],
     status: "active",
     botAccess: true,
     createdAt: at(96, 9, 12),
@@ -92,7 +91,6 @@ export const users: User[] = [
     username: "siti.aminah",
     fullName: "Siti Aminah",
     telegramHandle: "@sitiaminah",
-    customPrices: [{ serviceId: "svc-activation", price: 170_000 }],
     status: "active",
     botAccess: true,
     createdAt: at(88, 14, 3),
@@ -102,7 +100,6 @@ export const users: User[] = [
     username: "agus123",
     fullName: "Agus Setiawan",
     telegramHandle: "@agussetiawan",
-    customPrices: [],
     status: "active",
     botAccess: true,
     createdAt: at(74, 10, 45),
@@ -112,7 +109,6 @@ export const users: User[] = [
     username: "budi99",
     fullName: "Budi Hartono",
     telegramHandle: null,
-    customPrices: [],
     status: "suspended",
     botAccess: false,
     createdAt: at(70, 16, 20),
@@ -122,7 +118,6 @@ export const users: User[] = [
     username: "rahmat",
     fullName: "Rahmat Hidayat",
     telegramHandle: "@rahmath",
-    customPrices: [{ serviceId: "svc-activation", price: 140_000 }],
     status: "active",
     botAccess: true,
     createdAt: at(61, 8, 30),
@@ -132,7 +127,6 @@ export const users: User[] = [
     username: "dewi.lestari",
     fullName: "Dewi Lestari",
     telegramHandle: "@dewilestari",
-    customPrices: [],
     status: "active",
     botAccess: true,
     createdAt: at(52, 11, 5),
@@ -142,7 +136,6 @@ export const users: User[] = [
     username: "hendra.p",
     fullName: "Hendra Pratama",
     telegramHandle: "@hendrap",
-    customPrices: [],
     status: "active",
     botAccess: true,
     createdAt: at(41, 13, 40),
@@ -152,7 +145,6 @@ export const users: User[] = [
     username: "nurul.aini",
     fullName: "Nurul Aini",
     telegramHandle: null,
-    customPrices: [],
     status: "active",
     botAccess: false,
     createdAt: at(33, 9, 55),
@@ -162,7 +154,6 @@ export const users: User[] = [
     username: "yusuf.maulana",
     fullName: "Yusuf Maulana",
     telegramHandle: "@yusufm",
-    customPrices: [{ serviceId: "svc-activation", price: 160_000 }],
     status: "active",
     botAccess: true,
     createdAt: at(24, 15, 15),
@@ -172,7 +163,6 @@ export const users: User[] = [
     username: "intan.p",
     fullName: "Intan Permatasari",
     telegramHandle: "@intanp",
-    customPrices: [],
     status: "active",
     botAccess: true,
     createdAt: at(17, 10, 25),
@@ -182,7 +172,6 @@ export const users: User[] = [
     username: "galih.w",
     fullName: "Galih Wicaksono",
     telegramHandle: "@galihw",
-    customPrices: [],
     status: "active",
     botAccess: true,
     createdAt: at(9, 12, 0),
@@ -192,7 +181,6 @@ export const users: User[] = [
     username: "sari.mulyani",
     fullName: "Sari Mulyani",
     telegramHandle: null,
-    customPrices: [],
     status: "suspended",
     botAccess: false,
     createdAt: at(4, 17, 45),
@@ -295,13 +283,8 @@ function buildOrderId(dayOffset: number, seq: number): string {
   return `ZT${yy}${mm}${dd}${String(seq).padStart(4, "0")}`;
 }
 
-function priceFor(userId: string, serviceId: string): number {
-  const service = services.find((s) => s.id === serviceId)!;
-  const user = users.find((u) => u.id === userId)!;
-  return (
-    user.customPrices?.find((p) => p.serviceId === serviceId)?.price ??
-    service.price
-  );
+function priceFor(serviceId: string): number {
+  return services.find((s) => s.id === serviceId)!.price;
 }
 
 export const orders: Order[] = orderSeeds.map((seed) => {
@@ -329,7 +312,7 @@ export const orders: Order[] = orderSeeds.map((seed) => {
     imei: seed.imei,
     notes: seed.notes ?? null,
     status: seed.status,
-    price: priceFor(seed.userId, seed.serviceId),
+    price: priceFor(seed.serviceId),
     assignedAdminId: seed.adminId ?? null,
     startedAt,
     completedAt,

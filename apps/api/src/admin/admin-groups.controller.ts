@@ -64,6 +64,22 @@ export class AdminGroupsController {
     return group;
   }
 
+  @Put(":id/prices")
+  async updatePrices(@Req() req: AdminReq, @Param("id") id: string, @Body() body: Json) {
+    const set = optServicePrices(body.set, "Harga group", 1000) ?? [];
+    const setIds = new Set(set.map((p) => p.serviceId));
+    const remove = (optIdList(body.remove, "Layanan", 1000) ?? []).filter((s) => !setIds.has(s));
+    const group = await this.groups.updatePrices(id, { set, remove });
+    this.audit.record("admin.group.prices_updated", {
+      actorId: req.admin.sub,
+      groupId: group.id,
+      groupName: group.name,
+      pricesSet: set.length,
+      pricesRemoved: remove.length,
+    });
+    return group;
+  }
+
   @Put(":id/members")
   async setMembers(@Req() req: AdminReq, @Param("id") id: string, @Body() body: Json) {
     const group = await this.groups.setMembers(id, optIdList(body.userIds, "Member", 2000) ?? []);

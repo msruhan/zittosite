@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import {
+  Eye,
   MagnifyingGlass,
   PencilSimple,
   Plus,
@@ -30,6 +31,7 @@ import { formatDate, formatRupiah } from "@/lib/format";
 import { ApiError, api } from "@/lib/api";
 import { passwordPolicyError } from "@/lib/password";
 import type { Service, User, UserGroup } from "@/lib/types";
+import { UserPriceDialog } from "@/components/domain/user-price-dialog";
 
 const NO_GROUP = "__none";
 
@@ -47,6 +49,7 @@ export function UserManagement({
   const [editing, setEditing] = React.useState<User | null>(null);
   const [creating, setCreating] = React.useState(false);
   const [adjusting, setAdjusting] = React.useState<User | null>(null);
+  const [viewingPrices, setViewingPrices] = React.useState<User | null>(null);
 
   const [syncedUsers, setSyncedUsers] = React.useState(initialUsers);
   if (initialUsers !== syncedUsers) {
@@ -81,7 +84,6 @@ export function UserManagement({
             fullName: next.fullName,
             password: next.password,
             telegramHandle: next.telegramHandle,
-            customPrices: next.customPrices ?? [],
             groupId: next.groupId ?? null,
             role: next.role ?? "customer",
             botAccess: next.botAccess,
@@ -94,7 +96,6 @@ export function UserManagement({
           body: JSON.stringify({
             fullName: next.fullName,
             telegramHandle: next.telegramHandle,
-            customPrices: next.customPrices ?? [],
             groupId: next.groupId ?? null,
             role: next.role ?? "customer",
             status: next.status,
@@ -171,7 +172,6 @@ export function UserManagement({
               username: "",
               fullName: "",
               telegramHandle: null,
-              customPrices: [],
               groupId: null,
               role: "customer",
               status: "active",
@@ -263,14 +263,7 @@ export function UserManagement({
                             {user.groupName}
                           </Tag>
                         ) : (
-                          <div className="whitespace-nowrap">
-                            <p className="text-ink-soft">Tanpa group</p>
-                            {(user.customPrices ?? []).length > 0 ? (
-                              <p className="text-label text-hold-ink">
-                                Harga khusus
-                              </p>
-                            ) : null}
-                          </div>
+                          <p className="whitespace-nowrap text-ink-soft">Tanpa group</p>
                         )}
                       </TD>
                       <TD className="whitespace-nowrap">
@@ -324,6 +317,15 @@ export function UserManagement({
                       </TD>
                       <TD>
                         <div className="flex items-center gap-1">
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            aria-label={`Lihat harga ${user.fullName}`}
+                            title="Lihat harga layanan user ini"
+                            onClick={() => setViewingPrices(user)}
+                          >
+                            <Eye className="size-4 text-action" />
+                          </Button>
                           <Button
                             size="icon"
                             variant="ghost"
@@ -385,7 +387,6 @@ export function UserManagement({
         {editing ? (
           <UserFormDialog
             user={editing}
-            services={services}
             groups={groups}
             creating={creating}
             onCancel={() => {
@@ -393,6 +394,22 @@ export function UserManagement({
               setCreating(false);
             }}
             onSave={handleSave}
+          />
+        ) : null}
+      </Dialog>
+
+      <Dialog
+        open={Boolean(viewingPrices)}
+        onOpenChange={(open) => {
+          if (!open) setViewingPrices(null);
+        }}
+      >
+        {viewingPrices ? (
+          <UserPriceDialog
+            user={viewingPrices}
+            services={services}
+            groups={groups}
+            onClose={() => setViewingPrices(null)}
           />
         ) : null}
       </Dialog>
@@ -536,14 +553,12 @@ function BalanceDialog({
 
 function UserFormDialog({
   user,
-  services,
   groups,
   creating,
   onCancel,
   onSave,
 }: {
   user: User;
-  services: Service[];
   groups: UserGroup[];
   creating: boolean;
   onCancel: () => void;
@@ -551,14 +566,8 @@ function UserFormDialog({
 }) {
   const [draft, setDraft] = React.useState(user);
   const [password, setPassword] = React.useState("");
-  const [prices, setPrices] = React.useState<Record<string, string>>(() =>
-    Object.fromEntries(
-      (user.customPrices ?? []).map((p) => [p.serviceId, String(p.price)]),
-    ),
-  );
   const [saving, setSaving] = React.useState(false);
   const selectedGroup = groups.find((group) => group.id === draft.groupId) ?? null;
-  const hadCustomPrices = (user.customPrices ?? []).length > 0;
   const [errors, setErrors] = React.useState<{
     fullName?: string;
     username?: string;
@@ -588,11 +597,6 @@ function UserFormDialog({
         username: draft.username.trim(),
         telegramHandle: draft.telegramHandle?.trim() || null,
         groupId: draft.groupId || null,
-        customPrices: draft.groupId
-          ? []
-          : Object.entries(prices)
-              .filter(([, value]) => value !== "")
-              .map(([serviceId, value]) => ({ serviceId, price: Number(value) })),
         ...(password ? { password } : {}),
       });
     } finally {
@@ -687,7 +691,7 @@ function UserFormDialog({
           htmlFor="groupId"
           hint={
             groups.length
-              ? "Member group memakai harga group; harga khusus pribadi tidak berlaku."
+              ? undefined
               : "Belum ada group. Buat di menu Groups."
           }
         >
@@ -706,60 +710,18 @@ function UserFormDialog({
             ]}
           />
         </Field>
-        {selectedGroup ? (
-          <div className="space-y-2 rounded-md border border-action/30 bg-action-wash px-3.5 py-3">
-            <p className="text-body font-medium text-ink">
-              Harga mengikuti {selectedGroup.name}
-            </p>
-            <ul className="space-y-0.5">
-              {services.map((service) => {
-                const groupPrice = selectedGroup.prices.find(
-                  (p) => p.serviceId === service.id,
-                )?.price;
-                return (
-                  <li key={service.id} className="flex justify-between gap-3 text-body">
-                    <span className="text-ink-soft">{service.name}</span>
-                    <DataValue>{formatRupiah(groupPrice ?? service.price)}</DataValue>
-                  </li>
-                );
-              })}
-            </ul>
-            {hadCustomPrices ? (
-              <p className="text-body text-working-ink">
-                Harga khusus pribadi user ini akan dihapus saat disimpan.
-              </p>
-            ) : null}
-          </div>
-        ) : services.length > 0 ? (
-          <fieldset className="space-y-3 rounded-md border border-hairline p-3.5">
-            <legend className="px-1 text-body font-medium text-ink">
-              Harga khusus per layanan
-            </legend>
-            <p className="text-body text-ink-soft">
-              Kosongkan untuk mengikuti harga default di menu Services.
-            </p>
-            {services.map((service) => (
-              <Field
-                key={service.id}
-                label={service.name}
-                htmlFor={`price-${service.id}`}
-                hint={`Default ${formatRupiah(service.price)}${service.active ? "" : " · layanan nonaktif"}`}
-              >
-                <Input
-                  id={`price-${service.id}`}
-                  inputMode="numeric"
-                  className="font-data tabular"
-                  value={prices[service.id] ?? ""}
-                  placeholder={String(service.price)}
-                  onChange={(event) => {
-                    const raw = event.target.value.replace(/\D/g, "");
-                    setPrices((current) => ({ ...current, [service.id]: raw }));
-                  }}
-                />
-              </Field>
-            ))}
-          </fieldset>
-        ) : null}
+        <p className="rounded-md border border-hairline bg-mist/60 px-3.5 py-2.5 text-body text-ink-soft">
+          {selectedGroup ? (
+            <>
+              Harga mengikuti group{" "}
+              <span className="font-medium text-ink">{selectedGroup.name}</span> (
+              {selectedGroup.prices.length} layanan diatur, sisanya harga default).
+            </>
+          ) : (
+            "Tanpa group: user membayar harga default semua layanan."
+          )}{" "}
+          Atur harga di menu Groups.
+        </p>
         <Field
           label="Role"
           htmlFor="role"

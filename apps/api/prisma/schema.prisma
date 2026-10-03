@@ -137,7 +137,6 @@ model User {
   identities      UserIdentity[]
   linkTokens      TelegramLinkToken[]
   orders          Order[]
-  servicePrices   UserServicePrice[]
   balanceEntries  BalanceEntry[]
   topupInvoices   PaymentInvoice[]
 
@@ -182,21 +181,6 @@ model ActivityLog {
   @@index([event, createdAt])
   @@index([orderId])
   @@map("activity_logs")
-}
-
-/// Per-user price override; services without a row use Service.price.
-model UserServicePrice {
-  userId    String   @map("user_id")
-  serviceId String   @map("service_id")
-  price     Int
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  service   Service  @relation(fields: [serviceId], references: [id], onDelete: Cascade)
-
-  @@id([userId, serviceId])
-  @@index([serviceId])
-  @@map("user_service_prices")
 }
 
 model UserSession {
@@ -357,7 +341,6 @@ model Service {
   supplier           Supplier?           @relation(fields: [supplierId], references: [id], onDelete: SetNull)
   orders             Order[]
   assignments        ServiceAssignment[]
-  userPrices         UserServicePrice[]
   groupPrices        UserGroupPrice[]
 
   @@index([serviceGroupId])

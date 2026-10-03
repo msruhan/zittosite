@@ -40,7 +40,6 @@ import {
   optNonNegativeInt,
   optNullableNonNegativeInt,
   optNullableString,
-  optServicePrices,
   optString,
 } from "../security/input";
 
@@ -139,7 +138,6 @@ export class AdminOpsController {
       fullName: optString(body.fullName, "Nama lengkap", 120),
       password: optString(body.password, "Password", 200),
       telegramHandle: optNullableString(body.telegramHandle, "Telegram", 64),
-      customPrices: optServicePrices(body.customPrices, "Harga khusus"),
       groupId: optNullableString(body.groupId, "Group", 64),
       role: optEnum(body.role, USER_ROLES, "Role"),
       botAccess: optBoolean(body.botAccess, "Akses bot"),
@@ -169,7 +167,6 @@ export class AdminOpsController {
     const input = {
       fullName: optString(body.fullName, "Nama lengkap", 120),
       telegramHandle: optNullableString(body.telegramHandle, "Telegram", 64),
-      customPrices: optServicePrices(body.customPrices, "Harga khusus"),
       groupId: optNullableString(body.groupId, "Group", 64),
       role: optEnum(body.role, USER_ROLES, "Role"),
       status: optEnum(body.status, ["active", "suspended"] as const, "Status"),

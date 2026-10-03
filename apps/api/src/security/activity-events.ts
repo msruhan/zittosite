@@ -290,6 +290,14 @@ export const ACTIVITY_EVENTS = {
     summary: ({ fields }) =>
       `Memperbarui group ${fields.groupName ?? ""}${fields.pricesChanged ? " (harga)" : ""}`,
   },
+  "admin.group.prices_updated": {
+    category: "user",
+    label: "Harga group diubah",
+    summary: ({ fields }) =>
+      `Mengatur harga group ${fields.groupName ?? ""} (${fields.pricesSet ?? 0} diatur, ${
+        fields.pricesRemoved ?? 0
+      } kembali ke default)`,
+  },
   "admin.group.members_updated": {
     category: "user",
     label: "Member group diubah",

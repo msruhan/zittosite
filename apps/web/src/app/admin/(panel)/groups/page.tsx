@@ -4,7 +4,7 @@ import { PageHeader } from "@/components/shell/app-shell";
 import { GroupManagement } from "@/components/domain/group-management";
 import { ApiError } from "@/lib/api";
 import { serverApi } from "@/lib/server-api";
-import type { Service, User, UserGroup } from "@/lib/types";
+import type { Service, UserGroup } from "@/lib/types";
 
 export const metadata: Metadata = {
   title: "Groups",
@@ -13,14 +13,12 @@ export const metadata: Metadata = {
 export default async function AdminGroupsPage() {
   let groups: UserGroup[];
   let services: Service[];
-  let users: User[];
   try {
     const me = await serverApi<{ role: string }>("/admin/me");
     if (me.role !== "super_admin") redirect("/admin/orders");
-    [groups, services, users] = await Promise.all([
+    [groups, services] = await Promise.all([
       serverApi<UserGroup[]>("/admin/groups"),
       serverApi<Service[]>("/admin/services"),
-      serverApi<User[]>("/admin/users"),
     ]);
   } catch (err) {
     if (err instanceof ApiError && err.status === 401) redirect("/admin/login");
@@ -32,9 +30,9 @@ export default async function AdminGroupsPage() {
     <>
       <PageHeader
         title="Groups"
-        description="Kelompokkan user dan atur harga layanan per group. User tanpa group memakai harga default atau harga khusus pribadinya."
+        description="Beri harga khusus untuk sekelompok user. User tanpa group membayar harga default layanan."
       />
-      <GroupManagement initialGroups={groups} services={services} users={users} />
+      <GroupManagement initialGroups={groups} services={services} />
     </>
   );
 }

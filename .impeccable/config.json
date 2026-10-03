@@ -1,0 +1,9 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [
+      "apps/web/src/lib/mock-data.ts"
+    ],
+    "ignoreValues": []
+  }
+}

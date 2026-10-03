@@ -106,17 +106,15 @@ export class OrdersService {
       where: { active: true, ...serviceViaWhere(via) },
       orderBy: { name: "asc" },
       include: {
-        userPrices: { where: { userId }, select: { price: true } },
         groupPrices: { where: { groupId: groupId ?? "" }, select: { price: true } },
         serviceGroup: { select: { name: true } },
       },
     });
-    return services.map(({ userPrices, groupPrices, serviceGroup, ...service }) => {
+    return services.map(({ groupPrices, serviceGroup, ...service }) => {
       const price = resolveUserPrice({
         defaultPrice: service.price,
         groupId,
         groupPrice: groupPrices[0]?.price,
-        personalPrice: userPrices[0]?.price,
       });
       return {
         ...serializeService(service, price),
@@ -233,13 +231,9 @@ export class OrdersService {
       );
     }
 
-    const [user, service, override] = await Promise.all([
+    const [user, service] = await Promise.all([
       this.prisma.user.findUniqueOrThrow({ where: { id: userId } }),
       this.prisma.service.findUnique({ where: { id: serviceId } }),
-      this.prisma.userServicePrice.findUnique({
-        where: { userId_serviceId: { userId, serviceId } },
-        select: { price: true },
-      }),
     ]);
     if (!service || !service.active) {
       throw new BadRequestException("Layanan tidak tersedia.");
@@ -276,7 +270,6 @@ export class OrdersService {
       defaultPrice: service.price,
       groupId: user.groupId,
       groupPrice: groupPrice?.price,
-      personalPrice: override?.price,
     });
     const total = price * imeis.length;
     if (balanceOnly && user.creditBalance < total) {
