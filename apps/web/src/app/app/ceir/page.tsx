@@ -29,7 +29,7 @@ export default async function OrderCeirPage() {
     <>
       <PageHeader
         title={menus.ceir.label}
-        description="Order Anda untuk layanan Ceir yang diproses otomatis oleh Supplier API."
+        description="Order Anda untuk layanan Ceir yang diproses otomatis."
       />
       <OrderHistory
         orders={orders}

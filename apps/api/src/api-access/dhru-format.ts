@@ -1,4 +1,5 @@
 import type { OrderStatus, ResultStatus } from "@prisma/client";
+import { customerText } from "../orders/customer-text";
 
 export const DHRU_API_VERSION = "8.2";
 
@@ -221,7 +222,7 @@ export function describeOrder(order: DescribableOrder) {
   const status = dhruStatusCode(order.status, order.result?.resultStatus);
   const comments =
     order.status === "rejected" || order.status === "cancel"
-      ? order.statusReason ?? ""
+      ? customerText(order.statusReason) ?? ""
       : order.result?.resultStatus === "failed"
         ? order.result.resultNote
         : "";

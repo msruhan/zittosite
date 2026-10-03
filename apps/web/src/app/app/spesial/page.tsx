@@ -29,7 +29,7 @@ export default async function SpecialOrdersPage() {
     <>
       <PageHeader
         title={menus.special.label}
-        description={`Order ${menus.special.label} Anda yang diproses otomatis oleh Supplier API.`}
+        description={`Order ${menus.special.label} Anda yang diproses otomatis.`}
       />
       <OrderHistory
         orders={orders}

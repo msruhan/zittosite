@@ -7,6 +7,7 @@ import type {
   Service,
   User,
 } from "@prisma/client";
+import { customerActor, customerText } from "./customer-text";
 
 type InvoiceWithOrders = PaymentInvoice & {
   orders?: Array<Pick<Order, "orderId" | "imei" | "status">>;
@@ -142,10 +143,15 @@ export function serializeResult(
   };
 }
 
+/**
+ * Customer-facing unless `internal`: supplier wording is rewritten out of
+ * reasons and activity. Admin callers pass `internal: true`.
+ */
 export function serializeOrderListItem(
   order: OrderWithRelations,
-  opts?: { redactUser?: boolean },
+  opts?: { redactUser?: boolean; internal?: boolean },
 ) {
+  const internal = opts?.internal === true;
   return {
     id: order.id,
     orderId: order.orderId,
@@ -158,7 +164,7 @@ export function serializeOrderListItem(
     email: order.email,
     username: order.username,
     status: order.status,
-    statusReason: order.statusReason,
+    statusReason: internal ? order.statusReason : customerText(order.statusReason),
     isTest: order.isTest,
     price: order.price,
     assignedAdminId: order.assignedAdminId,
@@ -186,7 +192,10 @@ export function serializeOrderListItem(
         }
       : {}),
     activity: order.activity.map((log) => {
-      const entry = serializeActivity(log, order.orderId);
+      const raw = serializeActivity(log, order.orderId);
+      const entry = internal
+        ? raw
+        : { ...raw, note: customerText(raw.note), actor: customerActor(raw.actor) };
       const actorIsCustomer =
         log.actor === order.user.fullName || log.actor === order.user.username;
       return opts?.redactUser && actorIsCustomer

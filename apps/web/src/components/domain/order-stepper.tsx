@@ -44,6 +44,23 @@ const SUPPLIER_STEP_COPY: Record<FlowStatus, { title: string; pending: string }>
   },
 };
 
+/** What customers see for the same orders: the supplier is never mentioned. */
+const AUTOMATED_STEP_COPY: Record<FlowStatus, { title: string; pending: string }> = {
+  ...STEP_COPY,
+  waiting_action: {
+    title: "Masuk antrean proses",
+    pending: "Menunggu pembayaran terverifikasi",
+  },
+  in_process: {
+    title: "Diproses otomatis",
+    pending: "Menunggu diproses",
+  },
+  done: {
+    title: "Selesai",
+    pending: "Menunggu hasil",
+  },
+};
+
 type StepState = "complete" | "current" | "pending";
 
 function Disc({
@@ -108,7 +125,15 @@ function Disc({
  * timestamp, and the connector is green behind what is done, so the eye finds
  * "where am I" before reading a word.
  */
-export function OrderStepper({ order }: { order: OrderDetail }) {
+export function OrderStepper({
+  order,
+  internal = false,
+}: {
+  order: OrderDetail;
+  /** Admin view: names the Supplier API steps. */
+  internal?: boolean;
+}) {
+  const automatedCopy = internal ? SUPPLIER_STEP_COPY : AUTOMATED_STEP_COPY;
   const failure: "rejected" | "cancel" | null =
     order.status === "rejected" || order.status === "cancel"
       ? order.status
@@ -163,7 +188,7 @@ export function OrderStepper({ order }: { order: OrderDetail }) {
     <>
       <ol className="relative">
         {steps.map((step, index) => {
-          const copy = (order.service.via === "supplier" ? SUPPLIER_STEP_COPY : STEP_COPY)[
+          const copy = (order.service.via === "supplier" ? automatedCopy : STEP_COPY)[
             step.status
           ];
           const timestamp = timestampFor(step.status);

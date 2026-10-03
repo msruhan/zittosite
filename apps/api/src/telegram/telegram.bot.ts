@@ -577,6 +577,9 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
           const key = parseOrderCategory(rawKey ?? "");
           if (key) await this.showOrderCategory(ctx, key, Number(rawPage));
           else await ctx.answerCallbackQuery();
+        } else if (data.startsWith("uord:grp:")) {
+          const [groupKey, rawPage] = data.slice("uord:grp:".length).split(":");
+          await this.showSpecialGroup(ctx, groupKey ?? "", Number(rawPage));
         } else if (data.startsWith("uord:svc:")) {
           await this.handleUserServicePick(ctx, data.slice("uord:svc:".length));
         } else if (data.startsWith("uord:qris:")) {
@@ -1000,7 +1003,99 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
       await ctx.answerCallbackQuery({ text: "Belum ada layanan di kategori ini", show_alert: true });
       return;
     }
-    const view = pageOf(inCategory, page);
+    if (key === "special" && inCategory.some((service) => service.groupId)) {
+      await this.showSpecialGroups(ctx, inCategory, categoryLabel(key, menus), page);
+      return;
+    }
+    await this.showServiceList(ctx, {
+      title: categoryLabel(key, menus),
+      services: inCategory,
+      page,
+      pageData: (p) => `uord:cat:${key}:${p}`,
+      back: ["⬅️ Jenis layanan", "uord:cats"],
+    });
+  }
+
+  /** Layanan Spesial first asks for a group (as set in Grup Layanan Spesial), then lists its services. */
+  private async showSpecialGroups(
+    ctx: Context,
+    services: Array<{ group: string | null; groupId: string | null }>,
+    title: string,
+    page: number,
+  ) {
+    const groups = new Map<string, { name: string; count: number }>();
+    let ungrouped = 0;
+    for (const service of services) {
+      if (!service.groupId) {
+        ungrouped += 1;
+        continue;
+      }
+      const entry = groups.get(service.groupId);
+      if (entry) entry.count += 1;
+      else groups.set(service.groupId, { name: service.group ?? "Grup", count: 1 });
+    }
+    const options = [
+      ...[...groups.entries()]
+        .sort(([, a], [, b]) => a.name.localeCompare(b.name))
+        .map(([id, g]) => ({ key: id, label: `${g.name} (${g.count})` })),
+      ...(ungrouped ? [{ key: "none", label: `Lainnya (${ungrouped})` }] : []),
+    ];
+    const view = pageOf(options, page);
+    const keyboard = new InlineKeyboard();
+    for (const option of view.items) keyboard.text(option.label, `uord:grp:${option.key}`).row();
+    if (view.pages > 1) {
+      if (view.page > 1) keyboard.text("◀️ Sebelumnya", `uord:cat:special:${view.page - 1}`);
+      if (view.page < view.pages) keyboard.text("Berikutnya ▶️", `uord:cat:special:${view.page + 1}`);
+      keyboard.row();
+    }
+    keyboard.text("⬅️ Jenis layanan", "uord:cats").text("🏠 Menu", "menu:home");
+    await this.sendOrEdit(
+      ctx,
+      `📦 <b>${escapeHtml(title)}</b>\nPilih grup layanan (${services.length} layanan):`,
+      keyboard,
+      true,
+    );
+  }
+
+  private async showSpecialGroup(ctx: Context, groupKey: string, page: number) {
+    const actor = await this.requireMember(ctx);
+    if (!actor) return;
+    const [services, menus] = await Promise.all([
+      this.botServices(actor.user.id),
+      this.userMenus.get(),
+    ]);
+    const inGroup = services
+      .filter(
+        (service) =>
+          categoryOfService(service) === "special" &&
+          (groupKey === "none" ? !service.groupId : service.groupId === groupKey),
+      )
+      .sort((a, b) => a.name.localeCompare(b.name));
+    if (!inGroup.length) {
+      await ctx.answerCallbackQuery({ text: "Belum ada layanan di grup ini", show_alert: true });
+      return;
+    }
+    const groupName = groupKey === "none" ? "Lainnya" : inGroup[0].group ?? "Grup";
+    await this.showServiceList(ctx, {
+      title: `${categoryLabel("special", menus)} › ${groupName}`,
+      services: inGroup,
+      page,
+      pageData: (p) => `uord:grp:${groupKey}:${p}`,
+      back: ["⬅️ Grup layanan", "uord:cat:special"],
+    });
+  }
+
+  private async showServiceList(
+    ctx: Context,
+    input: {
+      title: string;
+      services: Array<{ id: string; code: string | null; name: string; price: number }>;
+      page: number;
+      pageData: (page: number) => string;
+      back: [label: string, data: string];
+    },
+  ) {
+    const view = pageOf(input.services, input.page);
     const keyboard = new InlineKeyboard();
     for (const service of view.items) {
       keyboard
@@ -1008,15 +1103,15 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
         .row();
     }
     if (view.pages > 1) {
-      if (view.page > 1) keyboard.text("◀️ Sebelumnya", `uord:cat:${key}:${view.page - 1}`);
-      if (view.page < view.pages) keyboard.text("Berikutnya ▶️", `uord:cat:${key}:${view.page + 1}`);
+      if (view.page > 1) keyboard.text("◀️ Sebelumnya", input.pageData(view.page - 1));
+      if (view.page < view.pages) keyboard.text("Berikutnya ▶️", input.pageData(view.page + 1));
       keyboard.row();
     }
-    keyboard.text("⬅️ Jenis layanan", "uord:cats").text("🏠 Menu", "menu:home");
+    keyboard.text(input.back[0], input.back[1]).text("🏠 Menu", "menu:home");
     const pageNote = view.pages > 1 ? ` · halaman ${view.page}/${view.pages}` : "";
     await this.sendOrEdit(
       ctx,
-      `📦 <b>${escapeHtml(categoryLabel(key, menus))}</b>\nPilih layanan (${inCategory.length}${pageNote}):`,
+      `📦 <b>${escapeHtml(input.title)}</b>\nPilih layanan (${input.services.length}${pageNote}):`,
       keyboard,
       true,
     );

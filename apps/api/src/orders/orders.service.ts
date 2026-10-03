@@ -121,6 +121,7 @@ export class OrdersService {
       return {
         ...serializeService(service, price),
         group: serviceGroup?.name ?? null,
+        groupId: service.serviceGroupId,
       };
     });
   }
@@ -521,6 +522,7 @@ export class OrdersService {
           where: { id: order.id },
           include: orderInclude,
         }),
+        { internal: true },
       );
     }
 
@@ -578,7 +580,7 @@ export class OrdersService {
         refund: refunded,
       }),
     );
-    return serializeOrderListItem(updated);
+    return serializeOrderListItem(updated, { internal: true });
   }
 
   /**
@@ -782,7 +784,7 @@ export class OrdersService {
       claimed.userId,
       userOrderNoticeHtml({ kind: "taken", orderId: claimed.orderId }),
     );
-    return serializeOrderListItem(claimed);
+    return serializeOrderListItem(claimed, { internal: true });
   }
 
   async rejectOrder(adminId: string, publicOrderId: string, reason?: string) {
@@ -869,7 +871,7 @@ export class OrdersService {
         duration: processDurationLabel(updated),
       }),
     );
-    return serializeOrderListItem(updated);
+    return serializeOrderListItem(updated, { internal: true });
   }
 
   async completeOrder(
@@ -962,7 +964,7 @@ export class OrdersService {
         duration: processDurationLabel(updated),
       }),
     );
-    return serializeOrderListItem(updated);
+    return serializeOrderListItem(updated, { internal: true });
   }
 
   /**
@@ -1134,7 +1136,7 @@ export class OrdersService {
       orderBy: { createdAt: "desc" },
       take,
     });
-    return rows.map((row) => serializeOrderListItem(row));
+    return rows.map((row) => serializeOrderListItem(row, { internal: true }));
   }
 
   private recordRefund(
@@ -1259,7 +1261,7 @@ export class OrdersService {
                 status: "waiting_action",
                 note:
                   order.service.fulfillmentChannel === "supplier"
-                    ? "Order diteruskan otomatis ke Supplier API."
+                    ? "Order diproses otomatis."
                     : "Order masuk antrean dan siap diambil admin.",
                 actor: "Sistem",
               },

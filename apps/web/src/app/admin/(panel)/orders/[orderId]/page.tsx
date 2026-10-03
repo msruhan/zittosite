@@ -326,7 +326,7 @@ export default async function AdminOrderDetailPage({
               <CardTitle className="text-title">Riwayat aktivitas</CardTitle>
             </CardHeader>
             <CardBody className="pt-4">
-              <OrderStepper order={order} />
+              <OrderStepper order={order} internal />
 
               <ul className="mt-5 space-y-3 border-t border-hairline pt-4">
                 {order.activity.map((log) => (

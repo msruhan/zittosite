@@ -8,6 +8,7 @@ import { UsdRateService } from "../orders/usd-rate.service";
 import { AdminNotifyService } from "../telegram/admin-notify.service";
 import { escapeHtml } from "../telegram/telegram-messages";
 import { SupplierRequestError, supplierInputFields } from "./dhru-supplier-client";
+import { customerText } from "../orders/customer-text";
 import { checkSupplierCost } from "./supplier-price-guard";
 import { supplierClient } from "./suppliers.service";
 
@@ -103,8 +104,9 @@ export class SupplierWorkerService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  private actor(supplier: Supplier) {
-    return { username: "supplier", fullName: supplier.name };
+  /** Activity and customer notices never name the supplier; admins see it on the order. */
+  private actor() {
+    return { username: "Sistem", fullName: "otomatis" };
   }
 
   async submitPending() {
@@ -143,6 +145,8 @@ export class SupplierWorkerService implements OnModuleInit, OnModuleDestroy {
 
       let failure: string;
       let retryable: boolean;
+      /** The supplier's own refusal message, safe to show the customer once rewritten. */
+      let refusal: string | null;
       try {
         const prices = await this.priceList(supplier);
         const cost = checkSupplierCost({
@@ -176,17 +180,19 @@ export class SupplierWorkerService implements OnModuleInit, OnModuleDestroy {
           });
           await this.orders.applyProcessorUpdate(
             order.id,
-            { kind: "processing", note: "Diterima Supplier API, sedang diproses otomatis." },
-            this.actor(supplier),
+            { kind: "processing", note: "Sedang diproses otomatis." },
+            this.actor(),
           );
           this.kick(FIRST_CHECK_DELAY_MS);
           continue;
         }
         failure = reply.message;
         retryable = isRetryableSupplierError(reply.message);
+        refusal = retryable ? null : reply.message;
       } catch (err) {
         failure = errorText(err);
         retryable = err instanceof SupplierRequestError;
+        refusal = null;
         if (!retryable) this.logger.error(`Supplier submit ${order.orderId} failed: ${failure}`);
       }
 
@@ -199,11 +205,11 @@ export class SupplierWorkerService implements OnModuleInit, OnModuleDestroy {
           order.id,
           {
             kind: "rejected",
-            reason: retryable
-              ? `Supplier tidak dapat memproses order: ${failure}`
-              : `Ditolak supplier: ${failure}`,
+            reason: refusal
+              ? customerText(`Ditolak: ${refusal}`)
+              : "Order tidak dapat diproses saat ini.",
           },
-          this.actor(supplier),
+          this.actor(),
         );
       }
     }
@@ -243,7 +249,12 @@ export class SupplierWorkerService implements OnModuleInit, OnModuleDestroy {
         data: { supplierError: error, supplierAttempts: MAX_SUBMIT_ATTEMPTS },
       }),
       this.prisma.orderActivityLog.create({
-        data: { orderId: order.id, status: "waiting_action", note: error, actor: "Sistem" },
+        data: {
+          orderId: order.id,
+          status: "waiting_action",
+          note: "Order sedang ditinjau admin.",
+          actor: "Sistem",
+        },
       }),
     ]);
     this.logger.warn(`Supplier submit ${order.orderId} held: ${reason}`);
@@ -298,14 +309,14 @@ export class SupplierWorkerService implements OnModuleInit, OnModuleDestroy {
           await this.orders.applyProcessorUpdate(
             order.id,
             { kind: "done", note: code || comments },
-            this.actor(supplier),
+            this.actor(),
           );
         } else if (status === 3) {
           const why = comments || code;
           await this.orders.applyProcessorUpdate(
             order.id,
-            { kind: "rejected", reason: why ? `Ditolak supplier: ${why}` : "Ditolak supplier." },
-            this.actor(supplier),
+            { kind: "rejected", reason: why ? customerText(`Ditolak: ${why}`) : "Ditolak." },
+            this.actor(),
           );
         } else if (order.supplierError) {
           await this.prisma.order.update({

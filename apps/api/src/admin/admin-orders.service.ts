@@ -101,7 +101,7 @@ export class AdminOrdersService {
       orderBy: { createdAt: "desc" },
       take: 200,
     });
-    return rows.map((row) => serializeOrderListItem(row, { redactUser }));
+    return rows.map((row) => serializeOrderListItem(row, { redactUser, internal: true }));
   }
 
   /** Super Admin Excel export of the Orders page, honouring the same filters as {@link list}. */
@@ -222,7 +222,7 @@ export class AdminOrdersService {
       include: orderInclude,
     });
     if (!order) throw new NotFoundException("Order tidak ditemukan.");
-    return serializeOrderListItem(order, { redactUser });
+    return serializeOrderListItem(order, { redactUser, internal: true });
   }
 
   async overrideStatus(
@@ -323,6 +323,7 @@ export class AdminOrdersService {
       this.notifyProgress(updated, next, admin, refunded);
     }
     return serializeOrderListItem(updated, {
+      internal: true,
       redactUser: admin.role !== "super_admin",
     });
   }
@@ -464,7 +465,7 @@ export class AdminOrdersService {
       },
       include: orderInclude,
     });
-    return serializeOrderListItem(updated);
+    return serializeOrderListItem(updated, { internal: true });
   }
 
   async dashboardStats(viewerAdminId: string) {
@@ -511,7 +512,7 @@ export class AdminOrdersService {
       activeServices: services,
       revenueToday: paidToday._sum.amount ?? 0,
       recentOrders: recent.map((row) =>
-        serializeOrderListItem(row, { redactUser }),
+        serializeOrderListItem(row, { redactUser, internal: true }),
       ),
     };
   }

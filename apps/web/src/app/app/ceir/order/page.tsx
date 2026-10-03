@@ -24,7 +24,7 @@ const STEPS = [
   {
     step: "02",
     title: "Diproses otomatis",
-    body: "Setelah lunas, order langsung diteruskan ke Supplier API tanpa menunggu admin.",
+    body: "Setelah lunas, order langsung diproses otomatis tanpa menunggu admin.",
   },
   {
     step: "03",
