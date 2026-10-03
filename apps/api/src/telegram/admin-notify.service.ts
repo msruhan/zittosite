@@ -442,24 +442,38 @@ export class AdminNotifyService {
     text: string,
     html = true,
   ) {
-    const res = await fetch(
+    const res = await this.fetchWithRetry(
       `https://api.telegram.org/bot${token}/sendMessage`,
-      {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          chat_id: chatId,
-          text,
-          parse_mode: html ? "HTML" : undefined,
-          disable_web_page_preview: true,
-        }),
-      },
+      JSON.stringify({
+        chat_id: chatId,
+        text,
+        parse_mode: html ? "HTML" : undefined,
+        disable_web_page_preview: true,
+      }),
     );
     if (!res.ok) {
       const body = await res.text().catch(() => "");
       this.logger.warn(
         `sendMessage failed (${res.status}): ${body.slice(0, 200)}`,
       );
+    }
+  }
+
+  /** Retries dropped connections/timeouts only; Telegram's own error replies are returned as-is. */
+  private async fetchWithRetry(url: string, body: string): Promise<Response> {
+    const delaysMs = [1_000, 3_000];
+    for (let attempt = 0; ; attempt++) {
+      try {
+        return await fetch(url, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body,
+          signal: AbortSignal.timeout(15_000),
+        });
+      } catch (err) {
+        if (attempt >= delaysMs.length) throw err;
+        await new Promise((resolve) => setTimeout(resolve, delaysMs[attempt]));
+      }
     }
   }
 
@@ -473,11 +487,10 @@ export class AdminNotifyService {
   } | null> {
     const method = payload._method ?? "sendMessage";
     const { _method: _drop, ...body } = payload;
-    const res = await fetch(`https://api.telegram.org/bot${token}/${method}`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(body),
-    });
+    const res = await this.fetchWithRetry(
+      `https://api.telegram.org/bot${token}/${method}`,
+      JSON.stringify(body),
+    );
     return (await res.json().catch(() => null)) as {
       ok?: boolean;
       result?: { message_id?: number };

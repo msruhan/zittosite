@@ -743,6 +743,9 @@ export class OrdersService {
       });
       if (!order) throw new NotFoundException("Order tidak ditemukan.");
       await this.assertAssignedToService(tx, admin, order.serviceId);
+      if (order.status === "in_process" && order.assignedAdminId === adminId) {
+        return null;
+      }
 
       const result = await tx.order.updateMany({
         where: { id: order.id, status: "waiting_action" },
@@ -753,7 +756,12 @@ export class OrdersService {
         },
       });
       if (result.count !== 1) {
-        throw new ConflictException("Order sudah diambil admin lain.");
+        const current = await tx.order.findUniqueOrThrow({ where: { id: order.id } });
+        throw new ConflictException(
+          current.status === "in_process"
+            ? "Order sudah diambil admin lain."
+            : "Order sudah tidak menunggu diproses.",
+        );
       }
       await tx.orderActivityLog.create({
         data: {
@@ -768,6 +776,16 @@ export class OrdersService {
         include: orderInclude,
       });
     });
+
+    if (!claimed) {
+      // Already this admin's order (e.g. a stale "Terima" button): resync the card, no new side effects.
+      const own = await this.prisma.order.findUniqueOrThrow({
+        where: { orderId: publicOrderId },
+        include: orderInclude,
+      });
+      await this.adminNotify.syncOrderCards(own.id, "taken", { actorName: admin.fullName });
+      return serializeOrderListItem(own, { internal: true });
+    }
 
     this.audit.record("order.taken", {
       actorId: adminId,

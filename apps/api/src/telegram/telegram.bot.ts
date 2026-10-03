@@ -6,6 +6,7 @@ import {
   OnModuleInit,
 } from "@nestjs/common";
 import { Bot, Context, InlineKeyboard, InputFile } from "grammy";
+import { run, sequentialize, type RunnerHandle } from "@grammyjs/runner";
 import * as QRCode from "qrcode";
 import type { Admin, ResultStatus, User } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
@@ -205,7 +206,7 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(TelegramBotService.name);
   private bot: Bot | null = null;
   private ready = false;
-  private polling = false;
+  private runner: RunnerHandle | null = null;
   private dailyRecapTimer: NodeJS.Timeout | null = null;
   private readonly seenUpdateIds = new Map<number, number>();
   private readonly sessions = new Map<string, ChatSession>();
@@ -235,7 +236,12 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
       return;
     }
 
-    this.bot = new Bot(token);
+    // grammY's default 500s request timeout lets one dropped connection stall a chat for minutes.
+    this.bot = new Bot(token, { client: { timeoutSeconds: 60 } });
+    // Updates run concurrently across chats but stay in order within a chat.
+    this.bot.use(
+      sequentialize((ctx) => (ctx.chat?.id ?? ctx.from?.id)?.toString()),
+    );
     this.registerHandlers(this.bot);
     this.bot.catch((error) => {
       const updateId = error.ctx.update.update_id;
@@ -289,10 +295,8 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
           );
         }
       }
-      this.polling = true;
-      this.bot.start({
-        onStart: () => this.logger.log("Telegram bot polling started"),
-      });
+      this.runner = run(this.bot);
+      this.logger.log("Telegram bot polling started");
     } else {
       this.logger.log("Telegram bot in webhook mode");
     }
@@ -301,7 +305,7 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
   async onModuleDestroy() {
     this.ready = false;
     if (this.dailyRecapTimer) clearTimeout(this.dailyRecapTimer);
-    if (this.bot && this.polling) await this.bot.stop();
+    if (this.runner?.isRunning()) await this.runner.stop();
   }
 
   /** Production (or TELEGRAM_DAILY_RECAP=1): recaps go out every day at 23.00 WIB. */
@@ -1196,6 +1200,11 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
         `📱 IMEI: <code>${escapeHtml(order.imei)}</code>`,
         "Kerjakan lalu tekan Done.",
       ].join("\n"),
+      {
+        reply_markup: new InlineKeyboard()
+          .text("✅ Done", `ord:done:${orderId}`)
+          .text("❌ Tolak", `ord:reject:${orderId}`),
+      },
     );
   }
 
