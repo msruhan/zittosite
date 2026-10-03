@@ -111,7 +111,23 @@
   --animate-rise: rise 420ms var(--ease-out-strong) both;
   --animate-stamp: stamp 480ms var(--ease-out-strong) both;
   --animate-spinner: spinner 600ms linear infinite;
+  --animate-cal-next: cal-next 220ms var(--ease-out-strong);
+  --animate-cal-prev: cal-prev 220ms var(--ease-out-strong);
 
+  @keyframes cal-next {
+    from {
+      opacity: 0;
+      transform: translateX(14px);
+      filter: blur(1px);
+    }
+  }
+  @keyframes cal-prev {
+    from {
+      opacity: 0;
+      transform: translateX(-14px);
+      filter: blur(1px);
+    }
+  }
   @keyframes overlay-in {
     from {
       opacity: 0;

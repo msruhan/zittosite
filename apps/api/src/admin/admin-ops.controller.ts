@@ -94,17 +94,27 @@ export class AdminOpsController {
 
   @Get("dashboard/insights")
   @UseGuards(SuperAdminGuard)
-  dashboardInsights(@Query("tahun") tahun?: string, @Query("bulan") bulan?: string) {
-    return this.reports.insights(parseReportPeriod(tahun, bulan));
+  dashboardInsights(
+    @Query("dari") dari?: string,
+    @Query("sampai") sampai?: string,
+    @Query("tahun") tahun?: string,
+    @Query("bulan") bulan?: string,
+  ) {
+    return this.reports.insights(parseReportPeriod({ dari, sampai, tahun, bulan }));
   }
 
   @Get("reports/summary")
   reportsSummary(
     @Req() req: AdminReq,
+    @Query("dari") dari?: string,
+    @Query("sampai") sampai?: string,
     @Query("tahun") tahun?: string,
     @Query("bulan") bulan?: string,
   ) {
-    return this.reports.summary(req.admin.sub, parseReportPeriod(tahun, bulan));
+    return this.reports.summary(
+      req.admin.sub,
+      parseReportPeriod({ dari, sampai, tahun, bulan }),
+    );
   }
 
   @Get("activity")

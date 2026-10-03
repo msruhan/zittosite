@@ -17,7 +17,7 @@ import {
 } from "@/components/ui/table";
 import { DonutChart } from "@/components/domain/donut-chart";
 import { OrdersBarChart } from "@/components/domain/orders-bar-chart";
-import { ReportPeriodFilter } from "@/components/domain/report-period-filter";
+import { DateRangeFilter } from "@/components/domain/date-range-filter";
 import { RevenueChart } from "@/components/domain/revenue-chart";
 import { StatGrid, StatTile } from "@/components/domain/stat-tile";
 import { ApiError } from "@/lib/api";
@@ -61,7 +61,7 @@ type AllTimeReport = {
 
 /** Filtered by year (breakdown per month) or month (per week, charts per day). */
 type PeriodReport = {
-  period: { year: number; month: number | null; label: string };
+  period: { from: string; to: string; days: number; label: string };
   finance: {
     canSeeCost: boolean;
     period: Money;
@@ -205,12 +205,21 @@ function firstParam(value: string | string[] | undefined): string | undefined {
 export default async function AdminReportsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ tahun?: string | string[]; bulan?: string | string[] }>;
+  searchParams: Promise<{
+    dari?: string | string[];
+    sampai?: string | string[];
+    tahun?: string | string[];
+    bulan?: string | string[];
+  }>;
 }) {
   const params = await searchParams;
+  const dari = firstParam(params.dari);
+  const sampai = firstParam(params.sampai);
   const tahun = firstParam(params.tahun);
   const bulan = firstParam(params.bulan);
   const query = new URLSearchParams();
+  if (dari) query.set("dari", dari);
+  if (sampai) query.set("sampai", sampai);
   if (tahun) query.set("tahun", tahun);
   if (tahun && bulan) query.set("bulan", bulan);
   const qs = query.toString();
@@ -233,7 +242,7 @@ export default async function AdminReportsPage({
   const today = period ? null : data.finance.today;
   const periodLabel = period?.label ?? null;
   const chartScope = period
-    ? period.month
+    ? period.days <= 62
       ? `per hari · ${period.label}`
       : `per bulan · ${period.label}`
     : "7 hari terakhir";
@@ -262,10 +271,10 @@ export default async function AdminReportsPage({
         }
         actions={
           <Suspense fallback={null}>
-            <ReportPeriodFilter
-              years={data.years}
-              year={period?.year ?? null}
-              month={period?.month ?? null}
+            <DateRangeFilter
+              from={period?.from ?? null}
+              to={period?.to ?? null}
+              label={periodLabel}
             />
           </Suspense>
         }

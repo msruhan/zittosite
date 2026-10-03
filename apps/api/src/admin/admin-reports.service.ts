@@ -99,82 +99,188 @@ function formatWeekdayNarrow(dayStart: Date): string {
   }).format(dayStart);
 }
 
-/** Reports filter: a whole year, or one month of it (1–12). */
-export type ReportPeriod = { year: number; month: number | null };
+/**
+ * Reports filter: Jakarta calendar days `from`..`to` (inclusive, YYYY-MM-DD);
+ * `start`/`end` are the matching UTC instants, `end` exclusive.
+ */
+export type ReportPeriod = { from: string; to: string; start: Date; end: Date };
 
 type Bucket = { label: string; start: Date; end: Date };
 
-/** `tahun` (YYYY) and optional `bulan` (1–12); anything invalid means "all time". */
-export function parseReportPeriod(tahun?: string, bulan?: string): ReportPeriod | undefined {
-  const year = Number(tahun);
+const YMD = /^\d{4}-\d{2}-\d{2}$/;
+const DAY_MS = 86_400_000;
+/** Ranges up to this many days chart per day; longer ones per month. */
+const DAILY_CHART_MAX_DAYS = 62;
+/** Finance table: per day up to 14 days, per week up to 92, per month beyond. */
+const DAILY_TABLE_MAX_DAYS = 14;
+const WEEKLY_TABLE_MAX_DAYS = 92;
+
+function validYmd(value: string | undefined): value is string {
+  if (!value || !YMD.test(value)) return false;
+  const date = new Date(`${value}T00:00:00+07:00`);
+  return !Number.isNaN(date.getTime()) && jakartaYmd(date) === value;
+}
+
+export function rangePeriod(from: string, to: string): ReportPeriod {
+  const [a, b] = from <= to ? [from, to] : [to, from];
+  const start = new Date(`${a}T00:00:00+07:00`);
+  return { from: a, to: b, start, end: addJakartaDays(new Date(`${b}T00:00:00+07:00`), 1) };
+}
+
+/**
+ * `dari`/`sampai` (YYYY-MM-DD, WIB) win; the older `tahun` (+ optional `bulan`)
+ * still maps to that year or month. Anything invalid means "all time".
+ */
+export function parseReportPeriod(q: {
+  dari?: string;
+  sampai?: string;
+  tahun?: string;
+  bulan?: string;
+}): ReportPeriod | undefined {
+  if (validYmd(q.dari) || validYmd(q.sampai)) {
+    const from = validYmd(q.dari) ? q.dari : q.sampai!;
+    const to = validYmd(q.sampai) ? q.sampai : q.dari!;
+    if (Number(from.slice(0, 4)) < 2000 || Number(to.slice(0, 4)) < 2000) return undefined;
+    return rangePeriod(from, to);
+  }
+  const year = Number(q.tahun);
   const current = Number(jakartaYmd(new Date()).slice(0, 4));
-  if (!/^\d{4}$/.test(tahun ?? "") || year < 2000 || year > current + 1) return undefined;
-  const month = Number(bulan);
-  return {
-    year,
-    month: /^\d{1,2}$/.test(bulan ?? "") && month >= 1 && month <= 12 ? month : null,
-  };
+  if (!/^\d{4}$/.test(q.tahun ?? "") || year < 2000 || year > current + 1) return undefined;
+  const month = Number(q.bulan);
+  if (/^\d{1,2}$/.test(q.bulan ?? "") && month >= 1 && month <= 12) {
+    const first = `${year}-${String(month).padStart(2, "0")}-01`;
+    const nextMonth = jakartaMonthStartOf(month === 12 ? year + 1 : year, month === 12 ? 1 : month + 1);
+    return rangePeriod(first, jakartaYmd(addJakartaDays(nextMonth, -1)));
+  }
+  return rangePeriod(`${year}-01-01`, `${year}-12-31`);
 }
 
 function jakartaMonthStartOf(year: number, month: number): Date {
   return new Date(`${year}-${String(month).padStart(2, "0")}-01T00:00:00+07:00`);
 }
 
-function nextMonthStart(year: number, month: number): Date {
-  return month === 12 ? jakartaMonthStartOf(year + 1, 1) : jakartaMonthStartOf(year, month + 1);
+function periodDays(period: ReportPeriod): number {
+  return Math.round((period.end.getTime() - period.start.getTime()) / DAY_MS);
 }
 
-function formatMonthShort(start: Date): string {
-  return new Intl.DateTimeFormat("id-ID", { timeZone: TZ, month: "short" }).format(start);
-}
-
-function formatPeriodLabel(period: ReportPeriod): string {
-  if (!period.month) return `Tahun ${period.year}`;
-  return new Intl.DateTimeFormat("id-ID", { timeZone: TZ, month: "long", year: "numeric" }).format(
-    jakartaMonthStartOf(period.year, period.month),
+function formatYmd(ymd: string, opts: Intl.DateTimeFormatOptions): string {
+  return new Intl.DateTimeFormat("id-ID", { timeZone: TZ, ...opts }).format(
+    new Date(`${ymd}T12:00:00+07:00`),
   );
 }
 
-function periodRange(period: ReportPeriod): { start: Date; end: Date } {
-  return period.month
-    ? { start: jakartaMonthStartOf(period.year, period.month), end: nextMonthStart(period.year, period.month) }
-    : { start: jakartaMonthStartOf(period.year, 1), end: jakartaMonthStartOf(period.year + 1, 1) };
-}
-
-function monthBuckets(year: number): Bucket[] {
-  return Array.from({ length: 12 }, (_, i) => {
-    const start = jakartaMonthStartOf(year, i + 1);
-    return { label: formatMonthShort(start), start, end: nextMonthStart(year, i + 1) };
-  });
-}
-
-function dayBuckets(start: Date, end: Date): Bucket[] {
-  const buckets: Bucket[] = [];
-  for (let day = start; day < end; day = addJakartaDays(day, 1)) {
-    buckets.push({ label: jakartaYmd(day).slice(8).replace(/^0/, ""), start: day, end: addJakartaDays(day, 1) });
+/** "3 Okt 2026", "Oktober 2026", "Tahun 2026", "1–15 Okt 2026", "28 Sep – 3 Okt 2026". */
+export function formatPeriodLabel(period: ReportPeriod): string {
+  const { from, to } = period;
+  if (from === to) return formatYmd(from, { day: "numeric", month: "short", year: "numeric" });
+  if (isFullYear(period)) return `Tahun ${from.slice(0, 4)}`;
+  if (isFullMonth(period)) return formatYmd(from, { month: "long", year: "numeric" });
+  const sameYear = from.slice(0, 4) === to.slice(0, 4);
+  if (from.slice(0, 7) === to.slice(0, 7)) {
+    return `${Number(from.slice(8))}–${formatYmd(to, { day: "numeric", month: "short", year: "numeric" })}`;
   }
-  return buckets;
+  const full: Intl.DateTimeFormatOptions = { day: "numeric", month: "short", year: "numeric" };
+  const head = formatYmd(from, sameYear ? { day: "numeric", month: "short" } : full);
+  return `${head} – ${formatYmd(to, full)}`;
 }
 
-/** Days 1–7, 8–14, 15–21, 22–28, 29–end of a month. */
-function weekBuckets(start: Date, end: Date): Bucket[] {
-  const month = formatMonthShort(start);
+function formatMonthShort(start: Date, withYear = false): string {
+  return new Intl.DateTimeFormat("id-ID", {
+    timeZone: TZ,
+    month: "short",
+    ...(withYear ? { year: "2-digit" } : {}),
+  }).format(start);
+}
+
+/** Calendar months overlapping the range, clipped to it. */
+function monthBuckets(start: Date, end: Date): Bucket[] {
+  const multiYear = jakartaYmd(start).slice(0, 4) !== jakartaYmd(addJakartaDays(end, -1)).slice(0, 4);
   const buckets: Bucket[] = [];
-  for (let from = start, firstDay = 1; from < end; firstDay += 7) {
-    const to = addJakartaDays(from, 7) < end ? addJakartaDays(from, 7) : end;
-    const lastDay = Number(jakartaYmd(addJakartaDays(to, -1)).slice(8));
-    buckets.push({ label: `${firstDay}–${lastDay} ${month}`, start: from, end: to });
+  for (let from = start; from < end; ) {
+    const [y, m] = jakartaYmd(from).split("-").map(Number);
+    const next = jakartaMonthStartOf(m === 12 ? y! + 1 : y!, m === 12 ? 1 : m! + 1);
+    const to = next < end ? next : end;
+    buckets.push({ label: formatMonthShort(from, multiYear), start: from, end: to });
     from = to;
   }
   return buckets;
 }
 
-/** The month or year right before `period`. */
+function dayBuckets(start: Date, end: Date, withMonth: boolean): Bucket[] {
+  const buckets: Bucket[] = [];
+  for (let day = start; day < end; day = addJakartaDays(day, 1)) {
+    buckets.push({
+      label: withMonth ? formatDayLabel(day) : jakartaYmd(day).slice(8).replace(/^0/, ""),
+      start: day,
+      end: addJakartaDays(day, 1),
+    });
+  }
+  return buckets;
+}
+
+/** Seven-day chunks from the first day: "1–7 Okt", "29 Sep–5 Okt". */
+function weekBuckets(start: Date, end: Date): Bucket[] {
+  const buckets: Bucket[] = [];
+  for (let from = start; from < end; ) {
+    const to = addJakartaDays(from, 7) < end ? addJakartaDays(from, 7) : end;
+    const last = addJakartaDays(to, -1);
+    const sameMonth = jakartaYmd(from).slice(0, 7) === jakartaYmd(last).slice(0, 7);
+    const head = sameMonth ? String(Number(jakartaYmd(from).slice(8))) : formatDayLabel(from);
+    buckets.push({ label: `${head}–${formatDayLabel(last)}`, start: from, end: to });
+    from = to;
+  }
+  return buckets;
+}
+
+function chartBucketsFor(period: ReportPeriod): Bucket[] {
+  const days = periodDays(period);
+  if (days > DAILY_CHART_MAX_DAYS) return monthBuckets(period.start, period.end);
+  const oneMonth = period.from.slice(0, 7) === period.to.slice(0, 7);
+  return dayBuckets(period.start, period.end, !oneMonth);
+}
+
+function tableBucketsFor(period: ReportPeriod): Bucket[] {
+  const days = periodDays(period);
+  if (days <= DAILY_TABLE_MAX_DAYS) return dayBuckets(period.start, period.end, true);
+  if (days <= WEEKLY_TABLE_MAX_DAYS) return weekBuckets(period.start, period.end);
+  return monthBuckets(period.start, period.end);
+}
+
+function isFullMonth(period: ReportPeriod): boolean {
+  return (
+    period.from.endsWith("-01") &&
+    period.from.slice(0, 7) === period.to.slice(0, 7) &&
+    jakartaYmd(period.end).endsWith("-01")
+  );
+}
+
+function isFullYear(period: ReportPeriod): boolean {
+  return period.from.endsWith("-01-01") && period.to === `${period.from.slice(0, 4)}-12-31`;
+}
+
+/** Previous calendar month/year for whole months/years, else the same number of days before. */
 function previousPeriod(period: ReportPeriod): ReportPeriod {
-  if (!period.month) return { year: period.year - 1, month: null };
-  return period.month === 1
-    ? { year: period.year - 1, month: 12 }
-    : { year: period.year, month: period.month - 1 };
+  if (isFullYear(period)) {
+    const year = Number(period.from.slice(0, 4)) - 1;
+    return rangePeriod(`${year}-01-01`, `${year}-12-31`);
+  }
+  if (isFullMonth(period)) {
+    const lastDay = jakartaYmd(addJakartaDays(period.start, -1));
+    return rangePeriod(`${lastDay.slice(0, 7)}-01`, lastDay);
+  }
+  const days = periodDays(period);
+  const to = jakartaYmd(addJakartaDays(period.start, -1));
+  const from = jakartaYmd(addJakartaDays(period.start, -days));
+  return rangePeriod(from, to);
+}
+
+function serializePeriod(period: ReportPeriod) {
+  return {
+    from: period.from,
+    to: period.to,
+    days: periodDays(period),
+    label: formatPeriodLabel(period),
+  };
 }
 
 function bucketIndexOf(buckets: Bucket[], at: Date): number {
@@ -416,14 +522,13 @@ export class AdminReportsService {
   }
 
   /**
-   * Reports for one year (breakdown per month) or one month (breakdown per
-   * week, charts per day). Sales count by completion date, orders by creation date.
+   * Reports for a date range; the breakdown is per day, week, or month depending
+   * on its length. Sales count by completion date, orders by creation date.
    */
   private async periodSummary(viewerId: string, period: ReportPeriod) {
-    const { start, end } = periodRange(period);
-    const tableBuckets = period.month ? weekBuckets(start, end) : monthBuckets(period.year);
-    const chartBuckets = period.month ? dayBuckets(start, end) : monthBuckets(period.year);
-    const inRange = { gte: start, lt: end };
+    const tableBuckets = tableBucketsFor(period);
+    const chartBuckets = chartBucketsFor(period);
+    const inRange = { gte: period.start, lt: period.end };
 
     const [
       years,
@@ -501,7 +606,7 @@ export class AdminReportsService {
 
     return {
       years,
-      period: { year: period.year, month: period.month, label: formatPeriodLabel(period) },
+      period: serializePeriod(period),
       finance: {
         canSeeCost,
         period: visible(total),
@@ -571,10 +676,15 @@ export class AdminReportsService {
     const todayStart = jakartaDayStart(now);
     const dailyStart = addJakartaDays(todayStart, -13);
     const mixStart = addJakartaDays(todayStart, -29);
-    const [currentYear, currentMonth] = jakartaYmd(now).split("-").map(Number);
-    const selectedPeriod = period ?? { year: currentYear!, month: currentMonth! };
-    const selectedRange = periodRange(selectedPeriod);
-    const previousRange = periodRange(previousPeriod(selectedPeriod));
+    const monthStart = jakartaMonthStart(now);
+    const selectedPeriod =
+      period ??
+      rangePeriod(
+        jakartaYmd(monthStart),
+        jakartaYmd(addJakartaDays(jakartaMonthStart(addJakartaDays(monthStart, 32)), -1)),
+      );
+    const selectedRange = selectedPeriod;
+    const previousRange = previousPeriod(selectedPeriod);
 
     const [years, allTime, selected, previous, earned, created, services] = await Promise.all([
       this.reportYears(),
@@ -649,11 +759,7 @@ export class AdminReportsService {
     return {
       years,
       finance: {
-        period: {
-          year: selectedPeriod.year,
-          month: selectedPeriod.month,
-          label: formatPeriodLabel(selectedPeriod),
-        },
+        period: serializePeriod(selectedPeriod),
         today,
         selected,
         previous,

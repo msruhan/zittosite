@@ -25,7 +25,7 @@ import {
   RecentOrdersTable,
   ServiceProfitTable,
 } from "@/components/domain/admin-dashboard-tables";
-import { ReportPeriodFilter } from "@/components/domain/report-period-filter";
+import { DateRangeFilter } from "@/components/domain/date-range-filter";
 import { StatGrid, StatTile } from "@/components/domain/stat-tile";
 import { ApiError } from "@/lib/api";
 import { serverApi } from "@/lib/server-api";
@@ -54,10 +54,10 @@ type DashboardInsights = {
   years: number[];
   finance: {
     /** Defaults to the current month when no filter is set. */
-    period: { year: number; month: number | null; label: string };
+    period: { from: string; to: string; days: number; label: string };
     today: Money;
     selected: Money;
-    /** The month (or year) before `period`. */
+    /** The period of equal length right before `period`. */
     previous: Money;
     allTime: Money;
   };
@@ -177,10 +177,10 @@ function FinanceSummaryCard({ insights }: { insights: DashboardInsights }) {
             </div>
           </div>
           <Suspense fallback={null}>
-            <ReportPeriodFilter
-              years={insights.years}
-              year={period.year}
-              month={period.month}
+            <DateRangeFilter
+              from={period.from}
+              to={period.to}
+              label={period.label}
               allowAllTime={false}
               compact
             />
@@ -215,7 +215,7 @@ function FinanceSummaryCard({ insights }: { insights: DashboardInsights }) {
                 <ArrowDownRight className="size-3.5" aria-hidden="true" />
               )}
               {change >= 0 ? "+" : ""}
-              {change}% vs {period.month ? "bulan" : "tahun"} sebelumnya
+              {change}% vs periode sebelumnya
             </span>
           ) : null}
         </div>
@@ -441,12 +441,21 @@ function firstParam(value: string | string[] | undefined): string | undefined {
 export default async function AdminDashboardPage({
   searchParams,
 }: {
-  searchParams: Promise<{ tahun?: string | string[]; bulan?: string | string[] }>;
+  searchParams: Promise<{
+    dari?: string | string[];
+    sampai?: string | string[];
+    tahun?: string | string[];
+    bulan?: string | string[];
+  }>;
 }) {
   const params = await searchParams;
+  const dari = firstParam(params.dari);
+  const sampai = firstParam(params.sampai);
   const tahun = firstParam(params.tahun);
   const bulan = firstParam(params.bulan);
   const query = new URLSearchParams();
+  if (dari) query.set("dari", dari);
+  if (sampai) query.set("sampai", sampai);
   if (tahun) query.set("tahun", tahun);
   if (tahun && bulan) query.set("bulan", bulan);
 
