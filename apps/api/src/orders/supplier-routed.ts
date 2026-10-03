@@ -1,4 +1,5 @@
 import type { Prisma, ServiceMenu } from "@prisma/client";
+import { MAX_BULK_IMEIS, MAX_SPECIAL_BULK } from "./imei-list";
 
 /**
  * Orders handled by an upstream Dhru supplier (e.g. CeirBot): already
@@ -36,6 +37,11 @@ export function isSpecialService(service: {
   menu: ServiceMenu;
 }): boolean {
   return service.fulfillmentChannel === "supplier" && service.menu === "special";
+}
+
+/** Most IMEI/SN/ECID values one bulk order may carry for this service. */
+export function maxBulkFor(service: { fulfillmentChannel: string; menu: ServiceMenu }): number {
+  return isSpecialService(service) ? MAX_SPECIAL_BULK : MAX_BULK_IMEIS;
 }
 
 export function serviceViaWhere(via?: OrderVia): Prisma.ServiceWhereInput {

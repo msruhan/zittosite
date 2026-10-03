@@ -1,6 +1,14 @@
 // Keep in sync with apps/api/src/orders/imei-list.ts — the API enforces the same rules.
 export const IMEI_LENGTH = 15;
 export const MAX_BULK_IMEIS = 6;
+export const MAX_SPECIAL_BULK = 2;
+
+/** Most values one bulk order may carry; Layanan Spesial allows fewer. */
+export function maxBulkFor(service: { via?: string; menu?: string | null } | null): number {
+  return service?.via === "supplier" && service.menu === "special"
+    ? MAX_SPECIAL_BULK
+    : MAX_BULK_IMEIS;
+}
 
 export type InputType = "imei" | "sn" | "ecid";
 
@@ -36,7 +44,11 @@ export function inputLengthError(value: string, type: InputType): string | undef
 }
 
 /** One value per line; blank lines ignored, 1-based line numbers. */
-export function parseImeiList(text: string, type: InputType = "imei"): ImeiListResult {
+export function parseImeiList(
+  text: string,
+  type: InputType = "imei",
+  max = MAX_BULK_IMEIS,
+): ImeiListResult {
   const label = INPUT_TYPE_LABEL[type];
   const errors: string[] = [];
   const imeis: string[] = [];
@@ -61,8 +73,8 @@ export function parseImeiList(text: string, type: InputType = "imei"): ImeiListR
     imeis.push(value);
   });
 
-  if (!errors.length && imeis.length > MAX_BULK_IMEIS) {
-    errors.push(`Maksimal ${MAX_BULK_IMEIS} ${label} per order (saat ini ${imeis.length}).`);
+  if (!errors.length && imeis.length > max) {
+    errors.push(`Maksimal ${max} ${label} per order (saat ini ${imeis.length}).`);
   }
   return { imeis, errors };
 }

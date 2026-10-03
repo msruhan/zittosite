@@ -58,9 +58,9 @@ import {
 import {
   INPUT_TYPE_LABEL,
   type InputType,
-  MAX_BULK_IMEIS,
   parseImeiList,
 } from "../orders/imei-list";
+import { maxBulkFor } from "../orders/supplier-routed";
 import { needsExtraInput } from "../orders/special-fields";
 import { UserMenusService } from "../orders/user-menus.service";
 import {
@@ -196,6 +196,7 @@ type ChatSession =
       serviceName: string;
       price: number;
       inputType: InputType;
+      maxBulk: number;
     }
   | { kind: "topup_amount"; userId: string };
 
@@ -700,14 +701,14 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
       }
 
       if (session.kind === "user_imei") {
-        const parsed = parseImeiList(text, session.inputType);
+        const parsed = parseImeiList(text, session.inputType, session.maxBulk);
         if (!parsed.ok) {
           await this.replyHtml(
             ctx,
             [
               ...parsed.errors.map((e) => `⚠️ ${escapeHtml(e)}`),
               "",
-              `Kirim ulang ${INPUT_TYPE_LABEL[session.inputType]}, satu per baris (maksimal ${MAX_BULK_IMEIS}).`,
+              `Kirim ulang ${INPUT_TYPE_LABEL[session.inputType]}, satu per baris (maksimal ${session.maxBulk}).`,
             ].join("\n"),
           );
           return;
@@ -1308,6 +1309,7 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
       return;
     }
     const inputType = service.inputType;
+    const maxBulk = maxBulkFor({ fulfillmentChannel: service.via, menu: service.menu ?? "ceir" });
     const chatId = String(ctx.chat?.id ?? "");
     this.sessions.set(chatId, {
       kind: "user_imei",
@@ -1316,6 +1318,7 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
       serviceName: service.name,
       price: service.price,
       inputType,
+      maxBulk,
     });
     const label = INPUT_TYPE_LABEL[inputType];
     await ctx.answerCallbackQuery();
@@ -1327,7 +1330,7 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
         service.inputType === "imei"
           ? "Kirim <b>IMEI 15 digit</b> sekarang."
           : `Kirim <b>${label}</b> perangkat sekarang.`,
-        `Bulk order: kirim beberapa ${label} dalam satu pesan, <b>satu per baris</b> (maksimal ${MAX_BULK_IMEIS}). Total = jumlah ${label} × harga, dibayar dengan 1 QRIS.`,
+        `Bulk order: kirim beberapa ${label} dalam satu pesan, <b>satu per baris</b> (maksimal ${maxBulk}). Total = jumlah ${label} × harga, dibayar dengan 1 QRIS.`,
         ...(actor.user.creditBalance > 0
           ? [
               `💳 Saldo Anda ${formatRp(actor.user.creditBalance)} otomatis dipakai dulu; sisanya dibayar via QRIS.`,

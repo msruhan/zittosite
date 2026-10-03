@@ -703,7 +703,7 @@ export function UsdRateCard({
       <form
         onSubmit={save}
         noValidate
-        className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-end sm:px-6"
+        className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:px-6"
       >
         <div className="min-w-0 flex-1">
           <p className="text-title text-ink">Kurs Layanan Spesial</p>
@@ -712,12 +712,14 @@ export function UsdRateCard({
             dari kurs ini; menyimpan kurs baru menghitung ulang {serviceCount} layanan.
           </p>
         </div>
-        <div className="flex items-end gap-2">
-          <Field
-            label="$1 ="
-            htmlFor="usd-rate"
-            error={draft && !valid ? "1.000–100.000" : undefined}
-          >
+        <div className="flex flex-col items-end gap-1">
+          <div className="flex items-center gap-2">
+            <label
+              htmlFor="usd-rate"
+              className="whitespace-nowrap font-data tabular text-title text-ink"
+            >
+              $1 =
+            </label>
             <div className="relative">
               <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-body text-ink-soft">
                 Rp
@@ -728,13 +730,19 @@ export function UsdRateCard({
                 className="w-36 pl-10 font-data tabular"
                 value={draft}
                 invalid={Boolean(draft) && !valid}
+                aria-describedby={draft && !valid ? "usd-rate-error" : undefined}
                 onChange={(event) => setDraft(event.target.value.replace(/\D/g, ""))}
               />
             </div>
-          </Field>
-          <Button type="submit" disabled={!dirty} loading={busy} loadingLabel="Menyimpan">
-            Simpan kurs
-          </Button>
+            <Button type="submit" disabled={!dirty} loading={busy} loadingLabel="Menyimpan">
+              Simpan kurs
+            </Button>
+          </div>
+          {draft && !valid ? (
+            <p id="usd-rate-error" className="text-label text-refused-ink">
+              Kurs harus 1.000–100.000.
+            </p>
+          ) : null}
         </div>
       </form>
     </Card>

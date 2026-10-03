@@ -80,3 +80,19 @@ export async function api<T>(
   if (res.status === 204) return undefined as T;
   return (await res.json()) as T;
 }
+
+/** GET a file attachment; `filename` comes from Content-Disposition when exposed. */
+export async function downloadFile(
+  path: string,
+): Promise<{ blob: Blob; filename: string | null }> {
+  if (isMockMode()) {
+    throw new ApiError("Export tidak tersedia di mode demo.", 501);
+  }
+  const res = await fetch(`${API_URL}${path}`, { credentials: "include" });
+  if (!res.ok) {
+    throw new ApiError(await parseError(res), res.status);
+  }
+  const disposition = res.headers.get("Content-Disposition") ?? "";
+  const filename = /filename="?([^";]+)"?/i.exec(disposition)?.[1] ?? null;
+  return { blob: await res.blob(), filename };
+}

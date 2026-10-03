@@ -11,6 +11,7 @@ import {
   Post,
   Query,
   Req,
+  StreamableFile,
   UseGuards,
 } from "@nestjs/common";
 import { Throttle } from "@nestjs/throttler";
@@ -468,6 +469,28 @@ export class AdminOpsController {
   @Get("orders-handlers")
   listOrderHandlers() {
     return this.orders.handlers();
+  }
+
+  @Get("orders/export")
+  @UseGuards(SuperAdminGuard)
+  @Throttle(SENSITIVE_THROTTLE)
+  async exportOrders(
+    @Req() req: AdminReq,
+    @Query("q") q?: string,
+    @Query("status") status?: string,
+    @Query("admin") adminId?: string,
+    @Query("from") from?: string,
+    @Query("to") to?: string,
+  ) {
+    const { buffer, filename } = await this.orders.exportXlsx(req.admin.sub, q, status, {
+      adminId,
+      from,
+      to,
+    });
+    return new StreamableFile(buffer, {
+      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      disposition: `attachment; filename="${filename}"`,
+    });
   }
 
   @Get("orders/:orderId")

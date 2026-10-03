@@ -32,6 +32,7 @@ export function ImeiChipInput({
   onError,
   invalid,
   inputType = "imei",
+  max = MAX_BULK_IMEIS,
 }: {
   id: string;
   imeis: string[];
@@ -41,9 +42,11 @@ export function ImeiChipInput({
   onError: (message: string | undefined) => void;
   invalid?: boolean;
   inputType?: InputType;
+  /** Most values allowed in this order. */
+  max?: number;
 }) {
   const inputRef = React.useRef<HTMLInputElement>(null);
-  const full = imeis.length >= MAX_BULK_IMEIS;
+  const full = imeis.length >= max;
   const label = INPUT_TYPE_LABEL[inputType];
 
   function commit(value: string, { quiet = false } = {}): boolean {
@@ -53,7 +56,7 @@ export function ImeiChipInput({
       (imeis.includes(value)
         ? `${label} ini sudah ditambahkan.`
         : full
-          ? `Maksimal ${MAX_BULK_IMEIS} ${label} per order.`
+          ? `Maksimal ${max} ${label} per order.`
           : undefined);
     if (problem) {
       if (!quiet) onError(problem);
@@ -92,11 +95,11 @@ export function ImeiChipInput({
     event.preventDefault();
     const parsed = parseImeiList(text.replace(/[,;]/g, "\n"), inputType);
     const fresh = [...new Set(parsed.imeis)].filter((imei) => !imeis.includes(imei));
-    const room = MAX_BULK_IMEIS - imeis.length;
+    const room = Math.max(0, max - imeis.length);
     onImeisChange([...imeis, ...fresh.slice(0, room)]);
     const problems = [...parsed.errors];
     if (fresh.length > room) {
-      problems.push(`Maksimal ${MAX_BULK_IMEIS} ${label} per order; ${fresh.length - room} tidak ditambahkan.`);
+      problems.push(`Maksimal ${max} ${label} per order; ${fresh.length - room} tidak ditambahkan.`);
     }
     onError(problems.length ? problems.join(" ") : undefined);
   }
@@ -144,7 +147,7 @@ export function ImeiChipInput({
         value={draft}
         placeholder={
           full
-            ? `Maksimal ${MAX_BULK_IMEIS} ${label}`
+            ? `Maksimal ${max} ${label}`
             : imeis.length
               ? `${label} berikutnya…`
               : PLACEHOLDER[inputType]

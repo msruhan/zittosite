@@ -3,7 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Eye, MagnifyingGlass, PencilSimple, X } from "@phosphor-icons/react";
+import { DownloadSimple, Eye, MagnifyingGlass, PencilSimple, X } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -21,7 +21,7 @@ import {
   Table,
   TableScroll,
 } from "@/components/ui/table";
-import { ApiError, api } from "@/lib/api";
+import { ApiError, api, downloadFile } from "@/lib/api";
 import { ORDER_STATUS_OPTIONS } from "@/lib/status";
 import { AutoRefreshStatus, useAutoRefresh } from "@/components/domain/auto-refresh";
 import { formatDateTime, formatRupiah } from "@/lib/format";
@@ -72,12 +72,15 @@ export function AdminOrderManagement({
   canEditStatus = false,
   supplierView = false,
   serverFilters,
+  canExport = false,
 }: {
   orders: OrderDetail[];
   fetchedAt: string;
   initialQuery?: string;
   showCustomerIdentity?: boolean;
   canEditStatus?: boolean;
+  /** Super Admin: download every order matching the current filters as Excel. */
+  canExport?: boolean;
   /** Swap the Admin column for service and supplier forwarding details. */
   supplierView?: boolean;
   serverFilters?: ServerFilters;
@@ -102,6 +105,7 @@ export function AdminOrderManagement({
     serverFilters && (serverFilters.admin || serverFilters.from || serverFilters.to),
   );
   const [status, setStatus] = React.useState<OrderStatus | "all">("all");
+  const [exporting, setExporting] = React.useState(false);
   const [editingId, setEditingId] = React.useState<string | null>(null);
   const [savingId, setSavingId] = React.useState<string | null>(null);
   const { refreshing } = useAutoRefresh({
@@ -138,6 +142,33 @@ export function AdminOrderManagement({
       });
     } finally {
       setSavingId(null);
+    }
+  }
+
+  async function exportOrders() {
+    const params = new URLSearchParams();
+    if (query.trim()) params.set("q", query.trim());
+    if (status !== "all") params.set("status", status);
+    if (serverFilters?.admin) params.set("admin", serverFilters.admin);
+    if (serverFilters?.from) params.set("from", serverFilters.from);
+    if (serverFilters?.to) params.set("to", serverFilters.to);
+    setExporting(true);
+    try {
+      const file = await downloadFile(`/admin/orders/export?${params.toString()}`);
+      const url = URL.createObjectURL(file.blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = file.filename ?? "orders.xlsx";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      toast.error("Export gagal", {
+        description: err instanceof ApiError ? err.message : "Coba lagi.",
+      });
+    } finally {
+      setExporting(false);
     }
   }
 
@@ -242,6 +273,19 @@ export function AdminOrderManagement({
             >
               <X className="size-4" aria-hidden="true" />
               Hapus filter
+            </Button>
+          ) : null}
+          {canExport ? (
+            <Button
+              type="button"
+              variant="secondary"
+              className="sm:ml-auto"
+              onClick={() => void exportOrders()}
+              loading={exporting}
+              loadingLabel="Menyiapkan"
+            >
+              <DownloadSimple className="size-4" aria-hidden="true" />
+              Export
             </Button>
           ) : null}
         </div>

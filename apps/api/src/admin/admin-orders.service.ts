@@ -18,6 +18,7 @@ import { AuditLogService } from "../security/audit-log.service";
 import { AdminNotifyService } from "../telegram/admin-notify.service";
 import { userOrderNoticeHtml } from "../telegram/telegram-messages";
 import { processDurationLabel } from "../orders/process-duration";
+import { ORDER_STATUS_LABEL, buildOrdersWorkbook, wibStamp } from "./order-export";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const DEFAULT_DONE_NOTE = "Order selesai diproses.";
@@ -46,6 +47,19 @@ const orderInclude = {
   activity: { orderBy: { createdAt: "asc" as const } },
   supplier: { select: { name: true } },
 } satisfies Prisma.OrderInclude;
+
+const exportInclude = {
+  service: { select: { name: true, fulfillmentChannel: true, menu: true, inputType: true } },
+  user: { select: { fullName: true, username: true } },
+  assignedAdmin: { select: { fullName: true } },
+  invoice: { select: { invoiceId: true, paymentStatus: true, paidAt: true } },
+  result: { select: { resultStatus: true, resultNote: true } },
+  supplier: { select: { name: true } },
+} satisfies Prisma.OrderInclude;
+
+const EXPORT_LIMIT = 20_000;
+
+type OrderListFilters = { adminId?: string; from?: string; to?: string };
 
 const ALL_STATUSES: OrderStatus[] = [
   "waiting_payment",
@@ -78,9 +92,77 @@ export class AdminOrdersService {
     q?: string,
     status?: string,
     supplierOnly = false,
-    filters: { adminId?: string; from?: string; to?: string } = {},
+    filters: OrderListFilters = {},
   ) {
     const redactUser = await this.redactFor(viewerAdminId);
+    const rows = await this.prisma.order.findMany({
+      where: this.listWhere(redactUser, q, status, supplierOnly, filters),
+      include: orderInclude,
+      orderBy: { createdAt: "desc" },
+      take: 200,
+    });
+    return rows.map((row) => serializeOrderListItem(row, { redactUser }));
+  }
+
+  /** Super Admin Excel export of the Orders page, honouring the same filters as {@link list}. */
+  async exportXlsx(
+    adminId: string,
+    q?: string,
+    status?: string,
+    filters: OrderListFilters = {},
+  ) {
+    const admin = await this.prisma.admin.findUniqueOrThrow({
+      where: { id: adminId },
+      select: { fullName: true },
+    });
+    const rows = await this.prisma.order.findMany({
+      where: this.listWhere(false, q, status, false, filters),
+      include: exportInclude,
+      orderBy: { createdAt: "desc" },
+      take: EXPORT_LIMIT + 1,
+    });
+    const truncated = rows.length > EXPORT_LIMIT;
+    const kept = truncated ? rows.slice(0, EXPORT_LIMIT) : rows;
+
+    const labels: string[] = [];
+    const needle = String(q ?? "").trim();
+    if (needle) labels.push(`Cari "${needle}"`);
+    if (status && ORDER_STATUS_LABEL[status]) labels.push(`Status ${ORDER_STATUS_LABEL[status]}`);
+    const handler = String(filters.adminId ?? "").trim();
+    if (handler === "none") labels.push("Tanpa admin");
+    else if (handler) {
+      const picked = await this.prisma.admin.findUnique({
+        where: { id: handler },
+        select: { fullName: true },
+      });
+      labels.push(`Admin ${picked?.fullName ?? handler}`);
+    }
+    if (jakartaDayStart(filters.from)) labels.push(`Dari ${filters.from}`);
+    if (jakartaDayStart(filters.to)) labels.push(`Sampai ${filters.to}`);
+
+    const exportedAt = new Date();
+    const buffer = await buildOrdersWorkbook(kept, {
+      exportedAt,
+      exportedBy: admin.fullName,
+      filters: labels,
+      truncated,
+      limit: EXPORT_LIMIT,
+    });
+    this.audit.record("admin.orders.exported", {
+      actorId: adminId,
+      count: kept.length,
+      filters: labels.join(", ") || undefined,
+    });
+    return { buffer, filename: `orders-${wibStamp(exportedAt)}.xlsx` };
+  }
+
+  private listWhere(
+    redactUser: boolean,
+    q: string | undefined,
+    status: string | undefined,
+    supplierOnly: boolean,
+    filters: OrderListFilters,
+  ): Prisma.OrderWhereInput {
     const adminId = String(filters.adminId ?? "").trim();
     const from = jakartaDayStart(filters.from);
     const toStart = jakartaDayStart(filters.to);
@@ -105,29 +187,23 @@ export class AdminOrdersService {
           ]
         : [];
 
-    const rows = await this.prisma.order.findMany({
-      where: {
-        ...(statusFilter ? { status: statusFilter } : {}),
-        ...(supplierOnly ? { AND: [SUPPLIER_ROUTED_ORDER] } : {}),
-        ...(adminId ? { assignedAdminId: adminId === "none" ? null : adminId } : {}),
-        ...(from || until
-          ? { createdAt: { ...(from ? { gte: from } : {}), ...(until ? { lt: until } : {}) } }
-          : {}),
-        ...(needle
-          ? {
-              OR: [
-                { orderId: { contains: needle, mode: "insensitive" } },
-                { imei: { contains: needle } },
-                ...userSearch,
-              ],
-            }
-          : {}),
-      },
-      include: orderInclude,
-      orderBy: { createdAt: "desc" },
-      take: 200,
-    });
-    return rows.map((row) => serializeOrderListItem(row, { redactUser }));
+    return {
+      ...(statusFilter ? { status: statusFilter } : {}),
+      ...(supplierOnly ? { AND: [SUPPLIER_ROUTED_ORDER] } : {}),
+      ...(adminId ? { assignedAdminId: adminId === "none" ? null : adminId } : {}),
+      ...(from || until
+        ? { createdAt: { ...(from ? { gte: from } : {}), ...(until ? { lt: until } : {}) } }
+        : {}),
+      ...(needle
+        ? {
+            OR: [
+              { orderId: { contains: needle, mode: "insensitive" } },
+              { imei: { contains: needle } },
+              ...userSearch,
+            ],
+          }
+        : {}),
+    };
   }
 
   /** Admins who have handled at least one order, for the Orders filter. */

@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Textarea } from "@/components/ui/field";
 import { Combobox } from "@/components/ui/combobox";
+import { Select } from "@/components/ui/select";
 import { DataValue } from "@/components/ui/data-value";
 import { ImeiChipInput } from "@/components/domain/imei-chip-input";
 import { RichDescription } from "@/components/domain/rich-description";
@@ -16,7 +17,7 @@ import { formatRupiah } from "@/lib/format";
 import {
   IMEI_LENGTH,
   INPUT_TYPE_LABEL,
-  MAX_BULK_IMEIS,
+  maxBulkFor,
   inputLengthError,
   type InputType,
 } from "@/lib/imei-list";
@@ -29,6 +30,9 @@ const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 type ExtraValues = { qnt: string; email: string; username: string };
 type ExtraErrors = Partial<Record<keyof ExtraValues, string>>;
 const EMPTY_EXTRAS: ExtraValues = { qnt: "", email: "", username: "" };
+
+const ALL_GROUPS = "__all__";
+const UNGROUPED = "__none__";
 
 function validateExtras(service: Service, values: ExtraValues): ExtraErrors {
   const errors: ExtraErrors = {};
@@ -81,31 +85,59 @@ export function CreateOrderForm({
   }
   const [submitting, setSubmitting] = React.useState(false);
 
+  const [groupFilter, setGroupFilter] = React.useState(ALL_GROUPS);
+  const groupOptions = React.useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const item of services) {
+      const key = item.group ?? UNGROUPED;
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+    if (!services.some((s) => s.group)) return [];
+    const named = [...counts.keys()]
+      .filter((key) => key !== UNGROUPED)
+      .sort((a, b) => a.localeCompare(b));
+    return [
+      { value: ALL_GROUPS, label: `Semua grup (${services.length})` },
+      ...named.map((key) => ({ value: key, label: `${key} (${counts.get(key)})` })),
+      ...(counts.has(UNGROUPED)
+        ? [{ value: UNGROUPED, label: `Lainnya (${counts.get(UNGROUPED)})` }]
+        : []),
+    ];
+  }, [services]);
+
   const serviceOptions = React.useMemo(() => {
     const grouped = services.some((s) => s.group);
-    const ordered = grouped
-      ? [...services.filter((s) => s.group)]
-          .sort((a, b) => a.group!.localeCompare(b.group!))
-          .concat(services.filter((s) => !s.group))
-      : services;
+    const inGroup =
+      groupFilter === ALL_GROUPS
+        ? services
+        : services.filter((s) => (s.group ?? UNGROUPED) === groupFilter);
+    const ordered =
+      grouped && groupFilter === ALL_GROUPS
+        ? [...inGroup.filter((s) => s.group)]
+            .sort((a, b) => a.group!.localeCompare(b.group!))
+            .concat(inGroup.filter((s) => !s.group))
+        : inGroup;
     return ordered.map((item) => ({
       value: item.id,
       label: item.name,
       hint: formatRupiah(priceFor[item.id]),
-      group: grouped ? (item.group ?? "Lainnya") : undefined,
+      group: grouped && groupFilter === ALL_GROUPS ? (item.group ?? "Lainnya") : undefined,
     }));
-  }, [services, priceFor]);
+  }, [services, priceFor, groupFilter]);
   const service = services.find((s) => s.id === serviceId) ?? null;
   const noDevice = service?.inputType === "none";
   const inputType: InputType =
     service?.inputType && service.inputType !== "none" ? service.inputType : "imei";
   const label = INPUT_TYPE_LABEL[inputType];
+  const maxBulk = service
+    ? maxBulkFor(service)
+    : Math.max(1, ...services.map((item) => maxBulkFor(item)));
   const price = service ? priceFor[service.id] : null;
   const draftComplete =
     !noDevice &&
     !inputLengthError(draft, inputType) &&
     !imeis.includes(draft) &&
-    imeis.length < MAX_BULK_IMEIS;
+    imeis.length < maxBulk;
   const quantity = noDevice ? 1 : imeis.length + (draftComplete ? 1 : 0);
   const total = price !== null ? price * Math.max(quantity, 1) : null;
   const balanceUsed = total !== null ? Math.min(Math.max(balance, 0), total) : 0;
@@ -180,6 +212,28 @@ export function CreateOrderForm({
 
   return (
     <form onSubmit={handleSubmit} noValidate className="space-y-5">
+      {groupOptions.length > 0 ? (
+        <Field label="Grup layanan" htmlFor="serviceGroup">
+          <Select
+            id="serviceGroup"
+            value={groupFilter}
+            onValueChange={(value) => {
+              setGroupFilter(value);
+              const current = services.find((s) => s.id === serviceId);
+              if (
+                current &&
+                value !== ALL_GROUPS &&
+                (current.group ?? UNGROUPED) !== value
+              ) {
+                setServiceId("");
+                setExtraErrors({});
+              }
+            }}
+            options={groupOptions}
+          />
+        </Field>
+      ) : null}
+
       <Field
         label="Layanan"
         htmlFor="service"
@@ -191,12 +245,19 @@ export function CreateOrderForm({
           id="service"
           value={serviceId}
           onValueChange={(value) => {
-            const nextType = services.find((s) => s.id === value)?.inputType ?? "imei";
+            const next = services.find((s) => s.id === value) ?? null;
+            const nextType = next?.inputType ?? "imei";
+            const nextMax = maxBulkFor(next);
             setExtraErrors({});
             if (nextType !== (service?.inputType ?? "imei")) {
               setImeis([]);
               setDraft("");
               setImeiError(undefined);
+            } else if (imeis.length > nextMax) {
+              setImeis(imeis.slice(0, nextMax));
+              setImeiError(
+                `Layanan ini maksimal ${nextMax} ${INPUT_TYPE_LABEL[nextType === "none" ? "imei" : nextType]} per order; sisanya dihapus.`,
+              );
             }
             setServiceId(value);
             setServiceError(undefined);
@@ -232,10 +293,10 @@ export function CreateOrderForm({
         required
         hint={
           inputType === "imei"
-            ? `${imeis.length}/${MAX_BULK_IMEIS} IMEI · ${
+            ? `${imeis.length}/${maxBulk} IMEI · ${
                 draft.length ? `${draft.length}/${IMEI_LENGTH} digit · ` : ""
               }ketik 15 digit lalu tekan Enter untuk menambah IMEI berikutnya. Ketik *#06# pada perangkat untuk melihat IMEI.`
-            : `${imeis.length}/${MAX_BULK_IMEIS} ${label} · ketik ${
+            : `${imeis.length}/${maxBulk} ${label} · ketik ${
                 inputType === "sn" ? "Serial Number (SN)" : "ECID"
               } perangkat lalu tekan Enter untuk menambah ${label} berikutnya.`
         }
@@ -249,6 +310,7 @@ export function CreateOrderForm({
           onDraftChange={setDraft}
           onError={setImeiError}
           invalid={Boolean(imeiError)}
+          max={maxBulk}
         />
       </Field>
       )}
@@ -401,8 +463,8 @@ export function CreateOrderForm({
             ? `Buat ${quantity} order, bayar dengan saldo`
             : "Buat order, bayar dengan saldo"
           : quantity > 1
-            ? `Buat ${quantity} order dan terbitkan 1 QRIS`
-            : "Buat order dan terbitkan QRIS"}
+            ? `Buat ${quantity} order dan Bayar via QRIS`
+            : "Buat order dan Bayar via QRIS"}
       </Button>
     </form>
   );

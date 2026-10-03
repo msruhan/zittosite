@@ -30,6 +30,7 @@ import { parseImeiList } from "./imei-list";
 import { NO_DEVICE_VALUE, parseOrderExtras } from "./special-fields";
 import {
   type OrderVia,
+  maxBulkFor,
   orderViaWhere,
   serviceViaWhere,
 } from "./supplier-routed";
@@ -187,7 +188,7 @@ export class OrdersService {
   }
 
   /**
-   * Creates one order per IMEI (up to MAX_BULK_IMEIS), all paid by a single
+   * Creates one order per IMEI (up to maxBulkFor(service)), all paid by a single
    * invoice for `imeis.length × price`. Returns the first order.
    *
    * `balanceOnly` (Dhru API) never issues QRIS: the balance must cover the
@@ -253,7 +254,11 @@ export class OrdersService {
     if (service.inputType === "none") {
       imeis = [NO_DEVICE_VALUE];
     } else {
-      const parsed = parseImeiList(input.imeis ?? String(input.imei ?? ""), service.inputType);
+      const parsed = parseImeiList(
+        input.imeis ?? String(input.imei ?? ""),
+        service.inputType,
+        maxBulkFor(service),
+      );
       if (!parsed.ok) throw new BadRequestException(parsed.errors.join(" "));
       imeis = parsed.imeis;
     }

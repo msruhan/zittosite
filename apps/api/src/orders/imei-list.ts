@@ -1,5 +1,6 @@
 export const IMEI_LENGTH = 15;
 export const MAX_BULK_IMEIS = 6;
+export const MAX_SPECIAL_BULK = 2;
 
 export type InputType = "imei" | "sn" | "ecid";
 
@@ -44,7 +45,11 @@ function lengthError(value: string, type: InputType): string | null {
  * Parses one value per line (or per array entry) for the service's input type.
  * Blank lines are ignored; line numbers in errors are 1-based over the raw input.
  */
-export function parseImeiList(input: string | string[], type: InputType = "imei"): ImeiListResult {
+export function parseImeiList(
+  input: string | string[],
+  type: InputType = "imei",
+  max = MAX_BULK_IMEIS,
+): ImeiListResult {
   const label = INPUT_TYPE_LABEL[type];
   const lines = Array.isArray(input) ? input : input.split(/\r?\n/);
   const errors: string[] = [];
@@ -71,10 +76,10 @@ export function parseImeiList(input: string | string[], type: InputType = "imei"
 
   if (errors.length) return { ok: false, errors };
   if (!imeis.length) return { ok: false, errors: [`Masukkan minimal 1 ${label}.`] };
-  if (imeis.length > MAX_BULK_IMEIS) {
+  if (imeis.length > max) {
     return {
       ok: false,
-      errors: [`Maksimal ${MAX_BULK_IMEIS} ${label} per order (saat ini ${imeis.length}).`],
+      errors: [`Maksimal ${max} ${label} per order (saat ini ${imeis.length}).`],
     };
   }
   return { ok: true, imeis };

@@ -85,6 +85,7 @@ export function ServiceManagement({
   const [groups, setGroups] = React.useState(initialGroups);
   const [usdRate, setUsdRate] = React.useState(initialUsdRate);
   const [query, setQuery] = React.useState("");
+  const [supplierFilter, setSupplierFilter] = React.useState("all");
   const [listTab, setListTab] = React.useState<CreateTab>("manual");
   const [editing, setEditing] = React.useState<ServiceDraft | null>(null);
   const [creating, setCreating] = React.useState(false);
@@ -112,16 +113,38 @@ export function ServiceManagement({
   );
   const tabServices = listTab === "api" ? apiServices : manualServices;
 
+  const supplierOptions = React.useMemo<SelectOption[]>(() => {
+    const counts = new Map<string, number>();
+    for (const service of apiServices) {
+      if (service.supplierId) counts.set(service.supplierId, (counts.get(service.supplierId) ?? 0) + 1);
+    }
+    return [
+      { value: "all", label: "Semua supplier" },
+      ...suppliers
+        .filter((supplier) => counts.has(supplier.id))
+        .map((supplier) => ({
+          value: supplier.id,
+          label: `${supplier.name} (${counts.get(supplier.id)})`,
+        })),
+    ];
+  }, [apiServices, suppliers]);
+  const activeSupplier =
+    listTab === "api" && supplierOptions.some((o) => o.value === supplierFilter)
+      ? supplierFilter
+      : "all";
+
   const filtered = React.useMemo(() => {
     const needle = query.trim().toLowerCase();
-    if (!needle) return tabServices;
-    return tabServices.filter(
-      (service) =>
+    return tabServices.filter((service) => {
+      if (activeSupplier !== "all" && service.supplierId !== activeSupplier) return false;
+      if (!needle) return true;
+      return (
         service.name.toLowerCase().includes(needle) ||
         descriptionToPlain(service.description).toLowerCase().includes(needle) ||
-        (service.code ?? "").toLowerCase().includes(needle),
-    );
-  }, [tabServices, query]);
+        (service.code ?? "").toLowerCase().includes(needle)
+      );
+    });
+  }, [tabServices, query, activeSupplier]);
 
   async function reload() {
     const [nextServices, nextGroups] = await Promise.all([
@@ -265,32 +288,17 @@ export function ServiceManagement({
 
   return (
     <div className="space-y-4">
-      <SegmentedTabs
-        label="Jenis layanan"
-        value={listTab}
-        onChange={setListTab}
-        className="sm:w-96"
-        tabs={[
-          { id: "manual", label: "Service manual", count: manualServices.length },
-          { id: "api", label: "Service API", count: apiServices.length },
-        ]}
-      />
-
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-        <label className="relative flex-1">
-          <span className="sr-only">Cari layanan</span>
-          <MagnifyingGlass
-            aria-hidden="true"
-            weight="regular"
-            className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-ink-faint"
-          />
-          <Input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Cari nama atau deskripsi layanan"
-            className="pl-9"
-          />
-        </label>
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <SegmentedTabs
+          label="Jenis layanan"
+          value={listTab}
+          onChange={setListTab}
+          className="sm:w-96"
+          tabs={[
+            { id: "manual", label: "Service manual", count: manualServices.length },
+            { id: "api", label: "Service API", count: apiServices.length },
+          ]}
+        />
         <Button onClick={openCreate}>
           <Plus className="size-4" aria-hidden="true" />
           Tambah Layanan
@@ -316,6 +324,32 @@ export function ServiceManagement({
           />
         </>
       ) : null}
+
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+        <label className="relative flex-1">
+          <span className="sr-only">Cari layanan</span>
+          <MagnifyingGlass
+            aria-hidden="true"
+            weight="regular"
+            className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-ink-faint"
+          />
+          <Input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Cari nama atau deskripsi layanan"
+            className="pl-9"
+          />
+        </label>
+        {listTab === "api" ? (
+          <Select
+            ariaLabel="Filter Supplier API"
+            value={activeSupplier}
+            onValueChange={setSupplierFilter}
+            options={supplierOptions}
+            className="sm:w-64"
+          />
+        ) : null}
+      </div>
 
       <Card>
         {filtered.length > 0 ? (
@@ -469,7 +503,7 @@ export function ServiceManagement({
                 ? listTab === "api"
                   ? "Tambahkan layanan dari daftar Supplier API agar order diteruskan otomatis."
                   : "Tambahkan layanan yang diproses operator lewat Telegram atau WhatsApp."
-                : "Coba ubah kata kunci pencarian."
+                : "Coba ubah kata kunci pencarian atau filter supplier."
             }
             action={
               tabServices.length === 0 ? (

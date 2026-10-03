@@ -365,6 +365,12 @@ export const ACTIVITY_EVENTS = {
     summary: ({ fields }) =>
       `Mengubah kurs Layanan Spesial dari ${rp(fields.previous)} ke ${rp(fields.rate)} per $1 (${fields.serviceCount ?? 0} layanan dihitung ulang)`,
   },
+  "admin.orders.exported": {
+    category: "order",
+    label: "Order diekspor",
+    summary: ({ fields }) =>
+      `Mengekspor ${fields.count ?? 0} order ke Excel${fields.filters ? ` (${fields.filters})` : ""}`,
+  },
   "admin.media.uploaded": {
     category: "service",
     label: "Gambar diunggah",
