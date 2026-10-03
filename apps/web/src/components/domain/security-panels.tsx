@@ -1,7 +1,6 @@
 "use client";
 
 import * as React from "react";
-import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
@@ -21,7 +20,6 @@ export function ChangePasswordCard({
   /** After password change, sessions are revoked — redirect here. */
   loginHref?: string;
 }) {
-  const router = useRouter();
   const [currentPassword, setCurrentPassword] = React.useState("");
   const [newPassword, setNewPassword] = React.useState("");
   const [confirmPassword, setConfirmPassword] = React.useState("");
@@ -54,8 +52,7 @@ export function ChangePasswordCard({
       toast.success("Password diperbarui", {
         description: "Silakan login ulang dengan password baru.",
       });
-      router.replace(loginHref);
-      router.refresh();
+      window.location.replace(loginHref);
     } catch (err) {
       const message =
         err instanceof ApiError ? err.message : "Gagal mengubah password.";

@@ -2,7 +2,6 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { Eye, EyeSlash, PaperPlaneTilt } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -17,7 +16,6 @@ export function LoginForm({
   redirectTo: string;
   audience: "user" | "admin";
 }) {
-  const router = useRouter();
   const [username, setUsername] = React.useState("");
   const [password, setPassword] = React.useState("");
   const [totpCode, setTotpCode] = React.useState("");
@@ -30,6 +28,15 @@ export function LoginForm({
     totpCode?: string;
   }>({});
   const [submitting, setSubmitting] = React.useState(false);
+
+  /**
+   * Full page load: the client router cache still holds pages rendered while logged out
+   * (redirects back to login), so a soft push can land on the login page again.
+   */
+  function enter(description: string) {
+    toast.success("Berhasil masuk", { description });
+    window.location.replace(redirectTo);
+  }
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -48,10 +55,7 @@ export function LoginForm({
             code: totpCode.trim(),
           }),
         });
-        toast.success("Berhasil masuk", {
-          description: "Selamat datang di panel Super Admin.",
-        });
-        router.push(redirectTo);
+        enter("Selamat datang di panel Super Admin.");
       } catch (error) {
         const message =
           error instanceof ApiError
@@ -59,7 +63,6 @@ export function LoginForm({
             : "Verifikasi 2FA gagal.";
         setErrors({ totpCode: message });
         toast.error("Gagal verifikasi 2FA", { description: message });
-      } finally {
         setSubmitting(false);
       }
       return;
@@ -93,11 +96,10 @@ export function LoginForm({
           toast.message("Verifikasi 2FA", {
             description: "Masukkan kode dari Google Authenticator.",
           });
+          setSubmitting(false);
           return;
         }
-        toast.success("Berhasil masuk", {
-          description: "Selamat datang di panel Super Admin.",
-        });
+        enter("Selamat datang di panel Super Admin.");
       } else {
         await api("/auth/login", {
           method: "POST",
@@ -106,17 +108,13 @@ export function LoginForm({
             password,
           }),
         });
-        toast.success("Berhasil masuk", {
-          description: "Selamat datang kembali di ZittoSite.",
-        });
+        enter("Selamat datang kembali di ZittoSite.");
       }
-      router.push(redirectTo);
     } catch (error) {
       const message =
         error instanceof ApiError ? error.message : "Login gagal.";
       toast.error("Gagal masuk", { description: message });
       setErrors({ password: message });
-    } finally {
       setSubmitting(false);
     }
   }

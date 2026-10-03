@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { SignOut } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import {
@@ -84,25 +84,20 @@ export function LogoutLink({
   variant: NavVariant;
   onNavigate?: () => void;
 }) {
-  const router = useRouter();
-
   async function handleLogout() {
     onNavigate?.();
+    const loginHref = variant === "admin" ? "/admin/login" : "/login";
     try {
-      if (variant === "admin") {
-        await api("/admin/auth/logout", { method: "POST" });
-        router.replace("/admin/login");
-      } else {
-        await api("/auth/logout", { method: "POST" });
-        router.replace("/login");
-      }
-      router.refresh();
+      await api(variant === "admin" ? "/admin/auth/logout" : "/auth/logout", {
+        method: "POST",
+      });
     } catch {
       toast.error("Logout gagal", {
         description: "Coba lagi atau tutup tab ini.",
       });
-      router.replace(variant === "admin" ? "/admin/login" : "/login");
     }
+    // Full page load drops the client router cache of logged-in pages.
+    window.location.replace(loginHref);
   }
 
   return (
