@@ -1328,14 +1328,8 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
         `Layanan: <b>${escapeHtml(service.name)}</b> (${formatRp(service.price)})`,
         "",
         service.inputType === "imei"
-          ? "Kirim <b>IMEI 15 digit</b> sekarang."
-          : `Kirim <b>${label}</b> perangkat sekarang.`,
-        `Bulk order: kirim beberapa ${label} dalam satu pesan, <b>satu per baris</b> (maksimal ${maxBulk}). Total = jumlah ${label} × harga, dibayar dengan 1 QRIS.`,
-        ...(actor.user.creditBalance > 0
-          ? [
-              `💳 Saldo Anda ${formatRp(actor.user.creditBalance)} otomatis dipakai dulu; sisanya dibayar via QRIS.`,
-            ]
-          : []),
+          ? "Silahkan Masukan <b>IMEI 15 digit</b>."
+          : `Silahkan Masukan <b>${label}</b> perangkat.`,
       ].join("\n"),
     );
   }
