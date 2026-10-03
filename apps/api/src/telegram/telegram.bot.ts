@@ -7,6 +7,7 @@ import {
 } from "@nestjs/common";
 import { Bot, Context, InlineKeyboard, InputFile } from "grammy";
 import { run, sequentialize, type RunnerHandle } from "@grammyjs/runner";
+import { descriptionToTelegramHtml } from "./telegram-description";
 import * as QRCode from "qrcode";
 import type { Admin, ResultStatus, User } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
@@ -1425,15 +1426,18 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
       maxBulk,
     });
     const label = INPUT_TYPE_LABEL[inputType];
+    const inputLabel = service.inputType === "imei" ? "IMEI 15 digit" : `${label} perangkat`;
+    const description = descriptionToTelegramHtml(service.description);
     await ctx.answerCallbackQuery();
     await this.replyHtml(
       ctx,
       [
-        `Layanan: <b>${escapeHtml(service.name)}</b> (${formatRp(service.price)})`,
+        `📦 <b>${escapeHtml(service.name)}</b>`,
+        `💰 Harga: <b>${formatRp(service.price)}</b>`,
         "",
-        service.inputType === "imei"
-          ? "Silahkan Masukan <b>IMEI 15 digit</b>."
-          : `Silahkan Masukan <b>${label}</b> perangkat.`,
+        description
+          ? `<blockquote>${description}</blockquote>\n\n✍️ Kirim <b>${escapeHtml(inputLabel)}</b> untuk melanjutkan.`
+          : `Silahkan Masukan <b>${escapeHtml(inputLabel)}</b>.`,
       ].join("\n"),
     );
   }
