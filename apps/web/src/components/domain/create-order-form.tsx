@@ -139,7 +139,20 @@ export function CreateOrderForm({
     !imeis.includes(draft) &&
     imeis.length < maxBulk;
   const quantity = noDevice ? 1 : imeis.length + (draftComplete ? 1 : 0);
-  const total = price !== null ? price * Math.max(quantity, 1) : null;
+  const qnt = Number(extras.qnt.trim());
+  const units = service?.requireQnt && Number.isInteger(qnt) && qnt > 0 ? qnt : 1;
+  const unitPrice = price !== null ? price * units : null;
+  const total = unitPrice !== null ? unitPrice * Math.max(quantity, 1) : null;
+  const breakdown =
+    price === null
+      ? null
+      : quantity > 1 && units > 1
+        ? `${quantity} ${label} × ${units} Qnt × ${formatRupiah(price)}`
+        : quantity > 1
+          ? `${quantity} ${label} × ${formatRupiah(price)}`
+          : units > 1
+            ? `${units} Qnt × ${formatRupiah(price)}`
+            : null;
   const balanceUsed = total !== null ? Math.min(Math.max(balance, 0), total) : 0;
   const due = total !== null ? total - balanceUsed : null;
   const paidByBalance = due === 0;
@@ -419,9 +432,7 @@ export function CreateOrderForm({
             <div className="flex items-baseline justify-between gap-4">
               <span className="text-body text-ink-soft">
                 Total
-                {price !== null && quantity > 1
-                  ? ` (${quantity} ${label} × ${formatRupiah(price)})`
-                  : ""}
+                {breakdown ? ` (${breakdown})` : ""}
               </span>
               <DataValue>{formatRupiah(total)}</DataValue>
             </div>
@@ -440,10 +451,8 @@ export function CreateOrderForm({
             <span className="text-body text-ink-soft">
               {balanceUsed > 0 ? "Sisa dibayar via QRIS" : "Total yang harus dibayar"}
             </span>
-            {balanceUsed === 0 && price !== null && quantity > 1 ? (
-              <DataValue className="block text-body text-ink-soft">
-                {quantity} {label} × {formatRupiah(price)}
-              </DataValue>
+            {balanceUsed === 0 && breakdown ? (
+              <DataValue className="block text-body text-ink-soft">{breakdown}</DataValue>
             ) : null}
           </div>
           <DataValue emphasis className="text-headline">

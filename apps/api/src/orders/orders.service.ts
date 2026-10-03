@@ -280,7 +280,9 @@ export class OrdersService {
       groupPrice: groupPrice?.price,
       userPrice: userPrice?.price,
     });
-    const total = price * imeis.length;
+    const units = extras.quantity ?? 1;
+    const linePrice = price * units;
+    const total = linePrice * imeis.length;
     if (balanceOnly && user.creditBalance < total) {
       throw new InsufficientBalanceException();
     }
@@ -375,8 +377,8 @@ export class OrdersService {
             notes,
             ...extras,
             status: "waiting_payment",
-            price,
-            costPrice: service.costPrice,
+            price: linePrice,
+            costPrice: service.costPrice * units,
             isTest: user.role === "testing",
             activity: {
               create: {
@@ -400,7 +402,7 @@ export class OrdersService {
         orderId: orderIds[i],
         serviceName: service.name,
         imei,
-        price,
+        price: linePrice,
         channel,
       });
     }

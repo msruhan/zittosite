@@ -2,12 +2,13 @@ import { Module } from "@nestjs/common";
 import { PrismaModule } from "../prisma/prisma.module";
 import { AdminModule } from "../admin/admin.module";
 import { OrdersModule } from "../orders/orders.module";
+import { AdminNotifyModule } from "../telegram/admin-notify.module";
 import { SuppliersController } from "./suppliers.controller";
 import { SuppliersService } from "./suppliers.service";
 import { SupplierWorkerService } from "./supplier-worker.service";
 
 @Module({
-  imports: [PrismaModule, AdminModule, OrdersModule],
+  imports: [PrismaModule, AdminModule, OrdersModule, AdminNotifyModule],
   controllers: [SuppliersController],
   providers: [SuppliersService, SupplierWorkerService],
 })

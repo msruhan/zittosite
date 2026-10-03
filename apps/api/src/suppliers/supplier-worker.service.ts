@@ -4,7 +4,11 @@ import { PrismaService } from "../prisma/prisma.service";
 import { OrdersService } from "../orders/orders.service";
 import { SupplierDispatch } from "../orders/supplier-dispatch";
 import { supplierExtraFields } from "../orders/special-fields";
+import { UsdRateService } from "../orders/usd-rate.service";
+import { AdminNotifyService } from "../telegram/admin-notify.service";
+import { escapeHtml } from "../telegram/telegram-messages";
 import { SupplierRequestError, supplierInputFields } from "./dhru-supplier-client";
+import { checkSupplierCost } from "./supplier-price-guard";
 import { supplierClient } from "./suppliers.service";
 
 export const MAX_SUBMIT_ATTEMPTS = 5;
@@ -18,6 +22,10 @@ const FRESH_WINDOW_MS = 10 * 60_000;
 const FRESH_POLL_EVERY_MS = 4_000;
 /** First status check after a successful submit. */
 const FIRST_CHECK_DELAY_MS = 2_000;
+/** Supplier price list and account currency are reused this long before refetching. */
+const PRICE_LIST_TTL_MS = 2 * 60_000;
+
+type PriceList = { at: number; currency: string; credits: Map<string, number> };
 
 /** Supplier refusals that are about our own account and worth retrying. */
 export function isRetryableSupplierError(message: string): boolean {
@@ -44,11 +52,14 @@ export class SupplierWorkerService implements OnModuleInit, OnModuleDestroy {
   private running = false;
   private rerun = false;
   private unsubscribe: (() => void) | null = null;
+  private readonly priceLists = new Map<string, PriceList>();
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly orders: OrdersService,
     private readonly dispatch: SupplierDispatch,
+    private readonly usdRate: UsdRateService,
+    private readonly notify: AdminNotifyService,
   ) {}
 
   onModuleInit() {
@@ -133,6 +144,18 @@ export class SupplierWorkerService implements OnModuleInit, OnModuleDestroy {
       let failure: string;
       let retryable: boolean;
       try {
+        const prices = await this.priceList(supplier);
+        const cost = checkSupplierCost({
+          credit: prices.credits.get(order.service.supplierServiceId!),
+          units: order.quantity ?? 1,
+          currency: prices.currency,
+          usdRate: await this.usdRate.get(),
+          chargedPrice: order.price,
+        });
+        if (!cost.ok) {
+          await this.hold(order, supplier, cost.reason);
+          continue;
+        }
         const reply = await supplierClient(supplier).placeOrder(
           order.service.supplierServiceId!,
           order.service.inputType === "none" ? null : order.imei,
@@ -184,6 +207,54 @@ export class SupplierWorkerService implements OnModuleInit, OnModuleDestroy {
         );
       }
     }
+  }
+
+  /** Live supplier credits per service; a failed fetch throws so the submit is retried. */
+  private async priceList(supplier: Supplier): Promise<PriceList> {
+    const cached = this.priceLists.get(supplier.id);
+    if (cached && Date.now() - cached.at < PRICE_LIST_TTL_MS) return cached;
+    const client = supplierClient(supplier);
+    const account = await client.accountInfo();
+    if (!account.ok) throw new SupplierRequestError(`Saldo supplier gagal dibaca: ${account.message}`);
+    const list = await client.serviceList();
+    if (!list.ok) throw new SupplierRequestError(`Daftar harga supplier gagal dibaca: ${list.message}`);
+    const fresh: PriceList = {
+      at: Date.now(),
+      currency: account.data.currency,
+      credits: new Map(list.data.map((s) => [s.id, s.credit])),
+    };
+    this.priceLists.set(supplier.id, fresh);
+    return fresh;
+  }
+
+  /**
+   * Leaves the order in Waiting Action without forwarding it, and stops the
+   * worker from retrying, so a Super Admin decides (cancel and refund, or handle manually).
+   */
+  private async hold(
+    order: { id: string; orderId: string },
+    supplier: Supplier,
+    reason: string,
+  ) {
+    const error = `Ditahan, tidak diteruskan ke supplier: ${reason}`;
+    await this.prisma.$transaction([
+      this.prisma.order.update({
+        where: { id: order.id },
+        data: { supplierError: error, supplierAttempts: MAX_SUBMIT_ATTEMPTS },
+      }),
+      this.prisma.orderActivityLog.create({
+        data: { orderId: order.id, status: "waiting_action", note: error, actor: "Sistem" },
+      }),
+    ]);
+    this.logger.warn(`Supplier submit ${order.orderId} held: ${reason}`);
+    await this.notify.notifySuperAdmins(
+      [
+        `⚠️ <b>Order ${escapeHtml(order.orderId)} ditahan</b>`,
+        `Tidak diteruskan ke ${escapeHtml(supplier.name)}: ${escapeHtml(reason)}`,
+        "",
+        "Order tetap Waiting Action. Batalkan (saldo user dikembalikan) atau proses manual.",
+      ].join("\n"),
+    );
   }
 
   async pollInProcess() {
