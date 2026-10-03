@@ -282,19 +282,16 @@ export function CreateOrderForm({
       </Field>
 
       {service ? (
-        <div className="flex gap-2.5 rounded-md border border-hairline bg-mist px-3.5 py-3">
-          <Info
-            aria-hidden="true"
-            weight="regular"
-            className="mt-0.5 size-4 shrink-0 text-ink-soft"
-          />
-          <div className="min-w-0 flex-1 space-y-1">
+        <div className="space-y-2">
+          {/* Same surface and padding as the admin editor, so the description reads exactly as written. */}
+          <div className="overflow-hidden rounded-md border border-hairline bg-surface px-4 py-3">
             <RichDescription text={service.description} />
-            <p className="text-body text-ink-soft">
-              Estimasi pengerjaan{" "}
-              <span className="font-data tabular">{service.estimate}</span>
-            </p>
           </div>
+          <p className="flex items-center gap-1.5 text-body text-ink-soft">
+            <Info aria-hidden="true" weight="regular" className="size-4 shrink-0" />
+            Estimasi pengerjaan{" "}
+            <span className="font-data tabular">{service.estimate}</span>
+          </p>
         </div>
       ) : null}
 
