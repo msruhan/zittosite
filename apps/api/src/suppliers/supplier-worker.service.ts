@@ -165,7 +165,11 @@ export class SupplierWorkerService implements OnModuleInit, OnModuleDestroy {
           order.service.inputType === "none" ? null : order.imei,
           {
             ...supplierInputFields(order.service.inputType, order.imei),
-            ...supplierExtraFields(order),
+            // Optional notes are meant for our admins; only a required Notes field goes upstream.
+            ...supplierExtraFields({
+              ...order,
+              notes: order.service.requireNotes ? order.notes : null,
+            }),
           },
         );
         if (reply.ok) {

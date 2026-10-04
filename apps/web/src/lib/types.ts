@@ -117,6 +117,7 @@ export interface Service {
   requireQnt?: boolean;
   requireEmail?: boolean;
   requireUsername?: boolean;
+  requireNotes?: boolean;
   /** Admin panel only: where paid orders are processed. */
   fulfillmentChannel?: FulfillmentChannel;
   /** Admin panel only: upstream supplier route when fulfillmentChannel is "supplier". */

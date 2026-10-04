@@ -16,7 +16,8 @@ import {
   sanitizeUsdInput,
   usdCentsToIdr,
 } from "@/lib/format";
-import type { InputType } from "@/lib/imei-list";
+import { ExtraFieldPicker } from "@/components/domain/extra-field-picker";
+import { NO_EXTRA_FIELDS, hasExtraFields, type ExtraFieldFlags } from "@/lib/order-fields";
 import { RICH_DESCRIPTION_MAX } from "@/lib/rich-text";
 import { cn } from "@/lib/utils";
 import {
@@ -92,7 +93,9 @@ export function SupplierImportPanel({
   const [markupText, setMarkupText] = React.useState("");
   const [online, setOnline] = React.useState(true);
   const [menu, setMenu] = React.useState<ServiceMenu>("ceir");
-  const [inputType, setInputType] = React.useState<InputType>("imei");
+  const [inputType, setInputType] = React.useState<NonNullable<Service["inputType"]>>("imei");
+  const [extraFields, setExtraFields] = React.useState<ExtraFieldFlags>(NO_EXTRA_FIELDS);
+  const [fieldsError, setFieldsError] = React.useState<string>();
 
   const current = loaded && loaded.supplierId === supplierId ? loaded : null;
   const rows = current?.rows ?? null;
@@ -188,6 +191,10 @@ export function SupplierImportPanel({
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     if (!supplierId || !rows || selected.size === 0) return;
+    if (usd && inputType === "none" && !hasExtraFields(extraFields)) {
+      setFieldsError("Tanpa IMEI/SN/ECID, centang minimal satu field: Qnt, Email, Username, atau Notes.");
+      return;
+    }
     const picks = rows.filter((svc) => selected.has(svc.id) && !imported.has(svc.id));
     const taken = new Set(existingServices.map((s) => s.code ?? "").filter(Boolean));
     onBusyChange(true);
@@ -213,7 +220,7 @@ export function SupplierImportPanel({
             supplierId,
             supplierServiceId: svc.id,
             menu,
-            inputType: menu === "special" ? inputType : "imei",
+            ...(usd ? { inputType, ...extraFields } : { inputType: "imei" }),
           }),
         });
         created++;
@@ -325,16 +332,32 @@ export function SupplierImportPanel({
             <Select
               id="import-input-type"
               value={inputType}
-              onValueChange={(value) => setInputType(value as InputType)}
+              onValueChange={(value) => {
+                setInputType(value as NonNullable<Service["inputType"]>);
+                setFieldsError(undefined);
+              }}
               options={[
                 { value: "imei", label: "IMEI (15 digit)" },
                 { value: "sn", label: "SN (Serial Number)" },
                 { value: "ecid", label: "ECID" },
+                { value: "none", label: "Tidak ada (tanpa IMEI/SN/ECID)" },
               ]}
             />
           </Field>
         ) : null}
       </div>
+
+      {menu === "special" ? (
+        <ExtraFieldPicker
+          value={extraFields}
+          error={fieldsError}
+          hint="Centang field yang wajib diisi user saat order; ikut dikirim ke supplier (QNT, EMAIL, USERNAME, NOTES). Berlaku untuk semua layanan yang dipilih."
+          onToggle={(key, checked) => {
+            setExtraFields((current) => ({ ...current, [key]: checked }));
+            setFieldsError(undefined);
+          }}
+        />
+      ) : null}
 
       <label className="relative block">
         <span className="sr-only">Cari layanan supplier</span>

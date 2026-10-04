@@ -24,6 +24,8 @@ import {
 } from "@/components/ui/table";
 import { ServiceGroupPanel, UsdRateCard } from "@/components/domain/service-group-panel";
 import { SupplierImportPanel } from "@/components/domain/supplier-import-panel";
+import { ExtraFieldPicker } from "@/components/domain/extra-field-picker";
+import { NO_EXTRA_FIELDS, hasExtraFields } from "@/lib/order-fields";
 import {
   formatRupiah,
   formatUsd,
@@ -54,12 +56,6 @@ const CHANNEL_LABEL: Record<FulfillmentChannel, string> = {
 };
 
 type ServiceDraft = Service & { assignedAdminIds: string[] };
-
-const EXTRA_FIELD_OPTIONS = [
-  { key: "requireQnt", label: "Qnt" },
-  { key: "requireEmail", label: "Email" },
-  { key: "requireUsername", label: "Username" },
-] as const satisfies ReadonlyArray<{ key: keyof Service; label: string }>;
 
 function toDraft(service: Service): ServiceDraft {
   return {
@@ -203,6 +199,7 @@ export function ServiceManagement({
             requireQnt: next.requireQnt ?? false,
             requireEmail: next.requireEmail ?? false,
             requireUsername: next.requireUsername ?? false,
+            requireNotes: next.requireNotes ?? false,
             ...(next.priceUsdCents != null
               ? {
                   priceUsd: next.priceUsdCents / 100,
@@ -230,6 +227,7 @@ export function ServiceManagement({
             requireQnt: next.requireQnt ?? false,
             requireEmail: next.requireEmail ?? false,
             requireUsername: next.requireUsername ?? false,
+            requireNotes: next.requireNotes ?? false,
             ...(next.priceUsdCents != null
               ? {
                   priceUsd: next.priceUsdCents / 100,
@@ -848,14 +846,9 @@ function ServiceFormDialog({
     if (draft.description.length > RICH_DESCRIPTION_MAX) {
       nextErrors.description = "Deskripsi terlalu panjang. Kurangi teks atau gambar dari URL luar.";
     }
-    if (
-      special &&
-      draft.inputType === "none" &&
-      !draft.requireQnt &&
-      !draft.requireEmail &&
-      !draft.requireUsername
-    ) {
-      nextErrors.fields = "Tanpa IMEI/SN/ECID, centang minimal satu field: Qnt, Email, atau Username.";
+    if (special && draft.inputType === "none" && !hasExtraFields(draft)) {
+      nextErrors.fields =
+        "Tanpa IMEI/SN/ECID, centang minimal satu field: Qnt, Email, Username, atau Notes.";
     }
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length > 0) return;
@@ -1132,14 +1125,7 @@ function ServiceFormDialog({
                 setDraft((current) => ({
                   ...current,
                   menu: value as ServiceMenu,
-                  ...(value === "ceir"
-                    ? {
-                        inputType: "imei" as const,
-                        requireQnt: false,
-                        requireEmail: false,
-                        requireUsername: false,
-                      }
-                    : {}),
+                  ...(value === "ceir" ? { inputType: "imei" as const, ...NO_EXTRA_FIELDS } : {}),
                 }));
                 if (value === "special" && !usdText.price && draft.price > 0) {
                   setUsdText({
@@ -1181,44 +1167,14 @@ function ServiceFormDialog({
                 ]}
               />
             </Field>
-            <fieldset>
-              <legend className="mb-1 text-body font-medium text-ink">Field tambahan</legend>
-              <p className="mb-2 text-body text-ink-soft">
-                Yang dicentang wajib diisi user saat order dan ikut dikirim ke supplier
-                (QNT, EMAIL, USERNAME). Qnt tidak mengubah harga.
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {EXTRA_FIELD_OPTIONS.map((option) => (
-                  <label
-                    key={option.key}
-                    className={cn(
-                      "inline-flex h-10 cursor-pointer items-center gap-2.5 rounded-md border px-3.5 text-body",
-                      "transition-colors duration-150 ease-out-strong",
-                      draft[option.key]
-                        ? "border-action bg-action-wash font-medium text-action"
-                        : "border-hairline bg-surface text-ink hover:bg-mist",
-                    )}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={Boolean(draft[option.key])}
-                      onChange={(event) => {
-                        const checked = event.target.checked;
-                        setDraft((current) => ({ ...current, [option.key]: checked }));
-                        setErrors((current) => ({ ...current, fields: undefined }));
-                      }}
-                      className="size-4 rounded-sm border-hairline accent-action"
-                    />
-                    {option.label}
-                  </label>
-                ))}
-              </div>
-              {errors.fields ? (
-                <p role="alert" className="mt-1.5 text-body text-refused-ink">
-                  {errors.fields}
-                </p>
-              ) : null}
-            </fieldset>
+            <ExtraFieldPicker
+              value={draft}
+              error={errors.fields}
+              onToggle={(key, checked) => {
+                setDraft((current) => ({ ...current, [key]: checked }));
+                setErrors((current) => ({ ...current, fields: undefined }));
+              }}
+            />
           </>
         ) : null}
         {draft.fulfillmentChannel === "telegram" ||

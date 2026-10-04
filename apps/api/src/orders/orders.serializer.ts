@@ -50,6 +50,7 @@ export function serializeService(
     requireQnt: service.requireQnt,
     requireEmail: service.requireEmail,
     requireUsername: service.requireUsername,
+    requireNotes: service.requireNotes,
   };
 }
 

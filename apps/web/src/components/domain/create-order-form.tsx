@@ -75,6 +75,7 @@ export function CreateOrderForm({
   const [draft, setDraft] = React.useState("");
   const [imeiError, setImeiError] = React.useState<string>();
   const [notes, setNotes] = React.useState("");
+  const [notesError, setNotesError] = React.useState<string>();
   const [serviceError, setServiceError] = React.useState<string>();
   const [extras, setExtras] = React.useState<ExtraValues>(EMPTY_EXTRAS);
   const [extraErrors, setExtraErrors] = React.useState<ExtraErrors>({});
@@ -165,7 +166,10 @@ export function CreateOrderForm({
     );
     const nextExtraErrors = service ? validateExtras(service, extras) : {};
     setExtraErrors(nextExtraErrors);
-    const extrasInvalid = Object.keys(nextExtraErrors).length > 0;
+    const nextNotesError =
+      service?.requireNotes && !notes.trim() ? "Masukkan notes." : undefined;
+    setNotesError(nextNotesError);
+    const extrasInvalid = Object.keys(nextExtraErrors).length > 0 || Boolean(nextNotesError);
     const finalImeis = noDevice ? [] : draftComplete ? [...imeis, draft] : imeis;
     let problem: string | undefined;
     if (noDevice) {
@@ -407,7 +411,27 @@ export function CreateOrderForm({
       </div>
       )}
 
-      {ceir ? null : (
+      {service?.requireNotes ? (
+        <Field
+          label="Notes"
+          htmlFor="notes"
+          error={notesError}
+          required
+          hint="Wajib diisi. Ikut dikirim ke supplier bersama order."
+        >
+          <Textarea
+            id="notes"
+            name="notes"
+            maxLength={500}
+            value={notes}
+            invalid={Boolean(notesError)}
+            onChange={(event) => {
+              setNotes(event.target.value);
+              setNotesError(undefined);
+            }}
+          />
+        </Field>
+      ) : ceir ? null : (
         <Field
           label="Catatan"
           htmlFor="notes"

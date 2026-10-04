@@ -873,7 +873,6 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
         username: actor.user.username,
         balance: actor.user.creditBalance,
         status: actor.user.status,
-        portalUrl: `${webPublicUrl()}/app`,
       }),
       { reply_markup: backToMenuKeyboard() },
     );
@@ -888,10 +887,7 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
     }
     await this.replyHtml(
       ctx,
-      saldoMemberHtml({
-        balance: actor.user.creditBalance,
-        portalUrl: `${webPublicUrl()}/app`,
-      }),
+      saldoMemberHtml({ balance: actor.user.creditBalance }),
       {
         reply_markup: new InlineKeyboard()
           .text("💳 Topup", "menu:topup")

@@ -10,6 +10,7 @@ import { serializeService } from "../orders/orders.serializer";
 import {
   type ExtraFieldFlags,
   type ServiceInputType,
+  NO_EXTRA_FIELDS,
   hasExtraFields,
   parseServiceInputType,
 } from "../orders/special-fields";
@@ -76,19 +77,18 @@ function extraFieldsFor(
   service: { fulfillmentChannel: FulfillmentChannel; menu: ServiceMenu },
   inputType: ServiceInputType,
   requested: ExtraFieldInput,
-  current: ExtraFieldFlags = { requireQnt: false, requireEmail: false, requireUsername: false },
+  current: ExtraFieldFlags = NO_EXTRA_FIELDS,
 ): ExtraFieldFlags {
-  if (!isSpecialService(service)) {
-    return { requireQnt: false, requireEmail: false, requireUsername: false };
-  }
+  if (!isSpecialService(service)) return NO_EXTRA_FIELDS;
   const flags: ExtraFieldFlags = {
     requireQnt: requested.requireQnt ?? current.requireQnt,
     requireEmail: requested.requireEmail ?? current.requireEmail,
     requireUsername: requested.requireUsername ?? current.requireUsername,
+    requireNotes: requested.requireNotes ?? current.requireNotes,
   };
   if (inputType === "none" && !hasExtraFields(flags)) {
     throw new BadRequestException(
-      "Layanan tanpa IMEI/SN/ECID harus mewajibkan minimal satu field: Qnt, Email, atau Username.",
+      "Layanan tanpa IMEI/SN/ECID harus mewajibkan minimal satu field: Qnt, Email, Username, atau Notes.",
     );
   }
   return flags;

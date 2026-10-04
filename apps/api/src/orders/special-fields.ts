@@ -9,6 +9,8 @@ export const NO_DEVICE_VALUE = "-";
 export const QNT_MAX = 100_000;
 const EMAIL_MAX = 254;
 const USERNAME_MAX = 100;
+/** Same limit as the order form's optional notes (Order.notes). */
+export const NOTES_MAX = 500;
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export function parseServiceInputType(value: unknown): ServiceInputType | undefined {
@@ -21,18 +23,27 @@ export interface ExtraFieldFlags {
   requireQnt: boolean;
   requireEmail: boolean;
   requireUsername: boolean;
+  requireNotes: boolean;
 }
+
+export const NO_EXTRA_FIELDS: ExtraFieldFlags = {
+  requireQnt: false,
+  requireEmail: false,
+  requireUsername: false,
+  requireNotes: false,
+};
 
 export interface OrderExtras {
   quantity: number | null;
   email: string | null;
   username: string | null;
+  notes: string | null;
 }
 
-export const NO_EXTRAS: OrderExtras = { quantity: null, email: null, username: null };
+export const NO_EXTRAS: OrderExtras = { quantity: null, email: null, username: null, notes: null };
 
 export function hasExtraFields(flags: ExtraFieldFlags): boolean {
-  return flags.requireQnt || flags.requireEmail || flags.requireUsername;
+  return flags.requireQnt || flags.requireEmail || flags.requireUsername || flags.requireNotes;
 }
 
 /** The Telegram bot only collects device values, so these services are website/API only. */
@@ -46,7 +57,7 @@ export function needsExtraInput(service: ExtraFieldFlags & { inputType: string }
  */
 export function parseOrderExtras(
   flags: ExtraFieldFlags,
-  raw: { qnt?: unknown; email?: unknown; username?: unknown },
+  raw: { qnt?: unknown; email?: unknown; username?: unknown; notes?: unknown },
 ): { ok: true; extras: OrderExtras } | { ok: false; errors: string[] } {
   const errors: string[] = [];
   const extras: OrderExtras = { ...NO_EXTRAS };
@@ -76,6 +87,13 @@ export function parseOrderExtras(
     } else extras.username = username;
   }
 
+  if (flags.requireNotes) {
+    const notes = String(raw.notes ?? "").trim();
+    if (!notes) errors.push("Notes wajib diisi.");
+    else if (notes.length > NOTES_MAX) errors.push(`Notes maksimal ${NOTES_MAX} karakter.`);
+    else extras.notes = notes;
+  }
+
   return errors.length ? { ok: false, errors } : { ok: true, extras };
 }
 
@@ -85,5 +103,6 @@ export function supplierExtraFields(extras: OrderExtras): Record<string, string>
   if (extras.quantity != null) fields.QNT = String(extras.quantity);
   if (extras.username) fields.USERNAME = extras.username;
   if (extras.email) fields.EMAIL = extras.email;
+  if (extras.notes) fields.NOTES = extras.notes;
   return fields;
 }

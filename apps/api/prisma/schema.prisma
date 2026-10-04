@@ -337,6 +337,8 @@ model Service {
   requireQnt         Boolean             @default(false) @map("require_qnt")
   requireEmail       Boolean             @default(false) @map("require_email")
   requireUsername    Boolean             @default(false) @map("require_username")
+  /// Notes is stored in Order.notes and sent to the supplier as NOTES.
+  requireNotes       Boolean             @default(false) @map("require_notes")
   createdAt          DateTime            @default(now()) @map("created_at")
   updatedAt          DateTime            @updatedAt @map("updated_at")
   supplier           Supplier?           @relation(fields: [supplierId], references: [id], onDelete: SetNull)

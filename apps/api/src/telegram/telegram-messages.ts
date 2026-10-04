@@ -86,7 +86,6 @@ export function statusMemberHtml(input: {
   username: string;
   balance: number;
   status: string;
-  portalUrl: string;
 }): string {
   return [
     "👤 <b>Status akun ZITTOSITE</b>",
@@ -96,8 +95,6 @@ export function statusMemberHtml(input: {
     row("💎", "Saldo", formatRp(input.balance)),
     row("🟢", "Status", input.status),
     row("🔗", "Telegram", "tertaut"),
-    "",
-    `🌐 Portal: ${escapeHtml(input.portalUrl)}`,
   ].join("\n");
 }
 
@@ -448,16 +445,11 @@ export function operatorUnlinkedHtml(): string {
   ].join("\n");
 }
 
-export function saldoMemberHtml(input: {
-  balance: number;
-  portalUrl: string;
-}): string {
+export function saldoMemberHtml(input: { balance: number }): string {
   return [
     "💎 <b>Saldo akun</b>",
     "",
     row("💰", "Saldo", formatRp(input.balance)),
-    "",
-    `🌐 Portal: ${escapeHtml(input.portalUrl)}`,
   ].join("\n");
 }
 
