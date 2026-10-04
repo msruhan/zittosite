@@ -1188,21 +1188,9 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
   private async handleAccept(ctx: Context, orderId: string) {
     const actor = await this.requireOperator(ctx);
     if (!actor) return;
-    const order = await this.orders.acceptOrder(actor.admin.id, orderId);
-    await ctx.answerCallbackQuery({ text: "Order diambil" });
-    await this.replyHtml(
-      ctx,
-      [
-        `🛠️ Anda mengambil <code>${escapeHtml(orderId)}</code>.`,
-        `📱 IMEI: <code>${escapeHtml(order.imei)}</code>`,
-        "Kerjakan lalu tekan Done.",
-      ].join("\n"),
-      {
-        reply_markup: new InlineKeyboard()
-          .text("✅ Done", `ord:done:${orderId}`)
-          .text("❌ Tolak", `ord:reject:${orderId}`),
-      },
-    );
+    // The order card itself flips to IN PROCESS (with Done/Tolak); no extra reply message.
+    await this.orders.acceptOrder(actor.admin.id, orderId);
+    await ctx.answerCallbackQuery({ text: "🛠️ Order diambil. Anda sedang mengerjakan IMEI ini." });
   }
 
   private async handleRejectStart(ctx: Context, orderId: string) {
@@ -1238,19 +1226,12 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
   private async handleDoneStart(ctx: Context, orderId: string) {
     const actor = await this.requireOperator(ctx);
     if (!actor) return;
-    const order = await this.orders.completeOrder(actor.admin.id, orderId, {
+    // The order card itself flips to DONE; no extra reply message.
+    await this.orders.completeOrder(actor.admin.id, orderId, {
       resultStatus: "success",
       resultNote: "",
     });
-    await ctx.answerCallbackQuery({ text: "Order selesai" });
-    await this.replyHtml(
-      ctx,
-      [
-        `✅ Order <code>${escapeHtml(orderId)}</code> selesai.`,
-        `📱 IMEI: <code>${escapeHtml(order.imei)}</code>`,
-        "User sudah diberi tahu.",
-      ].join("\n"),
-    );
+    await ctx.answerCallbackQuery({ text: "✅ Order selesai. User sudah diberi tahu." });
   }
 
   /** Older "Lewati" buttons from the previous note prompt. */

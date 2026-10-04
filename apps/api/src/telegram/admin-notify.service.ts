@@ -258,7 +258,7 @@ export class AdminNotifyService {
     const duration =
       kind === "done" || kind === "rejected" ? processDurationLabel(order) : undefined;
 
-    const render = (customer?: CardCustomer): string => {
+    const render = (customer?: CardCustomer, mine = false): string => {
       const base = {
         orderId: order.orderId,
         imei: order.imei,
@@ -266,7 +266,7 @@ export class AdminNotifyService {
         actorName: meta.actorName,
         customer,
       };
-      if (kind === "taken") return orderCardTakenHtml(base);
+      if (kind === "taken") return orderCardTakenHtml({ ...base, mine });
       if (kind === "cancelled") {
         return orderCardCancelledHtml({ ...base, reason: meta.note ?? "—" });
       }
@@ -275,12 +275,11 @@ export class AdminNotifyService {
       }
       return orderCardDoneHtml({ ...base, note: meta.note ?? "—", duration });
     };
-    const operatorHtml = withTestBanner(order.isTest, render());
-    const superAdminHtml = withTestBanner(order.isTest, render({
+    const customer: CardCustomer = {
       username: order.user.username,
       channel: order.channel,
       price: order.price,
-    }));
+    };
 
     let keyboard: { text: string; callback_data: string }[][] = [];
     if (kind === "taken") {
@@ -299,14 +298,18 @@ export class AdminNotifyService {
     }
 
     for (const row of order.telegramNotifications) {
-      const html = showsCustomer({ role: row.admin.role, chatId: row.chatId })
-        ? superAdminHtml
-        : operatorHtml;
       if (!row.messageId) continue;
       const isAssigneeCard =
         kind === "taken" &&
-        order.assignedAdminId &&
+        !!order.assignedAdminId &&
         row.adminId === order.assignedAdminId;
+      const html = withTestBanner(
+        order.isTest,
+        render(
+          showsCustomer({ role: row.admin.role, chatId: row.chatId }) ? customer : undefined,
+          isAssigneeCard,
+        ),
+      );
       try {
         await this.sendMessageRaw(token, {
           chat_id: row.chatId,

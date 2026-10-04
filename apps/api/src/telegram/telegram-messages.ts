@@ -584,15 +584,19 @@ export function orderCardTakenHtml(input: {
   serviceName: string;
   customer?: CardCustomer;
   actorName: string;
+  /** The card of the admin who took the order. */
+  mine?: boolean;
 }): string {
   return [
     "🛠️ <b>IN PROCESS</b>",
+    ...(input.mine ? ["👉 <b>Anda sedang mengerjakan IMEI ini.</b>"] : []),
     "",
     row("🎫", "Order ID", input.orderId, true),
     ...customerLines(input.customer),
     row("📱", "IMEI", input.imei, true),
     row("📦", "Layanan", input.serviceName),
     row("👷", "Diambil oleh", input.actorName),
+    ...(input.mine ? ["", "Tekan <b>Done</b> setelah selesai dikerjakan."] : []),
   ].join("\n");
 }
 
