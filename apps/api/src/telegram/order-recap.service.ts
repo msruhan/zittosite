@@ -37,6 +37,9 @@ export type SuperAdminRecap = {
       adminId: string;
       fullName: string;
       telegramHandle: string | null;
+      superAdmin: boolean;
+      /** Selling price minus cost of today's done orders. */
+      profit: number;
       orders: RecapOrderLine[];
     } & AdminDayStats
   >;
@@ -57,7 +60,10 @@ export type OperatorRecap = {
 };
 
 type Counted = { assignedAdminId: string | null; _count: { _all: number } };
-type Summed = { assignedAdminId: string | null; _sum: { costPrice: number | null } };
+type Summed = {
+  assignedAdminId: string | null;
+  _sum: { costPrice: number | null; price?: number | null };
+};
 
 /** Totals skip unassigned orders: those belong to the WhatsApp processor, not an admin. */
 function tally(rows: Counted[]) {
@@ -184,7 +190,7 @@ export class OrderRecapService {
         this.prisma.order.groupBy({
           by: ["assignedAdminId"],
           where: where.done,
-          _sum: { costPrice: true },
+          _sum: { costPrice: true, price: true },
         }),
       ]);
 
@@ -253,15 +259,23 @@ export class OrderRecapService {
     const admins = adminIds.length
       ? await this.prisma.admin.findMany({
           where: { id: { in: adminIds } },
-          select: { id: true, fullName: true, telegramUsername: true },
+          select: { id: true, fullName: true, telegramUsername: true, role: true },
         })
       : [];
+    const profits = new Map(
+      doneAmounts.map((row) => [
+        row.assignedAdminId,
+        (row._sum.price ?? 0) - (row._sum.costPrice ?? 0),
+      ]),
+    );
 
     const perAdmin = admins
       .map((admin) => ({
         adminId: admin.id,
         fullName: admin.fullName,
         telegramHandle: admin.telegramUsername,
+        superAdmin: admin.role === "super_admin",
+        profit: profits.get(admin.id) ?? 0,
         taken: t.map.get(admin.id) ?? 0,
         done: d.map.get(admin.id) ?? 0,
         rejected: r.map.get(admin.id) ?? 0,

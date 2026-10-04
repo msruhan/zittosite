@@ -293,6 +293,8 @@ export function superAdminRecapHtml(input: {
   perAdmin: Array<{
     fullName: string;
     telegramHandle: string | null;
+    superAdmin?: boolean;
+    profit?: number;
     taken: number;
     done: number;
     rejected: number;
@@ -306,9 +308,11 @@ export function superAdminRecapHtml(input: {
 
   const adminBlocks = input.perAdmin.map((a) =>
     [
-      `• <b>${escapeHtml(a.fullName)}</b>${handleSuffix(a.telegramHandle)}`,
+      `• <b>${escapeHtml(a.fullName)}</b>${handleSuffix(a.telegramHandle)}${a.superAdmin ? " · 👑 Super Admin" : ""}`,
       handledLine(a),
-      doneTotalLine(a),
+      a.superAdmin
+        ? `💰 Keuntungan: <b>${escapeHtml(formatRp(a.profit ?? 0))}</b> (${a.done} order, tanpa biaya admin)`
+        : doneTotalLine(a),
       ...recapOrderLinesByService(a.orders, 40),
     ].join("\n"),
   );

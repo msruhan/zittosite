@@ -168,6 +168,22 @@ export class AdminNotifyService {
       ],
     };
 
+    const cancelButton = {
+      text: "🚫 Batalkan order",
+      callback_data: `sord:cancel:${order.orderId}`,
+    };
+    // Supplier and WhatsApp orders run on their own; only manual ones can be taken.
+    const superAdminMarkup = {
+      inline_keyboard: [
+        operatorFree
+          ? [cancelButton]
+          : [
+              cancelButton,
+              { text: "🛠️ Ambil order", callback_data: `ord:accept:${order.orderId}` },
+            ],
+      ],
+    };
+
     for (const dest of destinations) {
       try {
         const body = await this.sendMessageRaw(token, {
@@ -175,19 +191,7 @@ export class AdminNotifyService {
           text: showsCustomer(dest) ? superAdminHtml : operatorHtml,
           parse_mode: "HTML",
           disable_web_page_preview: true,
-          reply_markup:
-            dest.role === "super_admin"
-              ? {
-                  inline_keyboard: [
-                    [
-                      {
-                        text: "🚫 Batalkan order",
-                        callback_data: `sord:cancel:${order.orderId}`,
-                      },
-                    ],
-                  ],
-                }
-              : replyMarkup,
+          reply_markup: dest.role === "super_admin" ? superAdminMarkup : replyMarkup,
         });
         const messageId =
           body?.ok && body.result?.message_id

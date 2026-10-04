@@ -15,7 +15,7 @@ import {
 } from "@prisma/client";
 import { processDurationLabel } from "./process-duration";
 import { resolveUserPrice } from "./user-price";
-import { userOrderNoticeHtml } from "../telegram/telegram-messages";
+import { formatRp, userOrderNoticeHtml } from "../telegram/telegram-messages";
 import { PrismaService } from "../prisma/prisma.service";
 import { paymentSimulationEnabled, webPublicUrl } from "../config/env";
 import { AdminNotifyService } from "../telegram/admin-notify.service";
@@ -81,6 +81,11 @@ export function assignedServiceFilter(adminId: string) {
       assignments: { some: { adminId } },
     },
   } satisfies Prisma.OrderWhereInput;
+}
+
+/** Name on order cards; tags orders a Super Admin handles personally. */
+function handlerLabel(admin: { fullName: string; role: AdminRole }): string {
+  return admin.role === "super_admin" ? `${admin.fullName} (Super Admin)` : admin.fullName;
 }
 
 @Injectable()
@@ -737,22 +742,29 @@ export class OrdersService {
       throw new ForbiddenException("Akun admin tidak aktif.");
     }
 
+    const bySuperAdmin = admin.role === "super_admin";
     const claimed = await this.prisma.$transaction(async (tx) => {
       const order = await tx.order.findUnique({
         where: { orderId: publicOrderId },
+        include: { service: { select: { fulfillmentChannel: true } } },
       });
       if (!order) throw new NotFoundException("Order tidak ditemukan.");
       await this.assertAssignedToService(tx, admin, order.serviceId);
+      if (bySuperAdmin && order.service.fulfillmentChannel !== "telegram") {
+        throw new ForbiddenException("Order ini diproses otomatis lewat supplier/WhatsApp.");
+      }
       if (order.status === "in_process" && order.assignedAdminId === adminId) {
         return null;
       }
 
+      // A Super Admin owns the business, so no operator fee is owed: the whole price is profit.
       const result = await tx.order.updateMany({
         where: { id: order.id, status: "waiting_action" },
         data: {
           status: "in_process",
           assignedAdminId: adminId,
           startedAt: new Date(),
+          ...(bySuperAdmin ? { costPrice: 0 } : {}),
         },
       });
       if (result.count !== 1) {
@@ -767,7 +779,9 @@ export class OrdersService {
         data: {
           orderId: order.id,
           status: "in_process",
-          note: `Order diambil oleh ${admin.fullName}.`,
+          note: bySuperAdmin
+            ? `Order diambil oleh ${admin.fullName} (Super Admin). Modal ${formatRp(order.costPrice)} tidak dibayarkan, seluruh harga jadi keuntungan.`
+            : `Order diambil oleh ${admin.fullName}.`,
           actor: admin.fullName,
         },
       });
@@ -783,7 +797,7 @@ export class OrdersService {
         where: { orderId: publicOrderId },
         include: orderInclude,
       });
-      await this.adminNotify.syncOrderCards(own.id, "taken", { actorName: admin.fullName });
+      await this.adminNotify.syncOrderCards(own.id, "taken", { actorName: handlerLabel(admin) });
       return serializeOrderListItem(own, { internal: true });
     }
 
@@ -795,7 +809,7 @@ export class OrdersService {
       imei: claimed.imei,
     });
     await this.adminNotify.syncOrderCards(claimed.id, "taken", {
-      actorName: admin.fullName,
+      actorName: handlerLabel(admin),
     });
     void this.adminNotify.notifySuperAdminsFollowUp(claimed.id, "taken", admin);
     void this.adminNotify.notifyUserById(
@@ -873,7 +887,7 @@ export class OrdersService {
     });
     this.recordRefund(updated, refunded, "order_rejected");
     await this.adminNotify.syncOrderCards(updated.id, "rejected", {
-      actorName: admin.fullName,
+      actorName: handlerLabel(admin),
       note,
     });
     void this.adminNotify.notifySuperAdminsFollowUp(updated.id, "rejected", admin, note);
@@ -960,7 +974,7 @@ export class OrdersService {
     });
     this.recordRefund(updated, refunded, "order_failed");
     await this.adminNotify.syncOrderCards(updated.id, "done", {
-      actorName: admin.fullName,
+      actorName: handlerLabel(admin),
       note: resultNote,
     });
     void this.adminNotify.notifySuperAdminsFollowUp(

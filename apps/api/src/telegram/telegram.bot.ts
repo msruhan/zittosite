@@ -1605,22 +1605,11 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
     return actor;
   }
 
-  /** Accepting and rejecting orders is operator work; Super Admin only monitors and cancels. */
+  /** Order work (take, reject, Done); a Super Admin may also take manual-service orders. */
   private async requireOperator(
     ctx: Context,
   ): Promise<Extract<TelegramActor, { kind: "admin" }> | null> {
-    const actor = await this.requireAdmin(ctx);
-    if (!actor) return null;
-    if (actor.admin.role === "super_admin") {
-      await ctx
-        .answerCallbackQuery({
-          text: "Order diproses oleh admin/operator. Super Admin hanya bisa membatalkan.",
-          show_alert: true,
-        })
-        .catch(() => undefined);
-      return null;
-    }
-    return actor;
+    return this.requireAdmin(ctx);
   }
 
   private async requireMember(
