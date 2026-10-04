@@ -8,6 +8,7 @@ import type {
   User,
 } from "@prisma/client";
 import { customerActor, customerText } from "./customer-text";
+import { decryptSupplierKey } from "../suppliers/supplier-secret";
 
 type InvoiceWithOrders = PaymentInvoice & {
   orders?: Array<Pick<Order, "orderId" | "imei" | "status">>;
@@ -51,6 +52,7 @@ export function serializeService(
     requireEmail: service.requireEmail,
     requireUsername: service.requireUsername,
     requireNotes: service.requireNotes,
+    requirePassword: service.requirePassword,
   };
 }
 
@@ -144,6 +146,15 @@ export function serializeResult(
   };
 }
 
+function revealPassword(passwordEnc: string | null): string | null {
+  if (!passwordEnc) return null;
+  try {
+    return decryptSupplierKey(passwordEnc);
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Customer-facing unless `internal`: supplier wording is rewritten out of
  * reasons and activity. Admin callers pass `internal: true`.
@@ -164,6 +175,9 @@ export function serializeOrderListItem(
     quantity: order.quantity,
     email: order.email,
     username: order.username,
+    hasPassword: Boolean(order.passwordEnc),
+    // Only admins processing the order see it; customers just get `hasPassword`.
+    ...(internal ? { password: revealPassword(order.passwordEnc) } : {}),
     status: order.status,
     statusReason: internal ? order.statusReason : customerText(order.statusReason),
     isTest: order.isTest,

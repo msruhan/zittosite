@@ -9,46 +9,75 @@ import {
   supplierExtraFields,
 } from "./special-fields";
 
-const ALL = { requireQnt: true, requireEmail: true, requireUsername: true, requireNotes: true };
+const ALL = {
+  requireQnt: true,
+  requireEmail: true,
+  requireUsername: true,
+  requireNotes: true,
+  requirePassword: true,
+};
 const NONE = NO_EXTRA_FIELDS;
 
-test("required extras are validated and trimmed", () => {
+test("required extras are validated and trimmed (password kept verbatim)", () => {
   const ok = parseOrderExtras(ALL, {
     qnt: " 5 ",
     email: " a@b.co ",
     username: " budi ",
     notes: " model A2 ",
+    password: " Rahasia 123",
   });
   assert.deepEqual(ok, {
     ok: true,
-    extras: { quantity: 5, email: "a@b.co", username: "budi", notes: "model A2" },
+    extras: {
+      quantity: 5,
+      email: "a@b.co",
+      username: "budi",
+      notes: "model A2",
+      password: " Rahasia 123",
+    },
   });
 
-  const bad = parseOrderExtras(ALL, { qnt: "1.5", email: "nope", username: "", notes: " " });
+  const bad = parseOrderExtras(ALL, {
+    qnt: "1.5",
+    email: "nope",
+    username: "",
+    notes: " ",
+    password: "  ",
+  });
   assert.equal(bad.ok, false);
-  if (!bad.ok) assert.equal(bad.errors.length, 4);
+  if (!bad.ok) assert.equal(bad.errors.length, 5);
 
   assert.equal(
-    parseOrderExtras(ALL, { qnt: 0, email: "a@b.co", username: "x", notes: "n" }).ok,
+    parseOrderExtras(ALL, { qnt: 0, email: "a@b.co", username: "x", notes: "n", password: "p" }).ok,
     false,
   );
   assert.equal(
     parseOrderExtras({ ...NONE, requireNotes: true }, { notes: "x".repeat(501) }).ok,
     false,
   );
+  assert.equal(
+    parseOrderExtras({ ...NONE, requirePassword: true }, { password: "a\nb" }).ok,
+    false,
+  );
 });
 
 test("fields the service does not require are dropped", () => {
   assert.deepEqual(
-    parseOrderExtras(NONE, { qnt: 9, email: "a@b.co", username: "x", notes: "hi" }),
+    parseOrderExtras(NONE, { qnt: 9, email: "a@b.co", username: "x", notes: "hi", password: "p" }),
     { ok: true, extras: NO_EXTRAS },
   );
 });
 
 test("supplier fields omit empty values", () => {
   assert.deepEqual(
-    supplierExtraFields({ quantity: 2, email: null, username: "u", notes: "catatan" }),
-    { QNT: "2", USERNAME: "u", NOTES: "catatan" },
+    supplierExtraFields({
+      quantity: 2,
+      email: null,
+      username: "u",
+      notes: "catatan",
+      password: "s3cret",
+    }),
+    { QNT: "2", USERNAME: "u", NOTES: "catatan", PASSWORD: "s3cret" },
   );
   assert.deepEqual(supplierExtraFields(NO_EXTRAS), {});
 });
@@ -60,4 +89,5 @@ test("input type parsing and Telegram eligibility", () => {
   assert.equal(needsExtraInput({ ...NONE, inputType: "none" }), true);
   assert.equal(needsExtraInput({ ...NONE, requireEmail: true, inputType: "sn" }), true);
   assert.equal(needsExtraInput({ ...NONE, requireNotes: true, inputType: "imei" }), true);
+  assert.equal(needsExtraInput({ ...NONE, requirePassword: true, inputType: "imei" }), true);
 });

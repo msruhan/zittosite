@@ -10,6 +10,7 @@ import { escapeHtml } from "../telegram/telegram-messages";
 import { SupplierRequestError, supplierInputFields } from "./dhru-supplier-client";
 import { customerText } from "../orders/customer-text";
 import { checkSupplierCost } from "./supplier-price-guard";
+import { decryptSupplierKey } from "./supplier-secret";
 import { supplierClient } from "./suppliers.service";
 
 export const MAX_SUBMIT_ATTEMPTS = 5;
@@ -169,6 +170,7 @@ export class SupplierWorkerService implements OnModuleInit, OnModuleDestroy {
             ...supplierExtraFields({
               ...order,
               notes: order.service.requireNotes ? order.notes : null,
+              password: order.passwordEnc ? decryptSupplierKey(order.passwordEnc) : null,
             }),
           },
         );

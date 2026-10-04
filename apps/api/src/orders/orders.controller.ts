@@ -33,6 +33,7 @@ export class OrdersController {
       qnt: typeof body.qnt === "number" ? body.qnt : optString(body.qnt, "Qnt", 12),
       email: optString(body.email, "Email", 254),
       username: optString(body.username, "Username", 100),
+      password: optString(body.password, "Password", 128),
       channel: "web",
     });
   }

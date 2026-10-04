@@ -200,6 +200,7 @@ export function ServiceManagement({
             requireEmail: next.requireEmail ?? false,
             requireUsername: next.requireUsername ?? false,
             requireNotes: next.requireNotes ?? false,
+            requirePassword: next.requirePassword ?? false,
             ...(next.priceUsdCents != null
               ? {
                   priceUsd: next.priceUsdCents / 100,
@@ -228,6 +229,7 @@ export function ServiceManagement({
             requireEmail: next.requireEmail ?? false,
             requireUsername: next.requireUsername ?? false,
             requireNotes: next.requireNotes ?? false,
+            requirePassword: next.requirePassword ?? false,
             ...(next.priceUsdCents != null
               ? {
                   priceUsd: next.priceUsdCents / 100,
@@ -659,10 +661,16 @@ function OperatorPicker({
     );
   }
 
+  const superAdminIds = new Set(
+    operators.filter((admin) => admin.role === "super_admin").map((admin) => admin.id),
+  );
+  const pickedOperators = selected.filter((id) => !superAdminIds.has(id)).length;
+  const pickedSuperAdmin = selected.some((id) => superAdminIds.has(id));
+
   return (
     <fieldset className="flex flex-col gap-1.5">
       <legend className="mb-1.5 text-body font-medium text-ink">
-        Assign operator
+        Assign admin
       </legend>
       {operators.length ? (
         <div className="max-h-48 divide-y divide-hairline overflow-y-auto rounded-md border border-hairline">
@@ -686,6 +694,9 @@ function OperatorPicker({
                   {operator.telegramHandle ? ` · ${operator.telegramHandle}` : " · Telegram belum tertaut"}
                 </span>
               </span>
+              {operator.role === "super_admin" ? (
+                <Tag className="border-action/15 bg-action-wash text-action">Super Admin</Tag>
+              ) : null}
               {!operator.active ? (
                 <Tag className="border-void-edge bg-void-wash text-void-ink">
                   Diblokir
@@ -700,9 +711,13 @@ function OperatorPicker({
         </p>
       )}
       <p className="text-body text-ink-soft">
-        {selected.length
-          ? `${selected.length} operator akan menerima dan memproses order layanan ini.`
-          : "Tanpa assign, order layanan ini hanya terlihat oleh Super Admin."}
+        {pickedOperators
+          ? `${pickedOperators} operator akan menerima dan memproses order layanan ini${
+              pickedSuperAdmin ? ", bersama Super Admin" : ""
+            }.`
+          : pickedSuperAdmin
+            ? "Order layanan ini hanya masuk ke Super Admin; operator tidak menerimanya."
+            : "Tanpa assign, order layanan ini hanya terlihat oleh Super Admin."}
       </p>
     </fieldset>
   );

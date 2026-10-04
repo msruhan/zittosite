@@ -118,6 +118,7 @@ export interface Service {
   requireEmail?: boolean;
   requireUsername?: boolean;
   requireNotes?: boolean;
+  requirePassword?: boolean;
   /** Admin panel only: where paid orders are processed. */
   fulfillmentChannel?: FulfillmentChannel;
   /** Admin panel only: upstream supplier route when fulfillmentChannel is "supplier". */
@@ -270,6 +271,10 @@ export interface Order {
   quantity?: number | null;
   email?: string | null;
   username?: string | null;
+  /** True when the order carries an account password (never sent to customers). */
+  hasPassword?: boolean;
+  /** Admin views only: the decrypted account password. */
+  password?: string | null;
   status: OrderStatus;
   /** Keterangan for rejected/cancelled orders; null means none. */
   statusReason?: string | null;

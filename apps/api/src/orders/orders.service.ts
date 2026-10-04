@@ -28,6 +28,7 @@ import {
 import { serializeOrderListItem, serializeService } from "./orders.serializer";
 import { parseImeiList } from "./imei-list";
 import { NO_DEVICE_VALUE, parseOrderExtras } from "./special-fields";
+import { encryptSupplierKey } from "../suppliers/supplier-secret";
 import {
   type OrderVia,
   maxBulkFor,
@@ -213,6 +214,7 @@ export class OrdersService {
       qnt?: number | string;
       email?: string;
       username?: string;
+      password?: string;
       channel?: OrderChannel;
       apiKeyId?: string;
       balanceOnly?: boolean;
@@ -266,7 +268,8 @@ export class OrdersService {
     }
     const parsedExtras = parseOrderExtras(service, input);
     if (!parsedExtras.ok) throw new BadRequestException(parsedExtras.errors.join(" "));
-    const extras = parsedExtras.extras;
+    const { password, ...extras } = parsedExtras.extras;
+    const passwordEnc = password ? encryptSupplierKey(password) : null;
     const [groupPrice, userPrice] = await Promise.all([
       user.groupId
         ? this.prisma.userGroupPrice.findUnique({
@@ -381,6 +384,7 @@ export class OrdersService {
             channel,
             imei,
             ...extras,
+            passwordEnc,
             notes: extras.notes ?? notes,
             status: "waiting_payment",
             price: linePrice,

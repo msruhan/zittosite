@@ -161,6 +161,7 @@ export class DhruService {
       email: params.EMAIL,
       username: params.USERNAME,
       notes: params.NOTES || params.NOTE,
+      password: params.PASSWORD,
     });
     if (!extras.ok) throw new DhruFailure(extras.errors.join(" "));
     const type = service.inputType;
@@ -190,6 +191,7 @@ export class DhruService {
         email: extras.email ?? undefined,
         username: extras.username ?? undefined,
         notes: extras.notes ?? undefined,
+        password: extras.password ?? undefined,
         channel: "api",
         apiKeyId: caller.apiKeyId,
         balanceOnly: true,

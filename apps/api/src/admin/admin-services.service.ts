@@ -85,10 +85,11 @@ function extraFieldsFor(
     requireEmail: requested.requireEmail ?? current.requireEmail,
     requireUsername: requested.requireUsername ?? current.requireUsername,
     requireNotes: requested.requireNotes ?? current.requireNotes,
+    requirePassword: requested.requirePassword ?? current.requirePassword,
   };
   if (inputType === "none" && !hasExtraFields(flags)) {
     throw new BadRequestException(
-      "Layanan tanpa IMEI/SN/ECID harus mewajibkan minimal satu field: Qnt, Email, Username, atau Notes.",
+      "Layanan tanpa IMEI/SN/ECID harus mewajibkan minimal satu field: Qnt, Email, Username, Password, atau Notes.",
     );
   }
   return flags;
@@ -501,12 +502,12 @@ export class AdminServicesService {
   private async validOperatorIds(ids: string[]) {
     if (!ids.length) return [];
     const found = await this.prisma.admin.findMany({
-      where: { id: { in: ids }, role: "admin" },
+      where: { id: { in: ids }, role: { in: ["admin", "super_admin"] } },
       select: { id: true },
     });
     if (found.length !== ids.length) {
       throw new BadRequestException(
-        "Assign hanya bisa ke akun operator yang terdaftar.",
+        "Assign hanya bisa ke akun admin yang terdaftar.",
       );
     }
     return ids;

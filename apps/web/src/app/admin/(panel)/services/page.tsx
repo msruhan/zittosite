@@ -54,7 +54,10 @@ export default async function AdminServicesPage() {
         initialServices={services}
         initialGroups={groups}
         initialUsdRate={usdRate}
-        operators={admins.filter((admin) => admin.role !== "super_admin")}
+        operators={[
+          ...admins.filter((admin) => admin.role === "super_admin"),
+          ...admins.filter((admin) => admin.role !== "super_admin"),
+        ]}
         suppliers={suppliers}
       />
     </>

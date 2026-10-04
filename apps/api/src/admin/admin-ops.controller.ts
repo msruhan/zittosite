@@ -290,6 +290,7 @@ export class AdminOpsController {
       requireEmail: optBoolean(body.requireEmail, "Field Email"),
       requireUsername: optBoolean(body.requireUsername, "Field Username"),
       requireNotes: optBoolean(body.requireNotes, "Field Notes"),
+      requirePassword: optBoolean(body.requirePassword, "Field Password"),
     });
     this.audit.record("admin.service.created", {
       actorId: req.admin.sub,
@@ -326,6 +327,7 @@ export class AdminOpsController {
       requireEmail: optBoolean(body.requireEmail, "Field Email"),
       requireUsername: optBoolean(body.requireUsername, "Field Username"),
       requireNotes: optBoolean(body.requireNotes, "Field Notes"),
+      requirePassword: optBoolean(body.requirePassword, "Field Password"),
     };
     const service = await this.services.update(id, input);
     this.audit.record("admin.service.updated", {
@@ -341,6 +343,7 @@ export class AdminOpsController {
       requireEmail: input.requireEmail,
       requireUsername: input.requireUsername,
       requireNotes: input.requireNotes,
+      requirePassword: input.requirePassword,
       menu: input.menu,
       assignedAdmins: input.assignedAdminIds?.join(","),
     });

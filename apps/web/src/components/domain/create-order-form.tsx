@@ -3,7 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Info, QrCode, Wallet } from "@phosphor-icons/react";
+import { Eye, EyeSlash, Info, QrCode, Wallet } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Textarea } from "@/components/ui/field";
@@ -22,14 +22,15 @@ import {
   type InputType,
 } from "@/lib/imei-list";
 import type { Service } from "@/lib/types";
+import { cn } from "@/lib/utils";
 
 // Keep in sync with apps/api/src/orders/special-fields.ts.
 const QNT_MAX = 100_000;
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-type ExtraValues = { qnt: string; email: string; username: string };
+type ExtraValues = { qnt: string; email: string; username: string; password: string };
 type ExtraErrors = Partial<Record<keyof ExtraValues, string>>;
-const EMPTY_EXTRAS: ExtraValues = { qnt: "", email: "", username: "" };
+const EMPTY_EXTRAS: ExtraValues = { qnt: "", email: "", username: "", password: "" };
 
 const ALL_GROUPS = "__all__";
 const UNGROUPED = "__none__";
@@ -50,6 +51,9 @@ function validateExtras(service: Service, values: ExtraValues): ExtraErrors {
   }
   if (service.requireUsername && !values.username.trim()) {
     errors.username = "Masukkan username.";
+  }
+  if (service.requirePassword && !values.password.trim()) {
+    errors.password = "Masukkan password.";
   }
   return errors;
 }
@@ -79,6 +83,7 @@ export function CreateOrderForm({
   const [serviceError, setServiceError] = React.useState<string>();
   const [extras, setExtras] = React.useState<ExtraValues>(EMPTY_EXTRAS);
   const [extraErrors, setExtraErrors] = React.useState<ExtraErrors>({});
+  const [passwordRevealed, setPasswordRevealed] = React.useState(false);
 
   function updateExtra(key: keyof ExtraValues, value: string) {
     setExtras((current) => ({ ...current, [key]: value }));
@@ -202,6 +207,7 @@ export function CreateOrderForm({
           ...(service?.requireQnt ? { qnt: extras.qnt.trim() } : {}),
           ...(service?.requireEmail ? { email: extras.email.trim() } : {}),
           ...(service?.requireUsername ? { username: extras.username.trim() } : {}),
+          ...(service?.requirePassword ? { password: extras.password } : {}),
         }),
       });
       const title = quantity > 1 ? `${quantity} order dibuat` : "Order dibuat";
@@ -364,6 +370,40 @@ export function CreateOrderForm({
             invalid={Boolean(extraErrors.username)}
             onChange={(event) => updateExtra("username", event.target.value)}
           />
+        </Field>
+      ) : null}
+
+      {service?.requirePassword ? (
+        <Field label="Password" htmlFor="orderPassword" error={extraErrors.password} required>
+          <div className="relative">
+            <Input
+              id="orderPassword"
+              type={passwordRevealed ? "text" : "password"}
+              autoComplete="off"
+              spellCheck={false}
+              maxLength={128}
+              className="pr-11"
+              value={extras.password}
+              invalid={Boolean(extraErrors.password)}
+              onChange={(event) => updateExtra("password", event.target.value)}
+            />
+            <button
+              type="button"
+              onClick={() => setPasswordRevealed((v) => !v)}
+              aria-label={passwordRevealed ? "Sembunyikan password" : "Tampilkan password"}
+              className={cn(
+                "absolute right-1 top-1 inline-flex size-8 items-center justify-center rounded-md text-ink-soft",
+                "transition-[background-color,color,transform] duration-150 ease-out-strong",
+                "hover:bg-mist hover:text-ink active:scale-[0.97]",
+              )}
+            >
+              {passwordRevealed ? (
+                <EyeSlash className="size-4" weight="regular" aria-hidden="true" />
+              ) : (
+                <Eye className="size-4" weight="regular" aria-hidden="true" />
+              )}
+            </button>
+          </div>
         </Field>
       ) : null}
 

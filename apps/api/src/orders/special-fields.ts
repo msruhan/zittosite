@@ -11,6 +11,7 @@ const EMAIL_MAX = 254;
 const USERNAME_MAX = 100;
 /** Same limit as the order form's optional notes (Order.notes). */
 export const NOTES_MAX = 500;
+const PASSWORD_MAX = 128;
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export function parseServiceInputType(value: unknown): ServiceInputType | undefined {
@@ -24,6 +25,7 @@ export interface ExtraFieldFlags {
   requireEmail: boolean;
   requireUsername: boolean;
   requireNotes: boolean;
+  requirePassword: boolean;
 }
 
 export const NO_EXTRA_FIELDS: ExtraFieldFlags = {
@@ -31,6 +33,7 @@ export const NO_EXTRA_FIELDS: ExtraFieldFlags = {
   requireEmail: false,
   requireUsername: false,
   requireNotes: false,
+  requirePassword: false,
 };
 
 export interface OrderExtras {
@@ -38,12 +41,26 @@ export interface OrderExtras {
   email: string | null;
   username: string | null;
   notes: string | null;
+  /** Plain text only in memory; stored encrypted as Order.passwordEnc. */
+  password: string | null;
 }
 
-export const NO_EXTRAS: OrderExtras = { quantity: null, email: null, username: null, notes: null };
+export const NO_EXTRAS: OrderExtras = {
+  quantity: null,
+  email: null,
+  username: null,
+  notes: null,
+  password: null,
+};
 
 export function hasExtraFields(flags: ExtraFieldFlags): boolean {
-  return flags.requireQnt || flags.requireEmail || flags.requireUsername || flags.requireNotes;
+  return (
+    flags.requireQnt ||
+    flags.requireEmail ||
+    flags.requireUsername ||
+    flags.requireNotes ||
+    flags.requirePassword
+  );
 }
 
 /** The Telegram bot only collects device values, so these services are website/API only. */
@@ -57,7 +74,7 @@ export function needsExtraInput(service: ExtraFieldFlags & { inputType: string }
  */
 export function parseOrderExtras(
   flags: ExtraFieldFlags,
-  raw: { qnt?: unknown; email?: unknown; username?: unknown; notes?: unknown },
+  raw: { qnt?: unknown; email?: unknown; username?: unknown; notes?: unknown; password?: unknown },
 ): { ok: true; extras: OrderExtras } | { ok: false; errors: string[] } {
   const errors: string[] = [];
   const extras: OrderExtras = { ...NO_EXTRAS };
@@ -94,6 +111,15 @@ export function parseOrderExtras(
     else extras.notes = notes;
   }
 
+  if (flags.requirePassword) {
+    // Not trimmed: spaces can be part of a password.
+    const password = typeof raw.password === "string" ? raw.password : String(raw.password ?? "");
+    if (!password.trim()) errors.push("Password wajib diisi.");
+    else if (password.length > PASSWORD_MAX || /[\r\n]/.test(password)) {
+      errors.push(`Password maksimal ${PASSWORD_MAX} karakter dalam satu baris.`);
+    } else extras.password = password;
+  }
+
   return errors.length ? { ok: false, errors } : { ok: true, extras };
 }
 
@@ -104,5 +130,6 @@ export function supplierExtraFields(extras: OrderExtras): Record<string, string>
   if (extras.username) fields.USERNAME = extras.username;
   if (extras.email) fields.EMAIL = extras.email;
   if (extras.notes) fields.NOTES = extras.notes;
+  if (extras.password) fields.PASSWORD = extras.password;
   return fields;
 }
