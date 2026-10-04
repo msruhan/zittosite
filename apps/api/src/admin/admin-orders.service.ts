@@ -187,10 +187,29 @@ export class AdminOrdersService {
           ]
         : [];
 
+    // An admin's orders include the ones still waiting in their queue (service assigned to them, not yet taken).
+    const handlerFilter: Prisma.OrderWhereInput | null = !adminId
+      ? null
+      : adminId === "none"
+        ? { assignedAdminId: null }
+        : {
+            OR: [
+              { assignedAdminId: adminId },
+              {
+                status: "waiting_action",
+                assignedAdminId: null,
+                service: { assignments: { some: { adminId } } },
+              },
+            ],
+          };
+    const and = [
+      ...(supplierOnly ? [SUPPLIER_ROUTED_ORDER] : []),
+      ...(handlerFilter ? [handlerFilter] : []),
+    ];
+
     return {
       ...(statusFilter ? { status: statusFilter } : {}),
-      ...(supplierOnly ? { AND: [SUPPLIER_ROUTED_ORDER] } : {}),
-      ...(adminId ? { assignedAdminId: adminId === "none" ? null : adminId } : {}),
+      ...(and.length ? { AND: and } : {}),
       ...(from || until
         ? { createdAt: { ...(from ? { gte: from } : {}), ...(until ? { lt: until } : {}) } }
         : {}),
@@ -206,10 +225,10 @@ export class AdminOrdersService {
     };
   }
 
-  /** Admins who have handled at least one order, for the Orders filter. */
+  /** Admins who have handled an order or have services assigned, for the Orders filter. */
   async handlers() {
     return this.prisma.admin.findMany({
-      where: { assignedOrders: { some: {} } },
+      where: { OR: [{ assignedOrders: { some: {} } }, { serviceAssignments: { some: {} } }] },
       select: { id: true, fullName: true, username: true },
       orderBy: { fullName: "asc" },
     });
