@@ -10,12 +10,14 @@ export function maxBulkFor(service: { via?: string; menu?: string | null } | nul
     : MAX_BULK_IMEIS;
 }
 
-export type InputType = "imei" | "sn" | "ecid";
+/** `imei_sn` takes either: 15 digits count as an IMEI, anything else as an SN. */
+export type InputType = "imei" | "sn" | "ecid" | "imei_sn";
 
 export const INPUT_TYPE_LABEL: Record<InputType, string> = {
   imei: "IMEI",
   sn: "SN",
   ecid: "ECID",
+  imei_sn: "IMEI/SN",
 };
 
 const CODE_MIN = 4;

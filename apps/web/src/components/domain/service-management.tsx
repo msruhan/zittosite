@@ -1178,6 +1178,7 @@ function ServiceFormDialog({
                   { value: "imei", label: "IMEI (15 digit)" },
                   { value: "sn", label: "SN (Serial Number)" },
                   { value: "ecid", label: "ECID" },
+                  { value: "imei_sn", label: "IMEI/SN (user pilih salah satu)" },
                   { value: "none", label: "Tidak ada (tanpa IMEI/SN/ECID)" },
                 ]}
               />

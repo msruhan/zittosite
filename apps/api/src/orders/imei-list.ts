@@ -2,19 +2,28 @@ export const IMEI_LENGTH = 15;
 export const MAX_BULK_IMEIS = 6;
 export const MAX_SPECIAL_BULK = 2;
 
-export type InputType = "imei" | "sn" | "ecid";
+/** `imei_sn` takes either: 15 digits count as an IMEI, anything else as an SN. */
+export type InputType = "imei" | "sn" | "ecid" | "imei_sn";
 
 export const INPUT_TYPE_LABEL: Record<InputType, string> = {
   imei: "IMEI",
   sn: "SN",
   ecid: "ECID",
+  imei_sn: "IMEI/SN",
 };
 
 const CODE_MIN = 4;
 const CODE_MAX = 40;
 
 export function parseInputType(value: unknown): InputType | undefined {
-  return value === "imei" || value === "sn" || value === "ecid" ? value : undefined;
+  return value === "imei" || value === "sn" || value === "ecid" || value === "imei_sn"
+    ? value
+    : undefined;
+}
+
+/** Whether an `imei_sn` value is an IMEI (exactly 15 digits) rather than an SN. */
+export function looksLikeImei(value: string): boolean {
+  return new RegExp(`^\\d{${IMEI_LENGTH}}$`).test(value);
 }
 
 export type ImeiListResult =

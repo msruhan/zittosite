@@ -112,7 +112,7 @@ export interface Service {
   serviceGroupId?: string | null;
   serviceGroupName?: string | null;
   /** What the user enters per order; SN/ECID/none only for Layanan Spesial. */
-  inputType?: "imei" | "sn" | "ecid" | "none";
+  inputType?: "imei" | "sn" | "ecid" | "imei_sn" | "none";
   /** Layanan Spesial only: extra fields the user must fill per order. */
   requireQnt?: boolean;
   requireEmail?: boolean;

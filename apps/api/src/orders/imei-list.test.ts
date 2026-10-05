@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { parseImeiList } from "./imei-list";
 import { maxBulkFor } from "./supplier-routed";
+import { supplierInputFields } from "../suppliers/dhru-supplier-client";
 
 const A = "356938035643809";
 const B = "351902447718283";
@@ -67,6 +68,20 @@ test("SN keeps letters, uppercased, separators dropped", () => {
     ok: true,
     imeis: ["F2LX12AB9Q0D", "C02XK0ABJG5H"],
   });
+});
+
+test("IMEI/SN accepts either and routes 15-digit values to IMEI", () => {
+  assert.deepEqual(parseImeiList(`${A}\nf2lx-12ab9q0d`, "imei_sn"), {
+    ok: true,
+    imeis: [A, "F2LX12AB9Q0D"],
+  });
+  assert.deepEqual(parseImeiList("ab", "imei_sn"), {
+    ok: false,
+    errors: ["Baris 1: IMEI/SN harus 4–40 huruf/angka (saat ini 2)."],
+  });
+  assert.deepEqual(supplierInputFields("imei_sn", A), {});
+  assert.deepEqual(supplierInputFields("imei_sn", "F2LX12AB9Q0D"), { SN: "F2LX12AB9Q0D" });
+  assert.deepEqual(supplierInputFields("imei_sn", "1234567890"), { SN: "1234567890" });
 });
 
 test("ECID length is bounded and labelled", () => {

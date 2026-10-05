@@ -171,7 +171,9 @@ export class DhruService {
         ? params.SN || params.SERIALNUMBER || params.IMEI
         : type === "ecid"
           ? params.ECID || params.IMEI
-          : params.IMEI;
+          : type === "imei_sn"
+            ? params.IMEI || params.SN || params.SERIALNUMBER
+            : params.IMEI;
     const parsed = parseImeiList([raw ?? ""], type);
     if (!parsed.ok) throw new DhruFailure(`Invalid ${INPUT_TYPE_LABEL[type]}`);
     return { service, imei: parsed.imeis[0]!, extras: extras.extras };

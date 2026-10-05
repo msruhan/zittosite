@@ -49,7 +49,7 @@ type Json = Record<string, unknown>;
 
 const TOTP_HEADER = "x-totp-code";
 const FULFILLMENT_CHANNELS = ["telegram", "whatsapp", "supplier"] as const;
-const INPUT_TYPES = ["imei", "sn", "ecid", "none"] as const;
+const INPUT_TYPES = ["imei", "sn", "ecid", "imei_sn", "none"] as const;
 const SERVICE_MENUS = ["ceir", "special"] as const;
 const USER_ROLES = ["customer", "testing"] as const;
 const WIB_OFFSET_MS = 7 * 60 * 60 * 1000;

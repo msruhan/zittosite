@@ -17,6 +17,7 @@ const PLACEHOLDER: Record<InputType, string> = {
   imei: "Contoh 356938035643809",
   sn: "Contoh F2LX12AB9Q0D",
   ecid: "Contoh 000A1B2C3D4E5F",
+  imei_sn: "Contoh 356938035643809 atau F2LX12AB9Q0D",
 };
 
 /**

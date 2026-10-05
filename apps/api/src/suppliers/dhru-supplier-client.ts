@@ -4,6 +4,8 @@
  * ERROR is the supplier's decision, anything else is a transport problem.
  */
 
+import { looksLikeImei } from "../orders/imei-list";
+
 export type SupplierConfig = { baseUrl: string; username: string; apiKey: string };
 
 export type RemoteService = {
@@ -60,9 +62,10 @@ function text(value: unknown): string {
 
 /** Dhru carries SN/ECID in their own fields; IMEI already travels as `IMEI`. */
 export function supplierInputFields(
-  inputType: "imei" | "sn" | "ecid" | "none",
+  inputType: "imei" | "sn" | "ecid" | "imei_sn" | "none",
   value: string,
 ): Record<string, string> {
+  if (inputType === "imei_sn") return looksLikeImei(value) ? {} : { SN: value };
   if (inputType === "sn") return { SN: value };
   if (inputType === "ecid") return { ECID: value };
   return {};

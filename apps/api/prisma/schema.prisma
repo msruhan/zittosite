@@ -79,6 +79,8 @@ enum ServiceInputType {
   imei
   sn
   ecid
+  /// Either an IMEI (15 digits) or an SN; sent to the supplier as IMEI or SN accordingly.
+  imei_sn
   /// Layanan Spesial without a device value; the order carries only Qnt/Email/Username.
   none
 }

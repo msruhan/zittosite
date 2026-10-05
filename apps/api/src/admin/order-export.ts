@@ -39,6 +39,7 @@ const INPUT_TYPE_LABEL: Record<string, string> = {
   imei: "IMEI",
   sn: "SN",
   ecid: "ECID",
+  imei_sn: "IMEI/SN",
   none: "-",
 };
 

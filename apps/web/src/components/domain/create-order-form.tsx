@@ -317,7 +317,11 @@ export function CreateOrderForm({
                 draft.length ? `${draft.length}/${IMEI_LENGTH} digit · ` : ""
               }ketik 15 digit lalu tekan Enter untuk menambah IMEI berikutnya. Ketik *#06# pada perangkat untuk melihat IMEI.`
             : `${imeis.length}/${maxBulk} ${label} · ketik ${
-                inputType === "sn" ? "Serial Number (SN)" : "ECID"
+                inputType === "sn"
+                  ? "Serial Number (SN)"
+                  : inputType === "imei_sn"
+                    ? "IMEI (15 digit) atau Serial Number (SN)"
+                    : "ECID"
               } perangkat lalu tekan Enter untuk menambah ${label} berikutnya.`
         }
       >

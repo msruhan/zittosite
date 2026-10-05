@@ -1,4 +1,4 @@
-import type { InputType } from "./imei-list";
+import { type InputType, parseInputType } from "./imei-list";
 
 /** `none` means the service takes no device value; only Layanan Spesial may use it. */
 export type ServiceInputType = InputType | "none";
@@ -15,9 +15,7 @@ const PASSWORD_MAX = 128;
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export function parseServiceInputType(value: unknown): ServiceInputType | undefined {
-  return value === "imei" || value === "sn" || value === "ecid" || value === "none"
-    ? value
-    : undefined;
+  return value === "none" ? value : parseInputType(value);
 }
 
 export interface ExtraFieldFlags {
