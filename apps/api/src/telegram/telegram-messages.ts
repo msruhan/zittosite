@@ -308,7 +308,7 @@ export function superAdminRecapHtml(input: {
       `• <b>${escapeHtml(a.fullName)}</b>${handleSuffix(a.telegramHandle)}${a.superAdmin ? " · 👑 Super Admin" : ""}`,
       handledLine(a),
       a.superAdmin
-        ? `💰 Keuntungan: <b>${escapeHtml(formatRp(a.profit ?? 0))}</b> (${a.done} order, tanpa biaya admin)`
+        ? `💰 Keuntungan: <b>${escapeHtml(formatRp(a.profit ?? 0))}</b> (${a.done} order)`
         : doneTotalLine(a),
       ...recapOrderLinesByService(a.orders, 40),
     ].join("\n"),

@@ -18,7 +18,7 @@ test("recap tags a Super Admin handler and shows their profit", () => {
     ],
   });
   assert.match(html, /<b>Owner<\/b> · 👑 Super Admin/);
-  assert.match(html, /Keuntungan: <b>Rp\s?95\.000<\/b> \(1 order, tanpa biaya admin\)/);
+  assert.match(html, /Keuntungan: <b>Rp\s?95\.000<\/b> \(1 order\)/);
   assert.doesNotMatch(html, /Admin HJ<\/b> · 👑/);
   assert.match(html, /Total selesai: <b>Rp\s?60\.000<\/b>/);
 });

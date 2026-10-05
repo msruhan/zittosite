@@ -15,7 +15,7 @@ import {
 } from "@prisma/client";
 import { processDurationLabel } from "./process-duration";
 import { resolveUserPrice } from "./user-price";
-import { formatRp, userOrderNoticeHtml } from "../telegram/telegram-messages";
+import { userOrderNoticeHtml } from "../telegram/telegram-messages";
 import { PrismaService } from "../prisma/prisma.service";
 import { paymentSimulationEnabled, webPublicUrl } from "../config/env";
 import { AdminNotifyService } from "../telegram/admin-notify.service";
@@ -761,14 +761,12 @@ export class OrdersService {
         return null;
       }
 
-      // A Super Admin owns the business, so no operator fee is owed: the whole price is profit.
       const result = await tx.order.updateMany({
         where: { id: order.id, status: "waiting_action" },
         data: {
           status: "in_process",
           assignedAdminId: adminId,
           startedAt: new Date(),
-          ...(bySuperAdmin ? { costPrice: 0 } : {}),
         },
       });
       if (result.count !== 1) {
@@ -784,7 +782,7 @@ export class OrdersService {
           orderId: order.id,
           status: "in_process",
           note: bySuperAdmin
-            ? `Order diambil oleh ${admin.fullName} (Super Admin). Modal ${formatRp(order.costPrice)} tidak dibayarkan, seluruh harga jadi keuntungan.`
+            ? `Order diambil oleh ${admin.fullName} (Super Admin).`
             : `Order diambil oleh ${admin.fullName}.`,
           actor: admin.fullName,
         },
