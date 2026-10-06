@@ -8,7 +8,11 @@ import {
   supplierEndpoint,
 } from "./dhru-supplier-client";
 import { decryptSupplierKey, encryptSupplierKey, maskSupplierKey } from "./supplier-secret";
-import { isRetryableSupplierError, submitRetryDelayMs } from "./supplier-worker.service";
+import {
+  isErrorReply,
+  isRetryableSupplierError,
+  submitRetryDelayMs,
+} from "./supplier-worker.service";
 
 process.env.ADMIN_JWT_SECRET ??= "test-admin-secret-0123456789abcdefghijklmnop";
 
@@ -124,4 +128,29 @@ test("retry policy", () => {
   assert.equal(isRetryableSupplierError("Invalid IMEI"), false);
   assert.equal(submitRetryDelayMs(1), 60_000);
   assert.equal(submitRetryDelayMs(3), 240_000);
+});
+
+test("completed replies carrying an error are recognised", () => {
+  for (const text of [
+    "Error: IMEI not supported",
+    "Result: ERROR",
+    "Check failed, try again later",
+    "Gagal cek IMEI",
+    "Invalid IMEI",
+    "Adjusted by admin — credits refunded.",
+  ]) {
+    assert.equal(isErrorReply(text), true, text);
+  }
+  for (const text of [
+    "Result: UNKNOWN",
+    "Result: REGISTERED",
+    "Result: ROAMER",
+    "Order successfully",
+    "Registration successfully",
+    '{"message":"successfully"}',
+    "5 credits added to a@b.co",
+    "Result: 5 entries 2026-07-17 · add_roamer · SF8080 · remove_roamer · auto-remove-operation",
+  ]) {
+    assert.equal(isErrorReply(text), false, text);
+  }
 });

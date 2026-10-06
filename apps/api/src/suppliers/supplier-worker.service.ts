@@ -34,6 +34,11 @@ export function isRetryableSupplierError(message: string): boolean {
   return /credit|balance|saldo|maintenance|try again|coba lagi|rate limit|too many/i.test(message);
 }
 
+/** Some suppliers mark failed orders as completed and put the error in CODE/COMMENTS. */
+export function isErrorReply(text: string): boolean {
+  return /\b(error|errors|failed|failure|gagal|invalid|refunded|rejected|cancell?ed)\b/i.test(text);
+}
+
 /** Wait before retry n (1-based): 1, 2, 4, 8 minutes. */
 export function submitRetryDelayMs(attempts: number): number {
   return 60_000 * 2 ** Math.max(0, attempts - 1);
@@ -311,7 +316,14 @@ export class SupplierWorkerService implements OnModuleInit, OnModuleDestroy {
           continue;
         }
         const { status, code, comments } = reply.data;
-        if (status === 4) {
+        if (status === 4 && isErrorReply(`${code} ${comments}`)) {
+          const why = code || comments;
+          await this.orders.applyProcessorUpdate(
+            order.id,
+            { kind: "rejected", reason: customerText(`Ditolak: ${why}`) },
+            this.actor(),
+          );
+        } else if (status === 4) {
           await this.orders.applyProcessorUpdate(
             order.id,
             { kind: "done", note: code || comments },
