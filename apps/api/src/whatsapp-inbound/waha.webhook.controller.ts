@@ -11,7 +11,8 @@ import {
 import { SkipThrottle } from "@nestjs/throttler";
 import type { Request } from "express";
 import { createHmac, timingSafeEqual } from "crypto";
-import { wahaInboundConfig } from "../config/env";
+import { wahaWebhookSecret } from "../config/env";
+import { AdminReactionService, type WahaReactionPayload } from "./admin-reaction.service";
 import { RoamercheckService, type WahaMessagePayload } from "./roamercheck.service";
 
 function hmacValid(rawBody: Buffer, provided: string, secret: string): boolean {
@@ -26,7 +27,10 @@ function hmacValid(rawBody: Buffer, provided: string, secret: string): boolean {
 export class WahaWebhookController {
   private readonly logger = new Logger(WahaWebhookController.name);
 
-  constructor(private readonly roamercheck: RoamercheckService) {}
+  constructor(
+    private readonly roamercheck: RoamercheckService,
+    private readonly reactions: AdminReactionService,
+  ) {}
 
   @Post()
   @HttpCode(200)
@@ -34,24 +38,30 @@ export class WahaWebhookController {
     @Req() req: RawBodyRequest<Request>,
     @Headers("x-webhook-hmac") hmac?: string,
   ) {
-    const config = wahaInboundConfig();
-    if (!config) return { received: false };
-    if (!req.rawBody || !hmac || !hmacValid(req.rawBody, hmac, config.secret)) {
+    const secret = wahaWebhookSecret();
+    if (!secret) return { received: false };
+    if (!req.rawBody || !hmac || !hmacValid(req.rawBody, hmac, secret)) {
       throw new UnauthorizedException("Invalid signature");
     }
 
-    const body = req.body as { event?: unknown; payload?: WahaMessagePayload };
-    if (body?.event !== "message" || !body.payload || typeof body.payload !== "object") {
-      return { received: true };
-    }
+    const body = req.body as { event?: unknown; payload?: unknown };
+    if (!body?.payload || typeof body.payload !== "object") return { received: true };
     try {
-      const outcome = await this.roamercheck.handle(body.payload);
-      if (!outcome.startsWith("ignored: other")) {
-        this.logger.log(`WAHA message ${String(body.payload.id ?? "?")}: ${outcome}`);
+      if (body.event === "message") {
+        const payload = body.payload as WahaMessagePayload;
+        const outcome = await this.roamercheck.handle(payload);
+        if (!outcome.startsWith("ignored: other") && outcome !== "off") {
+          this.logger.log(`WAHA message ${String(payload.id ?? "?")}: ${outcome}`);
+        }
+      } else if (body.event === "message.reaction") {
+        const outcome = await this.reactions.handle(body.payload as WahaReactionPayload);
+        if (!outcome.startsWith("ignored: other") && outcome !== "off") {
+          this.logger.log(`WAHA reaction: ${outcome}`);
+        }
       }
     } catch (err) {
       this.logger.warn(
-        `WAHA message handling failed: ${err instanceof Error ? err.message : String(err)}`,
+        `WAHA ${String(body.event)} handling failed: ${err instanceof Error ? err.message : String(err)}`,
       );
     }
     return { received: true };

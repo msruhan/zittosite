@@ -73,6 +73,8 @@ enum FulfillmentChannel {
   whatsapp
   /// Forwarded automatically to an upstream Dhru supplier (Service.supplierId).
   supplier
+  /// One message per order in the admin WhatsApp group; admins update it by reacting.
+  whatsapp_admin
 }
 
 enum ServiceInputType {
@@ -253,6 +255,8 @@ model Admin {
   telegramUsername      String?                     @map("telegram_username")
   telegramOauthLinkedAt DateTime?                   @map("telegram_oauth_linked_at")
   telegramLinkedAt      DateTime?                   @map("telegram_linked_at")
+  /// Digits only (62…); identifies the admin's reactions in the admin WhatsApp group.
+  whatsappNumber        String?                     @unique @map("whatsapp_number")
   createdAt             DateTime                    @default(now()) @map("created_at")
   updatedAt             DateTime                    @updatedAt @map("updated_at")
   sessions              AdminSession[]
@@ -471,6 +475,7 @@ model Order {
   result                OrderResult?
   activity              OrderActivityLog[]
   telegramNotifications OrderTelegramNotification[]
+  whatsappAdminMessage  OrderWhatsappMessage?
   balanceEntries        BalanceEntry[]
   webhookDeliveries     WebhookDelivery[]
 
@@ -571,6 +576,30 @@ model WhatsappNotification {
 
   @@index([status, nextAttemptAt])
   @@map("whatsapp_notifications")
+}
+
+/// Order card in the admin WhatsApp group (FulfillmentChannel.whatsapp_admin), sent through a retry queue.
+model OrderWhatsappMessage {
+  id            String                     @id @default(cuid())
+  orderId       String                     @unique @map("order_id")
+  chatId        String                     @map("chat_id")
+  text          String
+  status        WhatsappNotificationStatus @default(pending)
+  attempts      Int                        @default(0)
+  nextAttemptAt DateTime                   @default(now()) @map("next_attempt_at")
+  sentAt        DateTime?                  @map("sent_at")
+  /// Full WAHA id, needed to quote the card in replies.
+  wahaMessageId String?                    @map("waha_message_id")
+  /// Bare WhatsApp message id; reactions are matched on it.
+  messageKey    String?                    @map("message_key")
+  lastError     String?                    @map("last_error")
+  createdAt     DateTime                   @default(now()) @map("created_at")
+  updatedAt     DateTime                   @updatedAt @map("updated_at")
+  order         Order                      @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([status, nextAttemptAt])
+  @@index([messageKey])
+  @@map("order_whatsapp_messages")
 }
 
 model OrderActivityLog {

@@ -45,7 +45,7 @@ export type UserStatus = "active" | "suspended";
 
 export type ResultStatus = "success" | "failed";
 
-export type FulfillmentChannel = "telegram" | "whatsapp" | "supplier";
+export type FulfillmentChannel = "telegram" | "whatsapp" | "whatsapp_admin" | "supplier";
 
 export type ServiceMenu = "ceir" | "special";
 
@@ -217,6 +217,8 @@ export interface Admin {
   telegramHandle: string | null;
   telegramLinked?: boolean;
   telegramInvite?: AdminTelegramInvite | null;
+  /** Digits (62…); identifies the admin's reactions in the admin WhatsApp group. */
+  whatsappNumber?: string | null;
   active: boolean;
   handledCount: number;
   totpEnabled?: boolean;

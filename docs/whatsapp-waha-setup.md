@@ -97,6 +97,35 @@ WhatsApp-channel order with that IMEI. Outcomes are logged by
 Do not post test announcements in the production group: Roamercheck processes
 every "PEMBAYARAN DITERIMA" message.
 
+## 7. WhatsApp Admin (react to update orders)
+
+Services whose **Jalur proses order** is *WhatsApp Admin* post one card per
+paid order to a separate admin group. Admins update the order by reacting to
+its card; the bot replies under the card to confirm:
+
+| Reaction | Effect |
+|---|---|
+| ⏳ | Order taken by the reacting admin → in_process |
+| ✅ | Done (a waiting order is taken first) |
+| ❌ | Rejected, paid amount refunded to the user's balance |
+
+Only admins assigned to the service (or a Super Admin) can act. Reactions are
+matched to admins by the **Nomor WhatsApp** set in Super Admin → Admin; LIDs
+are resolved through WAHA. Removing a reaction changes nothing. These orders
+are not sent to operators on Telegram.
+
+Setup:
+
+1. Create a WhatsApp group for the admins and add the dedicated number.
+2. Find its id (step 4) and set `WA_ADMIN_GROUP_CHAT_ID=<id>@g.us` in `.env`.
+3. `WAHA_WEBHOOK_SECRET` must be set (step 6); WAHA's webhook sends
+   `message,message.reaction` (see `docker-compose.prod.yml`).
+4. Redeploy, fill in each admin's WhatsApp number, and switch the service's
+   channel to *WhatsApp Admin*.
+
+Card delivery state is in `order_whatsapp_messages` (same retry policy as
+below).
+
 ## Operations
 
 - **Failed sends** are retried automatically (1, 2, 5, 10, then every 30 minutes,

@@ -1,3 +1,6 @@
+import { INPUT_TYPE_LABEL } from "../orders/imei-list";
+import type { ServiceInputType } from "@prisma/client";
+
 export type PaidInvoiceInput = {
   paidAt: Date;
   orders: Array<{ imei: string }>;
@@ -27,4 +30,50 @@ export function paidInvoiceGroupText(input: PaidInvoiceInput): string {
     "",
     ...input.orders.map((order, i) => `${i + 1}. \`${order.imei}\``),
   ].join("\n");
+}
+
+/** Admin group card for one order; admins react to it instead of typing. */
+export function adminOrderCardText(input: {
+  orderId: string;
+  serviceName: string;
+  inputType: ServiceInputType;
+  imei: string;
+  notes?: string | null;
+  isTest?: boolean;
+}): string {
+  const notes = input.notes?.trim();
+  return [
+    ...(input.isTest ? ["🧪 *TESTING* · tidak dihitung statistik"] : []),
+    `📥 *ORDER BARU* · ${input.orderId}`,
+    input.serviceName,
+    ...(input.inputType === "none"
+      ? []
+      : [`${INPUT_TYPE_LABEL[input.inputType]}: \`${input.imei}\``]),
+    ...(notes ? [`📝 ${notes}`] : []),
+    "",
+    "_React: ⏳ proses · ✅ done · ❌ tolak_",
+  ].join("\n");
+}
+
+export type AdminReactionReply =
+  | { kind: "taken"; adminName: string }
+  | { kind: "done"; adminName: string }
+  | { kind: "rejected"; adminName: string; refunded: boolean }
+  | { kind: "cancelled"; reason: string }
+  | { kind: "refused"; message: string };
+
+/** Short reply quoting the order card after a reaction (or a cancel elsewhere). */
+export function adminReactionReplyText(reply: AdminReactionReply): string {
+  switch (reply.kind) {
+    case "taken":
+      return `⏳ Diproses oleh *${reply.adminName}*`;
+    case "done":
+      return `Done ✅ · ${reply.adminName}`;
+    case "rejected":
+      return `Ditolak ❌ · ${reply.adminName}${reply.refunded ? "\nDana dikembalikan ke saldo user." : ""}`;
+    case "cancelled":
+      return `🚫 Order dibatalkan Super Admin. Jangan diproses.\nAlasan: ${reply.reason}`;
+    case "refused":
+      return `⚠️ ${reply.message}`;
+  }
 }

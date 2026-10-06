@@ -109,6 +109,7 @@ export function AdminManagement({
             username: next.username,
             fullName: next.fullName,
             role: next.role ?? "admin",
+            whatsappNumber: next.whatsappNumber?.trim() || null,
             ...(password ? { password } : {}),
           }),
         });
@@ -120,6 +121,7 @@ export function AdminManagement({
             fullName: next.fullName,
             role: next.role,
             status: next.active ? "active" : "blocked",
+            whatsappNumber: next.whatsappNumber?.trim() || null,
             ...(password ? { password } : {}),
           }),
         });
@@ -336,6 +338,11 @@ export function AdminManagement({
                             <p className="font-data text-body text-ink-soft">
                               @{admin.username}
                             </p>
+                            {admin.whatsappNumber ? (
+                              <p className="font-data text-label text-ink-soft">
+                                WA {admin.whatsappNumber}
+                              </p>
+                            ) : null}
                           </div>
                         </div>
                       </TD>
@@ -859,6 +866,27 @@ function AdminFormDialog({
               { value: "admin", label: "Operator (hanya bot Telegram)" },
               { value: "super_admin", label: "Super Admin" },
             ]}
+          />
+        </Field>
+        <Field
+          label="Nomor WhatsApp"
+          htmlFor="whatsappNumber"
+          hint="Untuk layanan berjalur WhatsApp Admin: react admin di grup dikenali dari nomor ini. Contoh 6281234567890."
+        >
+          <Input
+            id="whatsappNumber"
+            inputMode="tel"
+            autoComplete="off"
+            className="font-data"
+            placeholder="62…"
+            maxLength={30}
+            value={draft.whatsappNumber ?? ""}
+            onChange={(event) =>
+              setDraft((current) => ({
+                ...current,
+                whatsappNumber: event.target.value,
+              }))
+            }
           />
         </Field>
         {!operator ? (

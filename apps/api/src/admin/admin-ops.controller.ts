@@ -48,7 +48,7 @@ type AdminReq = { admin: { sub: string } };
 type Json = Record<string, unknown>;
 
 const TOTP_HEADER = "x-totp-code";
-const FULFILLMENT_CHANNELS = ["telegram", "whatsapp", "supplier"] as const;
+const FULFILLMENT_CHANNELS = ["telegram", "whatsapp", "whatsapp_admin", "supplier"] as const;
 const INPUT_TYPES = ["imei", "sn", "ecid", "imei_sn", "none"] as const;
 const SERVICE_MENUS = ["ceir", "special"] as const;
 const USER_ROLES = ["customer", "testing"] as const;
@@ -617,6 +617,7 @@ export class AdminOpsController {
       fullName: optString(body.fullName, "Nama lengkap", 120),
       password: optString(body.password, "Password", 200),
       role: optEnum(body.role, ["admin", "super_admin"] as const, "Role"),
+      whatsappNumber: optNullableString(body.whatsappNumber, "Nomor WhatsApp", 30),
     };
     await this.totp.assertStepUp(req.admin.sub, totpCode);
     const admin = await this.admins.create(input);
@@ -642,6 +643,7 @@ export class AdminOpsController {
       role: optEnum(body.role, ["admin", "super_admin"] as const, "Role"),
       status: optEnum(body.status, ["active", "blocked"] as const, "Status"),
       password: optString(body.password, "Password", 200),
+      whatsappNumber: optNullableString(body.whatsappNumber, "Nomor WhatsApp", 30),
     };
     await this.totp.assertStepUp(req.admin.sub, totpCode);
     const admin = await this.admins.update(req.admin.sub, id, input);

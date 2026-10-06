@@ -15,6 +15,7 @@ import type {
 } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
 import { passwordPolicyError } from "../security/password";
+import { normalizeWhatsappNumber } from "../whatsapp-inbound/admin-reaction-parser";
 
 const ADMIN_INCLUDE = {
   _count: { select: { assignedOrders: true } },
@@ -58,12 +59,24 @@ export function serializeAdminAccount(
         : `@${handle}`
       : null,
     telegramLinked: Boolean(admin.telegramChatId),
+    whatsappNumber: admin.whatsappNumber,
     telegramInvite: serializeInvite(admin.telegramInvites?.[0]),
     active: admin.status === "active",
     handledCount: admin._count?.assignedOrders ?? 0,
     totpEnabled: Boolean(admin.totpEnabledAt),
     createdAt: admin.createdAt.toISOString(),
   };
+}
+
+/** undefined = unchanged, null = cleared; throws on a malformed number. */
+function parseWhatsappNumber(raw: string | null | undefined): string | null | undefined {
+  if (raw === undefined) return undefined;
+  if (raw === null || !raw.trim()) return null;
+  const number = normalizeWhatsappNumber(raw);
+  if (!/^62\d{8,13}$/.test(number)) {
+    throw new BadRequestException("Nomor WhatsApp tidak valid. Contoh: 6281234567890.");
+  }
+  return number;
 }
 
 /** Operators never sign in on the web, so they get a random, never-shared password. */
@@ -84,6 +97,7 @@ export class AdminAdminsService {
               { username: { contains: needle, mode: "insensitive" } },
               { fullName: { contains: needle, mode: "insensitive" } },
               { telegramUsername: { contains: needle, mode: "insensitive" } },
+              { whatsappNumber: { contains: needle.replace(/\D/g, "") || needle } },
             ],
           }
         : undefined,
@@ -98,6 +112,7 @@ export class AdminAdminsService {
     fullName?: string;
     password?: string;
     role?: AdminRole;
+    whatsappNumber?: string | null;
   }) {
     const username = String(input.username ?? "")
       .trim()
@@ -119,11 +134,14 @@ export class AdminAdminsService {
 
     const exists = await this.prisma.admin.findUnique({ where: { username } });
     if (exists) throw new ConflictException("Username sudah dipakai.");
+    const whatsappNumber = parseWhatsappNumber(input.whatsappNumber);
+    if (whatsappNumber) await this.assertWhatsappNumberFree(whatsappNumber);
 
     const admin = await this.prisma.admin.create({
       data: {
         username,
         fullName,
+        whatsappNumber: whatsappNumber ?? null,
         passwordHash:
           role === "super_admin"
             ? await bcrypt.hash(password, 10)
@@ -144,6 +162,7 @@ export class AdminAdminsService {
       role?: AdminRole;
       status?: AdminStatus;
       password?: string;
+      whatsappNumber?: string | null;
     },
   ) {
     const existing = await this.prisma.admin.findUnique({
@@ -183,6 +202,8 @@ export class AdminAdminsService {
       );
     }
     const demoting = existing.role === "super_admin" && nextRole === "admin";
+    const whatsappNumber = parseWhatsappNumber(input.whatsappNumber);
+    if (whatsappNumber) await this.assertWhatsappNumberFree(whatsappNumber, id);
 
     if (
       existing.role === "super_admin" &&
@@ -199,6 +220,7 @@ export class AdminAdminsService {
           : {}),
         ...(input.role ? { role: input.role } : {}),
         ...(input.status ? { status: input.status } : {}),
+        ...(whatsappNumber !== undefined ? { whatsappNumber } : {}),
         ...(password ? { passwordHash: await bcrypt.hash(password, 10) } : {}),
         ...(demoting ? { passwordHash: await unusablePasswordHash() } : {}),
       },
@@ -259,6 +281,16 @@ export class AdminAdminsService {
       where: { adminId, revokedAt: null },
       data: { revokedAt: new Date() },
     });
+  }
+
+  private async assertWhatsappNumberFree(whatsappNumber: string, exceptId?: string) {
+    const owner = await this.prisma.admin.findUnique({
+      where: { whatsappNumber },
+      select: { id: true, fullName: true },
+    });
+    if (owner && owner.id !== exceptId) {
+      throw new ConflictException(`Nomor WhatsApp sudah dipakai ${owner.fullName}.`);
+    }
   }
 
   private async assertNotLastSuperAdmin(id: string) {

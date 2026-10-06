@@ -51,6 +51,7 @@ import {
 const CHANNEL_LABEL: Record<FulfillmentChannel, string> = {
   telegram: "Telegram",
   whatsapp: "WhatsApp",
+  whatsapp_admin: "WhatsApp Admin",
   supplier: "API Supplier",
 };
 
@@ -491,7 +492,12 @@ export function ServiceManagement({
                         ) : null}
                       </TD>
                       <TD>
-                        {service.fulfillmentChannel === "whatsapp" ? (
+                        {service.fulfillmentChannel === "whatsapp_admin" ? (
+                          <div className="space-y-1">
+                            <AssigneeList assignees={service.assignedAdmins ?? []} />
+                            <p className="text-label text-ink-soft">via grup WA admin</p>
+                          </div>
+                        ) : service.fulfillmentChannel === "whatsapp" ? (
                           <span className="text-body text-ink-soft">
                             Grup WA (Roamercheck)
                           </span>
@@ -1139,10 +1145,17 @@ function ServiceFormDialog({
             options={[
               { value: "telegram", label: "Telegram (operator)" },
               { value: "whatsapp", label: "WhatsApp (Roamercheck)" },
+              { value: "whatsapp_admin", label: "WhatsApp Admin (react di grup)" },
               { value: "supplier", label: "API Supplier (otomatis)" },
             ]}
           />
         </Field>
+        {draft.fulfillmentChannel === "whatsapp_admin" ? (
+          <p className="-mt-2 text-label text-ink-soft">
+            Tiap order dikirim ke grup WhatsApp admin. Admin cukup react ⏳ proses, ✅ done, ❌
+            tolak. Nomor WhatsApp admin harus diisi di menu Admin.
+          </p>
+        ) : null}
         {draft.fulfillmentChannel === "supplier" ? (
           <SupplierPicker
             suppliers={suppliers}
@@ -1233,6 +1246,7 @@ function ServiceFormDialog({
           </>
         ) : null}
         {draft.fulfillmentChannel === "telegram" ||
+        draft.fulfillmentChannel === "whatsapp_admin" ||
         !draft.fulfillmentChannel ? (
           <OperatorPicker
             operators={operators}

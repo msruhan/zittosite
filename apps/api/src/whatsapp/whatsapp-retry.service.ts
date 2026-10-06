@@ -4,7 +4,8 @@ import {
   OnModuleDestroy,
   OnModuleInit,
 } from "@nestjs/common";
-import { whatsappConfig } from "../config/env";
+import { whatsappAdminConfig, whatsappConfig } from "../config/env";
+import { WhatsappAdminService } from "./whatsapp-admin.service";
 import { WhatsappNotifyService } from "./whatsapp-notify.service";
 
 const SWEEP_INTERVAL_MS = 60_000;
@@ -17,7 +18,10 @@ export class WhatsappRetryService implements OnModuleInit, OnModuleDestroy {
   private timer: NodeJS.Timeout | null = null;
   private running = false;
 
-  constructor(private readonly notify: WhatsappNotifyService) {}
+  constructor(
+    private readonly notify: WhatsappNotifyService,
+    private readonly admin: WhatsappAdminService,
+  ) {}
 
   onModuleInit() {
     this.timer = setInterval(() => void this.sweep(), SWEEP_INTERVAL_MS);
@@ -30,12 +34,20 @@ export class WhatsappRetryService implements OnModuleInit, OnModuleDestroy {
   }
 
   private async sweep() {
-    if (this.running || !whatsappConfig()) return;
+    if (this.running) return;
     this.running = true;
     try {
-      await this.notify.releaseStale();
-      for (const id of await this.notify.dueIds(BATCH_SIZE)) {
-        await this.notify.deliver(id);
+      if (whatsappConfig()) {
+        await this.notify.releaseStale();
+        for (const id of await this.notify.dueIds(BATCH_SIZE)) {
+          await this.notify.deliver(id);
+        }
+      }
+      if (whatsappAdminConfig()) {
+        await this.admin.releaseStale();
+        for (const id of await this.admin.dueIds(BATCH_SIZE)) {
+          await this.admin.deliver(id);
+        }
       }
     } catch (err) {
       this.logger.warn(

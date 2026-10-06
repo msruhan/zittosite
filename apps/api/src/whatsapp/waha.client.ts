@@ -1,5 +1,5 @@
 import { Injectable, Logger } from "@nestjs/common";
-import { whatsappConfig } from "../config/env";
+import { wahaConnection } from "../config/env";
 
 const REQUEST_TIMEOUT_MS = 15_000;
 
@@ -18,15 +18,20 @@ export class WahaClient {
   private readonly logger = new Logger(WahaClient.name);
 
   enabled(): boolean {
-    return whatsappConfig() !== null;
+    return wahaConnection() !== null;
   }
 
-  async sendText(chatId: string, text: string): Promise<{ messageId: string | null }> {
-    const config = whatsappConfig();
+  /** `replyTo` is the full WAHA id of a message to quote. */
+  async sendText(
+    chatId: string,
+    text: string,
+    replyTo?: string,
+  ): Promise<{ messageId: string | null }> {
+    const config = wahaConnection();
     if (!config) throw new WahaApiError("not_configured");
     if (config.mock) {
       this.logger.log(`[WAHA_MOCK] sendText to ${chatId}:\n${text}`);
-      return { messageId: `mock-${Date.now()}` };
+      return { messageId: `true_${chatId}_MOCK${Date.now()}` };
     }
 
     let res: Response;
@@ -34,7 +39,12 @@ export class WahaClient {
       res = await fetch(`${config.baseUrl}/api/sendText`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "X-Api-Key": config.apiKey },
-        body: JSON.stringify({ session: config.session, chatId, text }),
+        body: JSON.stringify({
+          session: config.session,
+          chatId,
+          text,
+          ...(replyTo ? { reply_to: replyTo } : {}),
+        }),
         signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
       });
     } catch (err) {
@@ -53,7 +63,7 @@ export class WahaClient {
 
   /** WhatsApp LID (`…@lid`) of a phone number; group senders are often reported by LID. */
   async lidForPhone(phone: string): Promise<string | null> {
-    const config = whatsappConfig();
+    const config = wahaConnection();
     if (!config || config.mock) return null;
     try {
       const res = await fetch(
@@ -73,6 +83,15 @@ export class WahaClient {
       return null;
     }
   }
+}
+
+/**
+ * Bare WhatsApp message id. WAHA serialises ids as `true_<chat>_<id>[_<participant>]`,
+ * while reaction events may carry either form.
+ */
+export function messageKey(id: string): string {
+  const parts = id.split("_");
+  return (parts[0] === "true" || parts[0] === "false") && parts.length >= 3 ? parts[2]! : id;
 }
 
 function parseMessageId(body: string): string | null {

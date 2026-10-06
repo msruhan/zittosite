@@ -21,6 +21,7 @@ import { paymentSimulationEnabled, webPublicUrl } from "../config/env";
 import { AdminNotifyService } from "../telegram/admin-notify.service";
 import { AuditLogService } from "../security/audit-log.service";
 import { WhatsappNotifyService } from "../whatsapp/whatsapp-notify.service";
+import { WhatsappAdminService } from "../whatsapp/whatsapp-admin.service";
 import {
   SayabayarClient,
   type SayabayarInvoice,
@@ -97,6 +98,7 @@ export class OrdersService {
     private readonly sayabayar: SayabayarClient,
     private readonly audit: AuditLogService,
     private readonly whatsappNotify: WhatsappNotifyService,
+    private readonly whatsappAdmin: WhatsappAdminService,
     private readonly topups: TopupService,
     private readonly supplierDispatch: SupplierDispatch,
     private readonly userMenus: UserMenusService,
@@ -583,6 +585,7 @@ export class OrdersService {
       actorName: admin.fullName,
       note: why,
     });
+    void this.whatsappAdmin.reply(order.id, { kind: "cancelled", reason: why });
     if (options.fromWeb) {
       void this.adminNotify.notifySuperAdminsFollowUp(order.id, "cancelled", admin, why, {
         includeActor: true,
@@ -763,7 +766,11 @@ export class OrdersService {
       });
       if (!order) throw new NotFoundException("Order tidak ditemukan.");
       await this.assertAssignedToService(tx, admin, order.serviceId);
-      if (bySuperAdmin && order.service.fulfillmentChannel !== "telegram") {
+      if (
+        bySuperAdmin &&
+        order.service.fulfillmentChannel !== "telegram" &&
+        order.service.fulfillmentChannel !== "whatsapp_admin"
+      ) {
         throw new ForbiddenException("Order ini diproses otomatis lewat supplier/WhatsApp.");
       }
       if (order.status === "in_process" && order.assignedAdminId === adminId) {
@@ -1315,7 +1322,11 @@ export class OrdersService {
       const whatsappId = orders.length
         ? await this.whatsappNotify.enqueuePaidInvoice(tx, invoiceRowId)
         : null;
-      return { orders, whatsappId };
+      const adminCardIds = await this.whatsappAdmin.enqueueOrders(
+        tx,
+        orders.map((order) => order.id),
+      );
+      return { orders, whatsappId, adminCardIds };
     });
 
     if (!result) return null;
@@ -1332,6 +1343,9 @@ export class OrdersService {
       this.supplierDispatch.notifyPaid();
     }
     if (result.whatsappId) void this.whatsappNotify.deliver(result.whatsappId);
+    void (async () => {
+      for (const id of result.adminCardIds) await this.whatsappAdmin.deliver(id);
+    })();
     return result.orders;
   }
 

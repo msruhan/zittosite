@@ -101,13 +101,14 @@ export class AdminNotifyService {
           serviceName: order.service.name,
         }),
       );
-    // WhatsApp- and supplier-fulfilled services need no operator; only super admins get an info card.
+    // WhatsApp- and supplier-fulfilled services need no operator here; only super admins get an info card.
     const viaWhatsapp = order.service.fulfillmentChannel === "whatsapp";
+    const viaWhatsappAdmin = order.service.fulfillmentChannel === "whatsapp_admin";
     const viaSupplier =
       order.service.fulfillmentChannel === "supplier"
         ? order.service.supplier?.name ?? "Supplier"
         : undefined;
-    const operatorFree = viaWhatsapp || Boolean(viaSupplier);
+    const operatorFree = viaWhatsapp || viaWhatsappAdmin || Boolean(viaSupplier);
 
     const assignments = await this.prisma.serviceAssignment.findMany({
       where: { serviceId: order.serviceId },
@@ -137,7 +138,7 @@ export class AdminNotifyService {
     };
     const operatorHtml = withTestBanner(
       order.isTest,
-      newOrderAdminHtml({ ...cardInput, viaWhatsapp, viaSupplier }),
+      newOrderAdminHtml({ ...cardInput, viaWhatsapp, viaWhatsappAdmin, viaSupplier }),
     );
     const superAdminHtml = withTestBanner(
       order.isTest,
@@ -150,6 +151,7 @@ export class AdminNotifyService {
         },
         assignedAdmins: assignedNames,
         viaWhatsapp,
+        viaWhatsappAdmin,
         viaSupplier,
       }),
     );

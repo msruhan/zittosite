@@ -84,17 +84,37 @@ export function wahaMockEnabled(): boolean {
   return process.env.WAHA_MOCK === "1" || process.env.WAHA_MOCK === "true";
 }
 
-/** WhatsApp group notifications via WAHA; null (feature off) until fully configured. */
-export function whatsappConfig() {
+/** WAHA gateway connection, independent of which group a feature posts to. */
+export function wahaConnection() {
   const baseUrl = process.env.WAHA_BASE_URL?.trim().replace(/\/$/, "") || "";
   const apiKey = process.env.WAHA_API_KEY?.trim() || "";
-  const groupChatId = process.env.WA_GROUP_CHAT_ID?.trim() || "";
   const session = process.env.WAHA_SESSION?.trim() || "default";
-  if (wahaMockEnabled()) {
-    return { mock: true, baseUrl, apiKey, session, groupChatId: groupChatId || "mock@g.us" };
-  }
-  if (!baseUrl || !apiKey || !groupChatId) return null;
-  return { mock: false, baseUrl, apiKey, session, groupChatId };
+  if (wahaMockEnabled()) return { mock: true, baseUrl, apiKey, session };
+  if (!baseUrl || !apiKey) return null;
+  return { mock: false, baseUrl, apiKey, session };
+}
+
+/** WhatsApp group notifications via WAHA; null (feature off) until fully configured. */
+export function whatsappConfig() {
+  const connection = wahaConnection();
+  const groupChatId = process.env.WA_GROUP_CHAT_ID?.trim() || "";
+  if (connection?.mock) return { ...connection, groupChatId: groupChatId || "mock@g.us" };
+  if (!connection || !groupChatId) return null;
+  return { ...connection, groupChatId };
+}
+
+/** Admin WhatsApp group for `whatsapp_admin` services; null (off) until configured. */
+export function whatsappAdminConfig() {
+  const connection = wahaConnection();
+  const groupChatId = process.env.WA_ADMIN_GROUP_CHAT_ID?.trim() || "";
+  if (connection?.mock) return { ...connection, groupChatId: groupChatId || "mock-admin@g.us" };
+  if (!connection || !groupChatId) return null;
+  return { ...connection, groupChatId };
+}
+
+/** HMAC key WAHA signs webhook events with; inbound events are ignored without it. */
+export function wahaWebhookSecret(): string | null {
+  return process.env.WAHA_WEBHOOK_SECRET?.trim() || null;
 }
 
 /**
@@ -102,7 +122,7 @@ export function whatsappConfig() {
  * until the webhook HMAC secret and the processor's phone number are set.
  */
 export function wahaInboundConfig() {
-  const secret = process.env.WAHA_WEBHOOK_SECRET?.trim() || "";
+  const secret = wahaWebhookSecret() ?? "";
   const processorNumber = (process.env.WA_PROCESSOR_NUMBER ?? "").replace(/\D/g, "");
   if (!secret || !processorNumber) return null;
   return { secret, processorNumber };
@@ -151,6 +171,11 @@ export function validateStartupEnv(warn: (message: string) => void) {
     warn("WAHA_API_KEY / WA_GROUP_CHAT_ID not set — WhatsApp group notifications are off");
   } else if (!wahaInboundConfig()) {
     warn("WAHA_WEBHOOK_SECRET / WA_PROCESSOR_NUMBER not set — Roamercheck status updates are off");
+  }
+  if (wahaConnection() && !whatsappAdminConfig()) {
+    warn("WA_ADMIN_GROUP_CHAT_ID not set — WhatsApp Admin services get no group messages");
+  } else if (whatsappAdminConfig() && !wahaWebhookSecret()) {
+    warn("WAHA_WEBHOOK_SECRET not set — admin reactions in the WhatsApp group are ignored");
   }
 
   if (!webPublicUrl().startsWith("https://")) {
