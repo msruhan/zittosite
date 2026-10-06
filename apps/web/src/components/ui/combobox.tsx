@@ -42,24 +42,29 @@ export function Combobox({
   const [active, setActive] = React.useState(-1);
 
   const selected = options.find((option) => option.value === value);
-  const filtered = React.useMemo(
+  const visible = React.useMemo(
     () =>
       options.filter(
         (option) =>
-          !option.disabled && matchesSearch(query, [option.label, option.hint, option.group]),
+          (!option.disabled || option.disabledLabel) &&
+          matchesSearch(query, [option.label, option.hint, option.group]),
       ),
     [options, query],
   );
+  const filtered = React.useMemo(() => visible.filter((option) => !option.disabled), [visible]);
 
+  // `index` is the keyboard position among selectable options; disabled rows get -1.
   const groups = React.useMemo(() => {
     const result: { label?: string; items: { option: SelectOption; index: number }[] }[] = [];
-    filtered.forEach((option, index) => {
+    let next = 0;
+    for (const option of visible) {
+      const index = option.disabled ? -1 : next++;
       const last = result[result.length - 1];
       if (last && last.label === option.group) last.items.push({ option, index });
       else result.push({ label: option.group, items: [{ option, index }] });
-    });
+    }
     return result;
-  }, [filtered]);
+  }, [visible]);
 
   function openList() {
     if (open) return;
@@ -215,13 +220,35 @@ export function Combobox({
             className="max-h-72 overflow-y-auto overscroll-contain p-1"
             onMouseDown={(event) => event.preventDefault()}
           >
-            {filtered.length ? (
+            {visible.length ? (
               groups.map((group, groupIndex) => (
                 <div key={`${group.label ?? ""}-${groupIndex}`} role="group" aria-label={group.label}>
                   {group.label ? (
                     <p className="px-3 pb-1 pt-2 text-label text-ink-faint">{group.label}</p>
                   ) : null}
                   {group.items.map(({ option, index }) => {
+                    if (option.disabled) {
+                      return (
+                        <div
+                          key={option.value}
+                          role="option"
+                          aria-selected={false}
+                          aria-disabled="true"
+                          className="relative flex cursor-not-allowed select-none items-center gap-2 rounded-sm py-2 pl-8 pr-3 text-body"
+                        >
+                          <span className="min-w-0 text-ink-faint">
+                            {option.label}
+                          </span>
+                          <span className="ml-auto inline-flex shrink-0 items-center gap-1.5 rounded-full border border-refused-edge/60 bg-refused-wash px-2 py-0.5 text-label font-bold text-refused-ink">
+                            <span aria-hidden="true" className="relative flex size-2">
+                              <span className="absolute inset-0 animate-ping rounded-full bg-refused-edge opacity-75 [animation-duration:1.6s]" />
+                              <span className="relative size-2 rounded-full bg-[#dc2626]" />
+                            </span>
+                            {option.disabledLabel}
+                          </span>
+                        </div>
+                      );
+                    }
                     const isSelected = option.value === value;
                     return (
                       <div

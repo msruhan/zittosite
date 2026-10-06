@@ -10,6 +10,6 @@ export class ServicesController {
 
   @Get()
   list(@Req() req: any, @Query("via") via?: string) {
-    return this.orders.listServices(req.user.sub, parseVia(via));
+    return this.orders.listServices(req.user.sub, parseVia(via), { includeOffline: true });
   }
 }

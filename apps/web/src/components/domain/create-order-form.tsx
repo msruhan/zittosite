@@ -126,16 +126,28 @@ export function CreateOrderForm({
       groupFilter === ALL_GROUPS
         ? services
         : services.filter((s) => (s.group ?? UNGROUPED) === groupFilter);
-    const ordered =
+    const byGroup =
       grouped && groupFilter === ALL_GROUPS
         ? [...inGroup.filter((s) => s.group)]
             .sort((a, b) => a.group!.localeCompare(b.group!))
             .concat(inGroup.filter((s) => !s.group))
         : inGroup;
+    // Offline services sink to the bottom of their group.
+    const sections = new Map<string, Service[]>();
+    for (const item of byGroup) {
+      const key = grouped && groupFilter === ALL_GROUPS ? (item.group ?? UNGROUPED) : "";
+      sections.set(key, [...(sections.get(key) ?? []), item]);
+    }
+    const ordered = [...sections.values()].flatMap((items) => [
+      ...items.filter((s) => s.active),
+      ...items.filter((s) => !s.active),
+    ]);
     return ordered.map((item) => ({
       value: item.id,
       label: item.name,
       hint: formatRupiah(priceFor[item.id]),
+      disabled: !item.active,
+      disabledLabel: item.active ? undefined : "Offline",
       group: grouped && groupFilter === ALL_GROUPS ? (item.group ?? "Lainnya") : undefined,
     }));
   }, [services, priceFor, groupFilter]);

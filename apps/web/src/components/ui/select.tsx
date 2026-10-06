@@ -10,6 +10,8 @@ export interface SelectOption {
   label: string;
   hint?: string;
   disabled?: boolean;
+  /** Combobox only: disabled options stay listed with this status (e.g. "Offline"). */
+  disabledLabel?: string;
   /** Consecutive options sharing a group render under one heading. */
   group?: string;
 }
