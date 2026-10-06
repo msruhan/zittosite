@@ -320,6 +320,8 @@ model Service {
   costPrice          Int                 @default(0) @map("cost_price")
   estimate           String
   active             Boolean             @default(true)
+  /// Off services stay in the order menu as Offline unless hidden.
+  hidden             Boolean             @default(false)
   /// Where paid orders are processed: Telegram operators, or the WhatsApp group (Roamercheck).
   fulfillmentChannel FulfillmentChannel  @default(telegram) @map("fulfillment_channel")
   supplierId         String?             @map("supplier_id")

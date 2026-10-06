@@ -100,6 +100,19 @@ type ServiceWithAssignments = Prisma.ServiceGetPayload<{
   include: typeof SERVICE_INCLUDE;
 }>;
 
+/** A hidden service is never orderable, and switching one online unhides it. */
+export function availabilityFor(input: {
+  active?: boolean;
+  hidden?: boolean;
+}): { active?: boolean; hidden?: boolean } {
+  if (input.hidden === true) return { active: false, hidden: true };
+  if (input.active === true) return { active: true, hidden: false };
+  return {
+    ...(input.active === false ? { active: false } : {}),
+    ...(input.hidden === false ? { hidden: false } : {}),
+  };
+}
+
 function serializeAdminService(service: ServiceWithAssignments) {
   return {
     ...serializeService(service),
@@ -155,6 +168,7 @@ export class AdminServicesService {
     costPrice?: number;
     estimate?: string;
     active?: boolean;
+    hidden?: boolean;
     fulfillmentChannel?: FulfillmentChannel;
     assignedAdminIds?: string[];
     inputType?: unknown;
@@ -198,6 +212,7 @@ export class AdminServicesService {
         costPrice,
         estimate,
         active: input.active !== false,
+        ...availabilityFor(input),
         fulfillmentChannel,
         ...route,
         menu,
@@ -221,7 +236,7 @@ export class AdminServicesService {
     if (!existing) throw new NotFoundException("Layanan tidak ditemukan.");
     if (existing._count.orders > 0) {
       throw new ConflictException(
-        `Layanan sudah punya ${existing._count.orders} order sehingga tidak bisa dihapus. Matikan (offline) saja agar tidak bisa dipesan.`,
+        `Layanan sudah punya ${existing._count.orders} order sehingga tidak bisa dihapus. Ubah statusnya ke Offline atau Sembunyikan saja agar tidak bisa dipesan.`,
       );
     }
     await this.prisma.service.delete({ where: { id } });
@@ -237,6 +252,7 @@ export class AdminServicesService {
       costPrice?: number;
       estimate?: string;
       active?: boolean;
+      hidden?: boolean;
       fulfillmentChannel?: FulfillmentChannel;
       assignedAdminIds?: string[];
       inputType?: unknown;
@@ -315,9 +331,7 @@ export class AdminServicesService {
           costPrice,
           priceUsdCents: usd?.priceUsdCents ?? null,
           costUsdCents: usd?.costUsdCents ?? null,
-          ...(typeof input.active === "boolean"
-            ? { active: input.active }
-            : {}),
+          ...availabilityFor(input),
           ...(input.fulfillmentChannel
             ? { fulfillmentChannel: input.fulfillmentChannel }
             : {}),

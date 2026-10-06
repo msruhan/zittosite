@@ -344,9 +344,11 @@ export const ACTIVITY_EVENTS = {
     category: "service",
     label: "Layanan diperbarui",
     summary: ({ fields }) =>
-      typeof fields.active === "boolean"
-        ? `Mengubah layanan ${fields.serviceName ?? ""} menjadi ${fields.active ? "online" : "offline"}`
-        : `Memperbarui layanan ${fields.serviceName ?? fields.serviceId ?? ""}`,
+      fields.hidden === true
+        ? `Menyembunyikan layanan ${fields.serviceName ?? ""} dari menu order`
+        : typeof fields.active === "boolean"
+          ? `Mengubah layanan ${fields.serviceName ?? ""} menjadi ${fields.active ? "online" : "offline"}`
+          : `Memperbarui layanan ${fields.serviceName ?? fields.serviceId ?? ""}`,
   },
   "admin.service.deleted": {
     category: "service",

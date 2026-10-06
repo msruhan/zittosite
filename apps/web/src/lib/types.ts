@@ -120,6 +120,8 @@ export interface Service {
   requireNotes?: boolean;
   requirePassword?: boolean;
   requireKeyLock?: boolean;
+  /** Off and also left out of the order menu (otherwise shown as Offline). */
+  hidden?: boolean;
   /** Admin panel only: where paid orders are processed. */
   fulfillmentChannel?: FulfillmentChannel;
   /** Admin panel only: upstream supplier route when fulfillmentChannel is "supplier". */

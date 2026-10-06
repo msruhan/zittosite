@@ -297,7 +297,7 @@ export function UserPriceDialog({
                           {[
                             tab === "api" ? service.supplierName : null,
                             service.serviceGroupName,
-                            service.active ? null : "Offline",
+                            service.active ? null : service.hidden ? "Tersembunyi" : "Offline",
                           ]
                             .filter(Boolean)
                             .join(" · ") || null}

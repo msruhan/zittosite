@@ -102,7 +102,7 @@ export class OrdersService {
     private readonly userMenus: UserMenusService,
   ) {}
 
-  /** `includeOffline` lists switched-off services too, so the web menu can show them as Offline. */
+  /** `includeOffline` lists switched-off (not hidden) services too, so the web menu can show them as Offline. */
   async listServices(
     userId: string,
     via?: OrderVia,
@@ -114,7 +114,10 @@ export class OrdersService {
     });
     const groupId = user?.groupId ?? null;
     const services = await this.prisma.service.findMany({
-      where: { ...(includeOffline ? {} : { active: true }), ...serviceViaWhere(via) },
+      where: {
+        ...(includeOffline ? { hidden: false } : { active: true }),
+        ...serviceViaWhere(via),
+      },
       orderBy: { name: "asc" },
       include: {
         groupPrices: { where: { groupId: groupId ?? "" }, select: { price: true } },

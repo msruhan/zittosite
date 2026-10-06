@@ -619,7 +619,9 @@ function PriceStep({
                               <ExceptionNote users={exceptions.get(service.id)} />
                             </span>
                             {!service.active ? (
-                              <Tag className="border-hairline bg-mist text-ink-soft">Offline</Tag>
+                              <Tag className="border-hairline bg-mist text-ink-soft">
+                                {service.hidden ? "Tersembunyi" : "Offline"}
+                              </Tag>
                             ) : null}
                             <span className="hidden shrink-0 text-right sm:block">
                               <DataValue className="block text-ink">

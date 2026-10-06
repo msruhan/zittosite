@@ -12,7 +12,6 @@ import { Field, Input, Textarea } from "@/components/ui/field";
 import { Combobox } from "@/components/ui/combobox";
 import { Select, type SelectOption } from "@/components/ui/select";
 import { Tag } from "@/components/ui/status-badge";
-import { Switch } from "@/components/ui/switch";
 import {
   TBody,
   TD,
@@ -56,6 +55,23 @@ const CHANNEL_LABEL: Record<FulfillmentChannel, string> = {
 };
 
 type ServiceDraft = Service & { assignedAdminIds: string[] };
+
+type Availability = "online" | "offline" | "hidden";
+
+const AVAILABILITY_OPTIONS: SelectOption[] = [
+  { value: "online", label: "Online" },
+  { value: "offline", label: "Offline" },
+  { value: "hidden", label: "Sembunyikan" },
+];
+
+function availabilityOf(service: Pick<Service, "active" | "hidden">): Availability {
+  if (service.active) return "online";
+  return service.hidden ? "hidden" : "offline";
+}
+
+function availabilityFields(value: Availability): Pick<Service, "active" | "hidden"> {
+  return { active: value === "online", hidden: value === "hidden" };
+}
 
 function toDraft(service: Service): ServiceDraft {
   return {
@@ -190,6 +206,7 @@ export function ServiceManagement({
             costPrice: next.costPrice ?? 0,
             estimate: next.estimate,
             active: next.active,
+            hidden: next.hidden ?? false,
             fulfillmentChannel: next.fulfillmentChannel ?? "telegram",
             assignedAdminIds: next.assignedAdminIds,
             supplierId: next.supplierId ?? null,
@@ -220,6 +237,7 @@ export function ServiceManagement({
             costPrice: next.costPrice ?? 0,
             estimate: next.estimate,
             active: next.active,
+            hidden: next.hidden ?? false,
             fulfillmentChannel: next.fulfillmentChannel ?? "telegram",
             assignedAdminIds: next.assignedAdminIds,
             supplierId: next.supplierId ?? null,
@@ -252,27 +270,36 @@ export function ServiceManagement({
     }
   }
 
-  async function handleToggle(service: Service) {
-    const next = !service.active;
+  async function handleAvailability(service: Service, value: Availability) {
+    if (togglingId === service.id || value === availabilityOf(service)) return;
+    const fields = availabilityFields(value);
     setTogglingId(service.id);
     setServices((current) =>
-      current.map((s) => (s.id === service.id ? { ...s, active: next } : s)),
+      current.map((s) => (s.id === service.id ? { ...s, ...fields } : s)),
     );
     try {
       await api(`/admin/services/${service.id}`, {
         method: "PATCH",
-        body: JSON.stringify({ active: next }),
+        body: JSON.stringify(fields),
       });
       await reload();
-      toast.success(next ? "Layanan online" : "Layanan offline", {
-        description: next
-          ? `${service.name} bisa dipesan user lagi.`
-          : `${service.name} disembunyikan dari menu order web & bot.`,
-      });
+      const toasts: Record<Availability, [string, string]> = {
+        online: ["Layanan online", `${service.name} bisa dipesan user lagi.`],
+        offline: [
+          "Layanan offline",
+          `${service.name} tetap tampil di menu order web dengan status Offline, tapi tidak bisa dipesan.`,
+        ],
+        hidden: [
+          "Layanan disembunyikan",
+          `${service.name} tidak tampil di menu order web & bot.`,
+        ],
+      };
+      const [title, description] = toasts[value];
+      toast.success(title, { description });
     } catch (err) {
       setServices((current) =>
         current.map((s) =>
-          s.id === service.id ? { ...s, active: service.active } : s,
+          s.id === service.id ? { ...s, active: service.active, hidden: service.hidden } : s,
         ),
       );
       toast.error("Gagal", {
@@ -477,22 +504,25 @@ export function ServiceManagement({
                         )}
                       </TD>
                       <TD>
-                        <div className="flex items-center gap-2.5">
-                          <Switch
-                            checked={service.active}
-                            disabled={togglingId === service.id}
-                            onCheckedChange={() => void handleToggle(service)}
-                            ariaLabel={`${service.name}: ${service.active ? "online" : "offline"}`}
-                          />
+                        <div className="flex items-center gap-2">
                           <span
-                            className={
-                              service.active
-                                ? "text-body font-medium text-cleared-ink"
-                                : "text-body font-medium text-ink-soft"
+                            aria-hidden="true"
+                            className={cn(
+                              "size-2 shrink-0 rounded-full",
+                              availabilityOf(service) === "online" && "bg-cleared-ink",
+                              availabilityOf(service) === "offline" && "bg-[#dc2626]",
+                              availabilityOf(service) === "hidden" && "bg-ink-faint",
+                            )}
+                          />
+                          <Select
+                            value={availabilityOf(service)}
+                            onValueChange={(value) =>
+                              void handleAvailability(service, value as Availability)
                             }
-                          >
-                            {service.active ? "Online" : "Offline"}
-                          </span>
+                            options={AVAILABILITY_OPTIONS}
+                            ariaLabel={`Status ${service.name}`}
+                            className="h-8 w-36"
+                          />
                         </div>
                       </TD>
                       <TD>
@@ -595,7 +625,7 @@ export function ServiceManagement({
         {deleting ? (
           <DialogContent
             title={`Hapus ${deleting.name}?`}
-            description="Layanan yang sudah punya order tidak bisa dihapus agar riwayat order tetap utuh. Matikan (offline) saja jika hanya ingin menyembunyikannya."
+            description="Layanan yang sudah punya order tidak bisa dihapus agar riwayat order tetap utuh. Ubah statusnya ke Offline atau Sembunyikan saja."
             footer={
               <>
                 <Button variant="ghost" onClick={() => setDeleting(null)}>
@@ -1073,20 +1103,27 @@ function ServiceFormDialog({
             }
           />
         </Field>
-        <Field label="Status" htmlFor="active">
+        <Field
+          label="Status"
+          htmlFor="active"
+          hint={
+            availabilityOf(draft) === "offline"
+              ? "Tetap tampil di menu order web dengan status Offline, tapi tidak bisa dipesan."
+              : availabilityOf(draft) === "hidden"
+                ? "Tidak tampil di menu order web & bot."
+                : undefined
+          }
+        >
           <Select
             id="active"
-            value={draft.active ? "active" : "inactive"}
+            value={availabilityOf(draft)}
             onValueChange={(value) =>
               setDraft((current) => ({
                 ...current,
-                active: value === "active",
+                ...availabilityFields(value as Availability),
               }))
             }
-            options={[
-              { value: "active", label: "Online" },
-              { value: "inactive", label: "Offline" },
-            ]}
+            options={AVAILABILITY_OPTIONS}
           />
         </Field>
         <Field label="Jalur proses order" htmlFor="fulfillmentChannel">

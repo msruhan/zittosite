@@ -45,6 +45,7 @@ export function serializeService(
     price: effectivePrice ?? service.price,
     estimate: service.estimate,
     active: service.active,
+    hidden: service.hidden,
     via: service.fulfillmentChannel === "supplier" ? "supplier" : "manual",
     menu: service.fulfillmentChannel === "supplier" ? service.menu : null,
     inputType: service.inputType,
