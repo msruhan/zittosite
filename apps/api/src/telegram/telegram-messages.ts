@@ -1,3 +1,5 @@
+import { isDatedEntry, resultNoteLines, splitLabel } from "./result-note";
+
 export const TELEGRAM_PARSE_MODE = "HTML" as const;
 
 export function escapeHtml(value: string): string {
@@ -11,6 +13,36 @@ export function escapeHtml(value: string): string {
 function row(icon: string, label: string, value: string, code = false): string {
   const v = code ? `<code>${escapeHtml(value)}</code>` : escapeHtml(value);
   return `${icon} <b>${escapeHtml(label)}:</b> ${v}`;
+}
+
+/** Telegram rejects messages over 4096 characters; the rest of the message needs room. */
+const NOTE_MAX_CHARS = 3000;
+
+function noteLineHtml(line: string): string {
+  if (isDatedEntry(line)) return `• ${escapeHtml(line)}`;
+  const pair = splitLabel(line);
+  return pair ? `<b>${escapeHtml(pair[0])}:</b> ${escapeHtml(pair[1])}` : escapeHtml(line);
+}
+
+/** Result note or reason: inline when it is one line, otherwise a quote block below the label. */
+function noteRows(icon: string, label: string, raw: string | null | undefined): string[] {
+  const lines = resultNoteLines(raw);
+  if (!lines.length) return [];
+  if (lines.length === 1) return [row(icon, label, lines[0]!)];
+  const shown: string[] = [];
+  let size = 0;
+  for (const line of lines) {
+    size += line.length + 1;
+    if (size > NOTE_MAX_CHARS) {
+      shown.push("…");
+      break;
+    }
+    shown.push(line);
+  }
+  return [
+    `${icon} <b>${escapeHtml(label)}:</b>`,
+    `<blockquote>${shown.map(noteLineHtml).join("\n")}</blockquote>`,
+  ];
 }
 
 export function unlinkedHtml(loginUrl: string): string {
@@ -575,9 +607,7 @@ export function superAdminFollowUpHtml(input: {
       ? [row("💰", "Harga", formatRp(input.customer.price))]
       : []),
     row("👷", "Admin", `${input.adminUsername} (${input.adminFullName})`),
-    ...(input.note
-      ? [row("📝", input.kind === "done" ? "Hasil" : "Alasan", input.note)]
-      : []),
+    ...noteRows("📝", input.kind === "done" ? "Hasil" : "Alasan", input.note),
     ...durationLines(input.duration),
   ].join("\n");
 }
@@ -621,7 +651,7 @@ export function orderCardRejectedHtml(input: {
     row("📱", "IMEI", input.imei, true),
     row("📦", "Layanan", input.serviceName),
     row("👷", "Oleh", input.actorName),
-    ...(input.reason ? [row("📝", "Alasan", input.reason)] : []),
+    ...noteRows("📝", "Alasan", input.reason),
     ...durationLines(input.duration),
   ].join("\n");
 }
@@ -663,7 +693,7 @@ export function orderCardDoneHtml(input: {
     row("📱", "IMEI", input.imei, true),
     row("📦", "Layanan", input.serviceName),
     row("👷", "Oleh", input.actorName),
-    row("📝", "Hasil", input.note),
+    ...noteRows("📝", "Hasil", input.note || "—"),
     ...durationLines(input.duration),
   ].join("\n");
 }
@@ -865,7 +895,7 @@ export function userOrderNoticeHtml(notice: UserOrderNotice): string {
         "",
         id,
         ...orderSubjectLines(notice),
-        ...(notice.reason ? [row("📝", "Alasan", notice.reason)] : []),
+        ...noteRows("📝", "Alasan", notice.reason),
         ...durationLines(notice.duration),
         ...refundLines(notice.refund),
       ].join("\n");
@@ -876,7 +906,7 @@ export function userOrderNoticeHtml(notice: UserOrderNotice): string {
         id,
         ...orderSubjectLines(notice),
         row("📊", "Hasil", RESULT_LABEL[notice.resultStatus] ?? notice.resultStatus),
-        ...(notice.note ? [row("📝", "Catatan", notice.note)] : []),
+        ...noteRows("📝", "Catatan", notice.note),
         ...durationLines(notice.duration),
         ...refundLines(notice.refund),
       ].join("\n");
