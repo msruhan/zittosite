@@ -201,6 +201,7 @@ export function ServiceManagement({
             requireUsername: next.requireUsername ?? false,
             requireNotes: next.requireNotes ?? false,
             requirePassword: next.requirePassword ?? false,
+            requireKeyLock: next.requireKeyLock ?? false,
             ...(next.priceUsdCents != null
               ? {
                   priceUsd: next.priceUsdCents / 100,
@@ -230,6 +231,7 @@ export function ServiceManagement({
             requireUsername: next.requireUsername ?? false,
             requireNotes: next.requireNotes ?? false,
             requirePassword: next.requirePassword ?? false,
+            requireKeyLock: next.requireKeyLock ?? false,
             ...(next.priceUsdCents != null
               ? {
                   priceUsd: next.priceUsdCents / 100,

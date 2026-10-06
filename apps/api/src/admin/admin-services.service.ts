@@ -86,10 +86,11 @@ function extraFieldsFor(
     requireUsername: requested.requireUsername ?? current.requireUsername,
     requireNotes: requested.requireNotes ?? current.requireNotes,
     requirePassword: requested.requirePassword ?? current.requirePassword,
+    requireKeyLock: requested.requireKeyLock ?? current.requireKeyLock,
   };
   if (inputType === "none" && !hasExtraFields(flags)) {
     throw new BadRequestException(
-      "Layanan tanpa IMEI/SN/ECID harus mewajibkan minimal satu field: Qnt, Email, Username, Password, atau Notes.",
+      "Layanan tanpa IMEI/SN/ECID harus mewajibkan minimal satu field: Qnt, Email, Username, Password, Key Lock, atau Notes.",
     );
   }
   return flags;

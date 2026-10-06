@@ -343,6 +343,8 @@ model Service {
   requireNotes       Boolean             @default(false) @map("require_notes")
   /// Password is stored encrypted in Order.passwordEnc and sent to the supplier as PASSWORD.
   requirePassword    Boolean             @default(false) @map("require_password")
+  /// Key Lock is stored in Order.keyLock and sent to the supplier as KEYLOCK.
+  requireKeyLock     Boolean             @default(false) @map("require_key_lock")
   createdAt          DateTime            @default(now()) @map("created_at")
   updatedAt          DateTime            @updatedAt @map("updated_at")
   supplier           Supplier?           @relation(fields: [supplierId], references: [id], onDelete: SetNull)
@@ -434,6 +436,7 @@ model Order {
   username              String?
   /// Account password for Service.requirePassword, AES-GCM encrypted (supplier-secret).
   passwordEnc           String?                     @map("password_enc")
+  keyLock               String?                     @map("key_lock")
   status                OrderStatus                 @default(waiting_payment)
   /// Snapshot of the user's testing role at creation; excluded from statistics.
   isTest                Boolean                     @default(false) @map("is_test")

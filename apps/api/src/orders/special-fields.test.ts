@@ -15,6 +15,7 @@ const ALL = {
   requireUsername: true,
   requireNotes: true,
   requirePassword: true,
+  requireKeyLock: true,
 };
 const NONE = NO_EXTRA_FIELDS;
 
@@ -25,6 +26,7 @@ test("required extras are validated and trimmed (password kept verbatim)", () =>
     username: " budi ",
     notes: " model A2 ",
     password: " Rahasia 123",
+    keyLock: " KL-77 ",
   });
   assert.deepEqual(ok, {
     ok: true,
@@ -34,6 +36,7 @@ test("required extras are validated and trimmed (password kept verbatim)", () =>
       username: "budi",
       notes: "model A2",
       password: " Rahasia 123",
+      keyLock: "KL-77",
     },
   });
 
@@ -43,12 +46,13 @@ test("required extras are validated and trimmed (password kept verbatim)", () =>
     username: "",
     notes: " ",
     password: "  ",
+    keyLock: "",
   });
   assert.equal(bad.ok, false);
-  if (!bad.ok) assert.equal(bad.errors.length, 5);
+  if (!bad.ok) assert.equal(bad.errors.length, 6);
 
   assert.equal(
-    parseOrderExtras(ALL, { qnt: 0, email: "a@b.co", username: "x", notes: "n", password: "p" }).ok,
+    parseOrderExtras(ALL, { qnt: 0, email: "a@b.co", username: "x", notes: "n", password: "p", keyLock: "k" }).ok,
     false,
   );
   assert.equal(
@@ -63,7 +67,7 @@ test("required extras are validated and trimmed (password kept verbatim)", () =>
 
 test("fields the service does not require are dropped", () => {
   assert.deepEqual(
-    parseOrderExtras(NONE, { qnt: 9, email: "a@b.co", username: "x", notes: "hi", password: "p" }),
+    parseOrderExtras(NONE, { qnt: 9, email: "a@b.co", username: "x", notes: "hi", password: "p", keyLock: "k" }),
     { ok: true, extras: NO_EXTRAS },
   );
 });
@@ -76,8 +80,9 @@ test("supplier fields omit empty values", () => {
       username: "u",
       notes: "catatan",
       password: "s3cret",
+      keyLock: "KL-1",
     }),
-    { QNT: "2", USERNAME: "u", NOTES: "catatan", PASSWORD: "s3cret" },
+    { QNT: "2", USERNAME: "u", NOTES: "catatan", PASSWORD: "s3cret", KEYLOCK: "KL-1" },
   );
   assert.deepEqual(supplierExtraFields(NO_EXTRAS), {});
 });

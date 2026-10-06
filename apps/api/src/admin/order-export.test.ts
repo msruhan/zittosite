@@ -12,6 +12,7 @@ function row(overrides: Partial<ExportOrderRow> = {}): ExportOrderRow {
     quantity: null,
     email: null,
     username: null,
+    keyLock: null,
     status: "done",
     isTest: false,
     statusReason: null,

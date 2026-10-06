@@ -7,6 +7,7 @@ export const EXTRA_FIELD_OPTIONS = [
   { key: "requireEmail", label: "Email" },
   { key: "requireUsername", label: "Username" },
   { key: "requirePassword", label: "Password" },
+  { key: "requireKeyLock", label: "Key Lock" },
   { key: "requireNotes", label: "Notes" },
 ] as const satisfies ReadonlyArray<{ key: keyof Service; label: string }>;
 
@@ -19,6 +20,7 @@ export const NO_EXTRA_FIELDS: ExtraFieldFlags = {
   requireUsername: false,
   requireNotes: false,
   requirePassword: false,
+  requireKeyLock: false,
 };
 
 export function hasExtraFields(flags: Partial<ExtraFieldFlags>): boolean {
@@ -32,7 +34,7 @@ export function deviceLabel(inputType: Service["inputType"]): string | null {
 
 /** Layanan Spesial extra fields that were filled on this order. */
 export function orderExtraRows(
-  order: Pick<Order, "quantity" | "email" | "username" | "hasPassword" | "password">,
+  order: Pick<Order, "quantity" | "email" | "username" | "hasPassword" | "password" | "keyLock">,
 ): Array<{ label: string; value: string }> {
   const rows: Array<{ label: string; value: string }> = [];
   if (order.quantity != null) rows.push({ label: "Qnt", value: String(order.quantity) });
@@ -40,6 +42,7 @@ export function orderExtraRows(
   // Admins get the real value; customers only see that one was given.
   if (order.password) rows.push({ label: "Password", value: order.password });
   else if (order.hasPassword) rows.push({ label: "Password", value: "••••••••" });
+  if (order.keyLock) rows.push({ label: "Key Lock", value: order.keyLock });
   if (order.email) rows.push({ label: "Email", value: order.email });
   return rows;
 }

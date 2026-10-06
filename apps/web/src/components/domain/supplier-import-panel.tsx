@@ -352,7 +352,7 @@ export function SupplierImportPanel({
         <ExtraFieldPicker
           value={extraFields}
           error={fieldsError}
-          hint="Centang field yang wajib diisi user saat order; ikut dikirim ke supplier (QNT, EMAIL, USERNAME, PASSWORD, NOTES). Berlaku untuk semua layanan yang dipilih."
+          hint="Centang field yang wajib diisi user saat order; ikut dikirim ke supplier (QNT, EMAIL, USERNAME, PASSWORD, KEYLOCK, NOTES). Berlaku untuk semua layanan yang dipilih."
           onToggle={(key, checked) => {
             setExtraFields((current) => ({ ...current, [key]: checked }));
             setFieldsError(undefined);

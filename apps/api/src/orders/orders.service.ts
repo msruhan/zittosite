@@ -215,6 +215,7 @@ export class OrdersService {
       email?: string;
       username?: string;
       password?: string;
+      keyLock?: string;
       channel?: OrderChannel;
       apiKeyId?: string;
       balanceOnly?: boolean;

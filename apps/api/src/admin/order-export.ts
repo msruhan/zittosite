@@ -51,6 +51,7 @@ export type ExportOrderRow = {
   quantity: number | null;
   email: string | null;
   username: string | null;
+  keyLock: string | null;
   status: string;
   isTest: boolean;
   statusReason: string | null;
@@ -135,6 +136,7 @@ const COLUMNS: Column[] = [
   { header: "Qty", width: 7, kind: "number", value: (r) => r.quantity },
   { header: "Email", width: 24, value: (r) => r.email ?? "" },
   { header: "Username Tambahan", width: 18, value: (r) => r.username ?? "" },
+  { header: "Key Lock", width: 18, value: (r) => r.keyLock ?? "" },
   { header: "Catatan User", width: 28, value: (r) => r.notes ?? "" },
   { header: "Harga Jual", width: 15, kind: "money", value: (r) => r.price },
   { header: "Harga Modal", width: 15, kind: "money", value: (r) => r.costPrice },

@@ -28,9 +28,15 @@ import { cn } from "@/lib/utils";
 const QNT_MAX = 100_000;
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-type ExtraValues = { qnt: string; email: string; username: string; password: string };
+type ExtraValues = {
+  qnt: string;
+  email: string;
+  username: string;
+  password: string;
+  keyLock: string;
+};
 type ExtraErrors = Partial<Record<keyof ExtraValues, string>>;
-const EMPTY_EXTRAS: ExtraValues = { qnt: "", email: "", username: "", password: "" };
+const EMPTY_EXTRAS: ExtraValues = { qnt: "", email: "", username: "", password: "", keyLock: "" };
 
 const ALL_GROUPS = "__all__";
 const UNGROUPED = "__none__";
@@ -54,6 +60,9 @@ function validateExtras(service: Service, values: ExtraValues): ExtraErrors {
   }
   if (service.requirePassword && !values.password.trim()) {
     errors.password = "Masukkan password.";
+  }
+  if (service.requireKeyLock && !values.keyLock.trim()) {
+    errors.keyLock = "Masukkan Key Lock.";
   }
   return errors;
 }
@@ -208,6 +217,7 @@ export function CreateOrderForm({
           ...(service?.requireEmail ? { email: extras.email.trim() } : {}),
           ...(service?.requireUsername ? { username: extras.username.trim() } : {}),
           ...(service?.requirePassword ? { password: extras.password } : {}),
+          ...(service?.requireKeyLock ? { keyLock: extras.keyLock.trim() } : {}),
         }),
       });
       const title = quantity > 1 ? `${quantity} order dibuat` : "Order dibuat";
@@ -408,6 +418,20 @@ export function CreateOrderForm({
               )}
             </button>
           </div>
+        </Field>
+      ) : null}
+
+      {service?.requireKeyLock ? (
+        <Field label="Key Lock" htmlFor="orderKeyLock" error={extraErrors.keyLock} required>
+          <Input
+            id="orderKeyLock"
+            autoComplete="off"
+            spellCheck={false}
+            maxLength={100}
+            value={extras.keyLock}
+            invalid={Boolean(extraErrors.keyLock)}
+            onChange={(event) => updateExtra("keyLock", event.target.value)}
+          />
         </Field>
       ) : null}
 

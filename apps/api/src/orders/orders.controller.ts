@@ -34,6 +34,7 @@ export class OrdersController {
       email: optString(body.email, "Email", 254),
       username: optString(body.username, "Username", 100),
       password: optString(body.password, "Password", 128),
+      keyLock: optString(body.keyLock, "Key Lock", 100),
       channel: "web",
     });
   }
