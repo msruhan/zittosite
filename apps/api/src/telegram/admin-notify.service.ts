@@ -251,6 +251,7 @@ export class AdminNotifyService {
         telegramNotifications: {
           include: { admin: { select: { role: true } } },
         },
+        assignedAdmin: { select: { role: true } },
         ...DURATION_INCLUDE,
       },
     });
@@ -297,8 +298,27 @@ export class AdminNotifyService {
       ];
     }
 
+    // Rejected/cancelled orders, and orders a Super Admin took, disappear from operators' chats
+    // so nobody keeps working them.
+    const removeFromOperators =
+      kind === "rejected" ||
+      kind === "cancelled" ||
+      (kind === "taken" && order.assignedAdmin?.role === "super_admin");
+
     for (const row of order.telegramNotifications) {
       if (!row.messageId) continue;
+      if (removeFromOperators && row.admin.role !== "super_admin") {
+        const deleted = await this.sendMessageRaw(token, {
+          chat_id: row.chatId,
+          message_id: Number(row.messageId),
+          _method: "deleteMessage",
+        }).catch(() => null);
+        if (deleted?.ok) continue;
+        // Telegram refuses to delete messages older than 48 hours; fall back to the edited card.
+        this.logger.warn(
+          `Order card delete failed chat=${row.chatId}: ${deleted?.description ?? "network error"}`,
+        );
+      }
       const isAssigneeCard =
         kind === "taken" &&
         !!order.assignedAdminId &&
@@ -311,7 +331,7 @@ export class AdminNotifyService {
         ),
       );
       try {
-        await this.sendMessageRaw(token, {
+        const edited = await this.sendMessageRaw(token, {
           chat_id: row.chatId,
           message_id: Number(row.messageId),
           text: html,
@@ -322,6 +342,9 @@ export class AdminNotifyService {
           },
           _method: "editMessageText",
         });
+        if (edited && !edited.ok && !/not modified/i.test(edited.description ?? "")) {
+          this.logger.warn(`Order card edit refused chat=${row.chatId}: ${edited.description}`);
+        }
       } catch (err) {
         this.logger.warn(
           `Order card edit failed chat=${row.chatId}: ${
