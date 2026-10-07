@@ -247,7 +247,9 @@ export function LoginForm({
         <p className="text-center text-body text-ink-soft">
           Butuh bantuan?{" "}
           <Link
-            href="https://t.me/"
+            href="https://t.me/zittosite_support"
+            target="_blank"
+            rel="noopener noreferrer"
             className="inline-flex items-center gap-1 font-medium text-action underline-offset-4 hover:underline"
           >
             <PaperPlaneTilt className="size-3.5" weight="regular" aria-hidden="true" />
