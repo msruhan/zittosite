@@ -1,6 +1,6 @@
 import { HttpException, Injectable, Logger } from "@nestjs/common";
 import type { OrderStatus } from "@prisma/client";
-import { whatsappAdminConfig } from "../config/env";
+import { whatsappAdminEnabled } from "../config/env";
 import { OrdersService } from "../orders/orders.service";
 import { PrismaService } from "../prisma/prisma.service";
 import { WahaClient } from "../whatsapp/waha.client";
@@ -40,10 +40,8 @@ export class AdminReactionService {
 
   /** Returns a short outcome for logs. */
   async handle(payload: WahaReactionPayload): Promise<string> {
-    const config = whatsappAdminConfig();
-    if (!config) return "off";
+    if (!whatsappAdminEnabled()) return "off";
     if (payload.fromMe === true) return "ignored: own reaction";
-    if (payload.from !== config.groupChatId) return "ignored: other chat";
 
     const emoji = typeof payload.reaction?.text === "string" ? payload.reaction.text : "";
     const action = reactionAction(emoji);
@@ -53,6 +51,7 @@ export class AdminReactionService {
 
     const card = await this.cards.findByMessage(messageId);
     if (!card) return "ignored: not an order card";
+    if (payload.from !== card.chatId) return "ignored: other chat";
     const order = card.order;
 
     const admin = await this.resolveAdmin(payload.participant);

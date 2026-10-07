@@ -51,7 +51,7 @@ export function adminOrderCardText(input: {
       : [`${INPUT_TYPE_LABEL[input.inputType]}: \`${input.imei}\``]),
     ...(notes ? [`📝 ${notes}`] : []),
     "",
-    "_React: ⏳ proses · ✅ done · ❌ tolak_",
+    "_React: ⏳/🔄 proses · ✅ done · ❌ tolak_",
   ].join("\n");
 }
 

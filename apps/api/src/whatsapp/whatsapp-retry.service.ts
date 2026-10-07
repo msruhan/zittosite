@@ -4,7 +4,7 @@ import {
   OnModuleDestroy,
   OnModuleInit,
 } from "@nestjs/common";
-import { whatsappAdminConfig, whatsappConfig } from "../config/env";
+import { whatsappAdminEnabled, whatsappConfig } from "../config/env";
 import { WhatsappAdminService } from "./whatsapp-admin.service";
 import { WhatsappNotifyService } from "./whatsapp-notify.service";
 
@@ -43,7 +43,7 @@ export class WhatsappRetryService implements OnModuleInit, OnModuleDestroy {
           await this.notify.deliver(id);
         }
       }
-      if (whatsappAdminConfig()) {
+      if (whatsappAdminEnabled()) {
         await this.admin.releaseStale();
         for (const id of await this.admin.dueIds(BATCH_SIZE)) {
           await this.admin.deliver(id);

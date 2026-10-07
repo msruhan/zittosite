@@ -13,6 +13,10 @@ const USERNAME_MAX = 100;
 export const NOTES_MAX = 500;
 const PASSWORD_MAX = 128;
 const KEY_LOCK_MAX = 100;
+/** Usually an image link, so allow long URLs. */
+const SIGN_IN_PICTURE_MAX = 500;
+/** Custom field name as defined at the supplier (iSpider Infinix/Tecno/Itel ID services). */
+export const SIGN_IN_PICTURE_FIELD = "Picture on sign-in page";
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export function parseServiceInputType(value: unknown): ServiceInputType | undefined {
@@ -26,6 +30,7 @@ export interface ExtraFieldFlags {
   requireNotes: boolean;
   requirePassword: boolean;
   requireKeyLock: boolean;
+  requireSignInPicture: boolean;
 }
 
 export const NO_EXTRA_FIELDS: ExtraFieldFlags = {
@@ -35,6 +40,7 @@ export const NO_EXTRA_FIELDS: ExtraFieldFlags = {
   requireNotes: false,
   requirePassword: false,
   requireKeyLock: false,
+  requireSignInPicture: false,
 };
 
 export interface OrderExtras {
@@ -45,6 +51,7 @@ export interface OrderExtras {
   /** Plain text only in memory; stored encrypted as Order.passwordEnc. */
   password: string | null;
   keyLock: string | null;
+  signInPicture: string | null;
 }
 
 export const NO_EXTRAS: OrderExtras = {
@@ -54,6 +61,7 @@ export const NO_EXTRAS: OrderExtras = {
   notes: null,
   password: null,
   keyLock: null,
+  signInPicture: null,
 };
 
 export function hasExtraFields(flags: ExtraFieldFlags): boolean {
@@ -63,7 +71,8 @@ export function hasExtraFields(flags: ExtraFieldFlags): boolean {
     flags.requireUsername ||
     flags.requireNotes ||
     flags.requirePassword ||
-    flags.requireKeyLock
+    flags.requireKeyLock ||
+    flags.requireSignInPicture
   );
 }
 
@@ -85,6 +94,7 @@ export function parseOrderExtras(
     notes?: unknown;
     password?: unknown;
     keyLock?: unknown;
+    signInPicture?: unknown;
   },
 ): { ok: true; extras: OrderExtras } | { ok: false; errors: string[] } {
   const errors: string[] = [];
@@ -139,6 +149,14 @@ export function parseOrderExtras(
     } else extras.keyLock = keyLock;
   }
 
+  if (flags.requireSignInPicture) {
+    const picture = String(raw.signInPicture ?? "").trim();
+    if (!picture) errors.push(`${SIGN_IN_PICTURE_FIELD} wajib diisi.`);
+    else if (picture.length > SIGN_IN_PICTURE_MAX || /[\r\n]/.test(picture)) {
+      errors.push(`${SIGN_IN_PICTURE_FIELD} maksimal ${SIGN_IN_PICTURE_MAX} karakter dalam satu baris.`);
+    } else extras.signInPicture = picture;
+  }
+
   return errors.length ? { ok: false, errors } : { ok: true, extras };
 }
 
@@ -151,5 +169,6 @@ export function supplierExtraFields(extras: OrderExtras): Record<string, string>
   if (extras.notes) fields.NOTES = extras.notes;
   if (extras.password) fields.PASSWORD = extras.password;
   if (extras.keyLock) fields.KEYLOCK = extras.keyLock;
+  if (extras.signInPicture) fields[SIGN_IN_PICTURE_FIELD] = extras.signInPicture;
   return fields;
 }

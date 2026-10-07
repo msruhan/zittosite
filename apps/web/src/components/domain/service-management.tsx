@@ -46,6 +46,7 @@ import {
   type ServiceMenu,
   type Supplier,
   type SupplierRemoteService,
+  type WhatsappGroup,
 } from "@/lib/types";
 
 const CHANNEL_LABEL: Record<FulfillmentChannel, string> = {
@@ -106,6 +107,29 @@ export function ServiceManagement({
   const [togglingId, setTogglingId] = React.useState<string | null>(null);
   const [deleting, setDeleting] = React.useState<Service | null>(null);
   const [deleteBusy, setDeleteBusy] = React.useState(false);
+  const [waGroups, setWaGroups] = React.useState<WhatsappGroup[] | null>(null);
+  const [waGroupsError, setWaGroupsError] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    api<WhatsappGroup[]>("/admin/services/whatsapp-groups")
+      .then((groups) => {
+        if (!cancelled) setWaGroups(groups);
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setWaGroupsError(err instanceof ApiError ? err.message : "Gagal memuat grup WhatsApp.");
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  const waGroupName = React.useCallback(
+    (id: string | null | undefined) =>
+      id ? (waGroups?.find((group) => group.id === id)?.name ?? id) : null,
+    [waGroups],
+  );
 
   const [syncedServices, setSyncedServices] = React.useState(initialServices);
   if (initialServices !== syncedServices) {
@@ -209,6 +233,8 @@ export function ServiceManagement({
             active: next.active,
             hidden: next.hidden ?? false,
             fulfillmentChannel: next.fulfillmentChannel ?? "telegram",
+            whatsappGroupId:
+              next.fulfillmentChannel === "whatsapp_admin" ? (next.whatsappGroupId ?? null) : null,
             assignedAdminIds: next.assignedAdminIds,
             supplierId: next.supplierId ?? null,
             supplierServiceId: next.supplierServiceId ?? null,
@@ -220,6 +246,7 @@ export function ServiceManagement({
             requireNotes: next.requireNotes ?? false,
             requirePassword: next.requirePassword ?? false,
             requireKeyLock: next.requireKeyLock ?? false,
+            requireSignInPicture: next.requireSignInPicture ?? false,
             ...(next.priceUsdCents != null
               ? {
                   priceUsd: next.priceUsdCents / 100,
@@ -240,6 +267,8 @@ export function ServiceManagement({
             active: next.active,
             hidden: next.hidden ?? false,
             fulfillmentChannel: next.fulfillmentChannel ?? "telegram",
+            whatsappGroupId:
+              next.fulfillmentChannel === "whatsapp_admin" ? (next.whatsappGroupId ?? null) : null,
             assignedAdminIds: next.assignedAdminIds,
             supplierId: next.supplierId ?? null,
             supplierServiceId: next.supplierServiceId ?? null,
@@ -251,6 +280,7 @@ export function ServiceManagement({
             requireNotes: next.requireNotes ?? false,
             requirePassword: next.requirePassword ?? false,
             requireKeyLock: next.requireKeyLock ?? false,
+            requireSignInPicture: next.requireSignInPicture ?? false,
             ...(next.priceUsdCents != null
               ? {
                   priceUsd: next.priceUsdCents / 100,
@@ -495,7 +525,16 @@ export function ServiceManagement({
                         {service.fulfillmentChannel === "whatsapp_admin" ? (
                           <div className="space-y-1">
                             <AssigneeList assignees={service.assignedAdmins ?? []} />
-                            <p className="text-label text-ink-soft">via grup WA admin</p>
+                            <p
+                              className={cn(
+                                "text-label",
+                                service.whatsappGroupId ? "text-ink-soft" : "text-[#dc2626]",
+                              )}
+                            >
+                              {service.whatsappGroupId
+                                ? `Grup ${waGroupName(service.whatsappGroupId)}`
+                                : "Grup WA belum dipilih"}
+                            </p>
                           </div>
                         ) : service.fulfillmentChannel === "whatsapp" ? (
                           <span className="text-body text-ink-soft">
@@ -613,6 +652,8 @@ export function ServiceManagement({
             initialTab={listTab}
             existingServices={services}
             usdRate={usdRate}
+            waGroups={waGroups}
+            waGroupsError={waGroupsError}
             onCancel={() => {
               setEditing(null);
               setCreating(false);
@@ -821,6 +862,8 @@ function ServiceFormDialog({
   initialTab,
   existingServices,
   usdRate,
+  waGroups,
+  waGroupsError,
   onCancel,
   onSave,
   onImported,
@@ -832,6 +875,9 @@ function ServiceFormDialog({
   initialTab: CreateTab;
   existingServices: Service[];
   usdRate: number;
+  /** Null while loading. */
+  waGroups: WhatsappGroup[] | null;
+  waGroupsError: string | null;
   onCancel: () => void;
   onSave: (service: ServiceDraft) => void | Promise<void>;
   onImported: () => void | Promise<void>;
@@ -855,6 +901,7 @@ function ServiceFormDialog({
     costPrice?: string;
     estimate?: string;
     supplier?: string;
+    waGroup?: string;
     fields?: string;
     description?: string;
   }>({});
@@ -892,6 +939,9 @@ function ServiceFormDialog({
       (!draft.supplierId || !draft.supplierServiceId)
     ) {
       nextErrors.supplier = "Pilih supplier dan layanan supplier.";
+    }
+    if (draft.fulfillmentChannel === "whatsapp_admin" && !draft.whatsappGroupId) {
+      nextErrors.waGroup = "Pilih grup WhatsApp tujuan order.";
     }
     if (!draft.estimate.trim()) {
       nextErrors.estimate = "Masukkan estimasi pengerjaan.";
@@ -1151,10 +1201,38 @@ function ServiceFormDialog({
           />
         </Field>
         {draft.fulfillmentChannel === "whatsapp_admin" ? (
-          <p className="-mt-2 text-label text-ink-soft">
-            Tiap order dikirim ke grup WhatsApp admin. Admin cukup react ⏳ proses, ✅ done, ❌
-            tolak. Nomor WhatsApp admin harus diisi di menu Admin.
-          </p>
+          <>
+            <p className="-mt-2 text-label text-ink-soft">
+              Tiap order dikirim ke grup WhatsApp yang dipilih. Admin cukup react ⏳/🔄 proses, ✅
+              done, ❌ tolak. Nomor WhatsApp admin harus diisi di menu Admin.
+            </p>
+            <Field
+              label="Grup WhatsApp"
+              htmlFor="whatsappGroupId"
+              hint={
+                waGroupsError ??
+                (waGroups === null ? "Memuat grup…" : "Grup yang sudah berisi nomor bot.")
+              }
+              error={errors.waGroup}
+            >
+              <Select
+                id="whatsappGroupId"
+                value={draft.whatsappGroupId ?? ""}
+                placeholder="Pilih grup"
+                onValueChange={(value) => {
+                  setDraft((current) => ({ ...current, whatsappGroupId: value || null }));
+                  setErrors((current) => ({ ...current, waGroup: undefined }));
+                }}
+                options={[
+                  ...(waGroups ?? []).map((group) => ({ value: group.id, label: group.name })),
+                  ...(draft.whatsappGroupId &&
+                  !(waGroups ?? []).some((group) => group.id === draft.whatsappGroupId)
+                    ? [{ value: draft.whatsappGroupId, label: draft.whatsappGroupId }]
+                    : []),
+                ]}
+              />
+            </Field>
+          </>
         ) : null}
         {draft.fulfillmentChannel === "supplier" ? (
           <SupplierPicker

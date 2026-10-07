@@ -7,6 +7,7 @@ import {
   type ExtraFieldFlags,
   NO_DEVICE_VALUE,
   type OrderExtras,
+  SIGN_IN_PICTURE_FIELD,
   type ServiceInputType,
   parseOrderExtras,
 } from "../orders/special-fields";
@@ -163,6 +164,7 @@ export class DhruService {
       notes: params.NOTES || params.NOTE,
       password: params.PASSWORD,
       keyLock: params.KEYLOCK,
+      signInPicture: params[SIGN_IN_PICTURE_FIELD.toUpperCase()] || params.SIGNINPICTURE,
     });
     if (!extras.ok) throw new DhruFailure(extras.errors.join(" "));
     const type = service.inputType;
@@ -196,6 +198,7 @@ export class DhruService {
         notes: extras.notes ?? undefined,
         password: extras.password ?? undefined,
         keyLock: extras.keyLock ?? undefined,
+        signInPicture: extras.signInPicture ?? undefined,
         channel: "api",
         apiKeyId: caller.apiKeyId,
         balanceOnly: true,

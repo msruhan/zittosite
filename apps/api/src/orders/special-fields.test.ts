@@ -16,6 +16,7 @@ const ALL = {
   requireNotes: true,
   requirePassword: true,
   requireKeyLock: true,
+  requireSignInPicture: true,
 };
 const NONE = NO_EXTRA_FIELDS;
 
@@ -27,6 +28,7 @@ test("required extras are validated and trimmed (password kept verbatim)", () =>
     notes: " model A2 ",
     password: " Rahasia 123",
     keyLock: " KL-77 ",
+    signInPicture: " https://postimg.cc/abc ",
   });
   assert.deepEqual(ok, {
     ok: true,
@@ -37,6 +39,7 @@ test("required extras are validated and trimmed (password kept verbatim)", () =>
       notes: "model A2",
       password: " Rahasia 123",
       keyLock: "KL-77",
+      signInPicture: "https://postimg.cc/abc",
     },
   });
 
@@ -47,12 +50,21 @@ test("required extras are validated and trimmed (password kept verbatim)", () =>
     notes: " ",
     password: "  ",
     keyLock: "",
+    signInPicture: "",
   });
   assert.equal(bad.ok, false);
-  if (!bad.ok) assert.equal(bad.errors.length, 6);
+  if (!bad.ok) assert.equal(bad.errors.length, 7);
 
   assert.equal(
-    parseOrderExtras(ALL, { qnt: 0, email: "a@b.co", username: "x", notes: "n", password: "p", keyLock: "k" }).ok,
+    parseOrderExtras(ALL, {
+      qnt: 0,
+      email: "a@b.co",
+      username: "x",
+      notes: "n",
+      password: "p",
+      keyLock: "k",
+      signInPicture: "p",
+    }).ok,
     false,
   );
   assert.equal(
@@ -63,11 +75,23 @@ test("required extras are validated and trimmed (password kept verbatim)", () =>
     parseOrderExtras({ ...NONE, requirePassword: true }, { password: "a\nb" }).ok,
     false,
   );
+  assert.equal(
+    parseOrderExtras({ ...NONE, requireSignInPicture: true }, { signInPicture: "a\nb" }).ok,
+    false,
+  );
 });
 
 test("fields the service does not require are dropped", () => {
   assert.deepEqual(
-    parseOrderExtras(NONE, { qnt: 9, email: "a@b.co", username: "x", notes: "hi", password: "p", keyLock: "k" }),
+    parseOrderExtras(NONE, {
+      qnt: 9,
+      email: "a@b.co",
+      username: "x",
+      notes: "hi",
+      password: "p",
+      keyLock: "k",
+      signInPicture: "p",
+    }),
     { ok: true, extras: NO_EXTRAS },
   );
 });
@@ -81,8 +105,16 @@ test("supplier fields omit empty values", () => {
       notes: "catatan",
       password: "s3cret",
       keyLock: "KL-1",
+      signInPicture: "https://postimg.cc/abc",
     }),
-    { QNT: "2", USERNAME: "u", NOTES: "catatan", PASSWORD: "s3cret", KEYLOCK: "KL-1" },
+    {
+      QNT: "2",
+      USERNAME: "u",
+      NOTES: "catatan",
+      PASSWORD: "s3cret",
+      KEYLOCK: "KL-1",
+      "Picture on sign-in page": "https://postimg.cc/abc",
+    },
   );
   assert.deepEqual(supplierExtraFields(NO_EXTRAS), {});
 });
@@ -95,4 +127,5 @@ test("input type parsing and Telegram eligibility", () => {
   assert.equal(needsExtraInput({ ...NONE, requireEmail: true, inputType: "sn" }), true);
   assert.equal(needsExtraInput({ ...NONE, requireNotes: true, inputType: "imei" }), true);
   assert.equal(needsExtraInput({ ...NONE, requirePassword: true, inputType: "imei" }), true);
+  assert.equal(needsExtraInput({ ...NONE, requireSignInPicture: true, inputType: "imei" }), true);
 });

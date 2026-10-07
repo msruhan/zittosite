@@ -267,6 +267,12 @@ export class AdminOpsController {
     return this.services.list();
   }
 
+  @Get("services/whatsapp-groups")
+  @UseGuards(SuperAdminGuard)
+  listWhatsappGroups() {
+    return this.services.whatsappGroups();
+  }
+
   @Post("services")
   @UseGuards(SuperAdminGuard)
   async createService(@Req() req: AdminReq, @Body() body: Json) {
@@ -280,6 +286,7 @@ export class AdminOpsController {
       active: optBoolean(body.active, "Aktif"),
       hidden: optBoolean(body.hidden, "Sembunyikan"),
       fulfillmentChannel: optEnum(body.fulfillmentChannel, FULFILLMENT_CHANNELS, "Jalur proses"),
+      whatsappGroupId: optNullableString(body.whatsappGroupId, "Grup WhatsApp", 60),
       assignedAdminIds: optIdList(body.assignedAdminIds, "Assign admin"),
       supplierId: optNullableString(body.supplierId, "Supplier", 40),
       supplierServiceId: optNullableString(body.supplierServiceId, "Layanan supplier", 120),
@@ -293,6 +300,7 @@ export class AdminOpsController {
       requireNotes: optBoolean(body.requireNotes, "Field Notes"),
       requirePassword: optBoolean(body.requirePassword, "Field Password"),
       requireKeyLock: optBoolean(body.requireKeyLock, "Field Key Lock"),
+      requireSignInPicture: optBoolean(body.requireSignInPicture, "Field Picture on sign-in page"),
     });
     this.audit.record("admin.service.created", {
       actorId: req.admin.sub,
@@ -319,6 +327,7 @@ export class AdminOpsController {
       active: optBoolean(body.active, "Aktif"),
       hidden: optBoolean(body.hidden, "Sembunyikan"),
       fulfillmentChannel: optEnum(body.fulfillmentChannel, FULFILLMENT_CHANNELS, "Jalur proses"),
+      whatsappGroupId: optNullableString(body.whatsappGroupId, "Grup WhatsApp", 60),
       assignedAdminIds: optIdList(body.assignedAdminIds, "Assign admin"),
       supplierId: optNullableString(body.supplierId, "Supplier", 40),
       supplierServiceId: optNullableString(body.supplierServiceId, "Layanan supplier", 120),
@@ -332,6 +341,7 @@ export class AdminOpsController {
       requireNotes: optBoolean(body.requireNotes, "Field Notes"),
       requirePassword: optBoolean(body.requirePassword, "Field Password"),
       requireKeyLock: optBoolean(body.requireKeyLock, "Field Key Lock"),
+      requireSignInPicture: optBoolean(body.requireSignInPicture, "Field Picture on sign-in page"),
     };
     const service = await this.services.update(id, input);
     this.audit.record("admin.service.updated", {
@@ -343,6 +353,7 @@ export class AdminOpsController {
       active: input.active,
       hidden: input.hidden,
       fulfillmentChannel: input.fulfillmentChannel,
+      whatsappGroupId: input.whatsappGroupId,
       inputType: input.inputType,
       requireQnt: input.requireQnt,
       requireEmail: input.requireEmail,
@@ -350,6 +361,7 @@ export class AdminOpsController {
       requireNotes: input.requireNotes,
       requirePassword: input.requirePassword,
       requireKeyLock: input.requireKeyLock,
+      requireSignInPicture: input.requireSignInPicture,
       menu: input.menu,
       assignedAdmins: input.assignedAdminIds?.join(","),
     });

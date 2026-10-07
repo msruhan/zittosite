@@ -21,6 +21,7 @@ import {
   inputLengthError,
   type InputType,
 } from "@/lib/imei-list";
+import { SIGN_IN_PICTURE_LABEL } from "@/lib/order-fields";
 import type { Service } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -34,9 +35,17 @@ type ExtraValues = {
   username: string;
   password: string;
   keyLock: string;
+  signInPicture: string;
 };
 type ExtraErrors = Partial<Record<keyof ExtraValues, string>>;
-const EMPTY_EXTRAS: ExtraValues = { qnt: "", email: "", username: "", password: "", keyLock: "" };
+const EMPTY_EXTRAS: ExtraValues = {
+  qnt: "",
+  email: "",
+  username: "",
+  password: "",
+  keyLock: "",
+  signInPicture: "",
+};
 
 const ALL_GROUPS = "__all__";
 const UNGROUPED = "__none__";
@@ -63,6 +72,9 @@ function validateExtras(service: Service, values: ExtraValues): ExtraErrors {
   }
   if (service.requireKeyLock && !values.keyLock.trim()) {
     errors.keyLock = "Masukkan Key Lock.";
+  }
+  if (service.requireSignInPicture && !values.signInPicture.trim()) {
+    errors.signInPicture = `Masukkan ${SIGN_IN_PICTURE_LABEL}.`;
   }
   return errors;
 }
@@ -230,6 +242,9 @@ export function CreateOrderForm({
           ...(service?.requireUsername ? { username: extras.username.trim() } : {}),
           ...(service?.requirePassword ? { password: extras.password } : {}),
           ...(service?.requireKeyLock ? { keyLock: extras.keyLock.trim() } : {}),
+          ...(service?.requireSignInPicture
+            ? { signInPicture: extras.signInPicture.trim() }
+            : {}),
         }),
       });
       const title = quantity > 1 ? `${quantity} order dibuat` : "Order dibuat";
@@ -443,6 +458,27 @@ export function CreateOrderForm({
             value={extras.keyLock}
             invalid={Boolean(extraErrors.keyLock)}
             onChange={(event) => updateExtra("keyLock", event.target.value)}
+          />
+        </Field>
+      ) : null}
+
+      {service?.requireSignInPicture ? (
+        <Field
+          label={SIGN_IN_PICTURE_LABEL}
+          htmlFor="orderSignInPicture"
+          hint="Link foto halaman sign-in perangkat (mis. dari postimages.org)."
+          error={extraErrors.signInPicture}
+          required
+        >
+          <Input
+            id="orderSignInPicture"
+            autoComplete="off"
+            spellCheck={false}
+            maxLength={500}
+            placeholder={SIGN_IN_PICTURE_LABEL}
+            value={extras.signInPicture}
+            invalid={Boolean(extraErrors.signInPicture)}
+            onChange={(event) => updateExtra("signInPicture", event.target.value)}
           />
         </Field>
       ) : null}

@@ -3,7 +3,7 @@ export type ReactionAction = "take" | "done" | "reject";
 /** Order action for a reaction emoji, or null for any other (or a removed) reaction. */
 export function reactionAction(emoji: string): ReactionAction | null {
   const bare = emoji.replace(/[\uFE0F\u{1F3FB}-\u{1F3FF}]/gu, "").trim();
-  if (bare === "⏳" || bare === "⌛") return "take";
+  if (bare === "⏳" || bare === "⌛" || bare === "🔄") return "take";
   if (bare === "✅" || bare === "✔" || bare === "☑") return "done";
   if (bare === "❌" || bare === "✖" || bare === "❎") return "reject";
   return null;

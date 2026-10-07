@@ -35,6 +35,7 @@ export class OrdersController {
       username: optString(body.username, "Username", 100),
       password: optString(body.password, "Password", 128),
       keyLock: optString(body.keyLock, "Key Lock", 100),
+      signInPicture: optString(body.signInPicture, "Picture on sign-in page", 500),
       channel: "web",
     });
   }

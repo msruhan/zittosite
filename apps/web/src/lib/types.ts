@@ -120,10 +120,13 @@ export interface Service {
   requireNotes?: boolean;
   requirePassword?: boolean;
   requireKeyLock?: boolean;
+  requireSignInPicture?: boolean;
   /** Off and also left out of the order menu (otherwise shown as Offline). */
   hidden?: boolean;
   /** Admin panel only: where paid orders are processed. */
   fulfillmentChannel?: FulfillmentChannel;
+  /** WhatsApp group (`…@g.us`) of a WhatsApp Admin service. */
+  whatsappGroupId?: string | null;
   /** Admin panel only: upstream supplier route when fulfillmentChannel is "supplier". */
   supplierId?: string | null;
   supplierServiceId?: string | null;
@@ -225,6 +228,11 @@ export interface Admin {
   createdAt?: string;
 }
 
+export interface WhatsappGroup {
+  id: string;
+  name: string;
+}
+
 export interface OrderResult {
   id: string;
   orderId: string;
@@ -281,6 +289,7 @@ export interface Order {
   /** Admin views only: the decrypted account password. */
   password?: string | null;
   keyLock?: string | null;
+  signInPicture?: string | null;
   status: OrderStatus;
   /** Keterangan for rejected/cancelled orders; null means none. */
   statusReason?: string | null;

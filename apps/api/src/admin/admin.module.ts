@@ -16,9 +16,10 @@ import { AdminGroupsService } from "./admin-groups.service";
 import { AdminMediaController, MediaController } from "./media.controller";
 import { OrdersModule } from "../orders/orders.module";
 import { AdminNotifyModule } from "../telegram/admin-notify.module";
+import { WhatsappModule } from "../whatsapp/whatsapp.module";
 
 @Module({
-  imports: [PrismaModule, OrdersModule, AdminNotifyModule],
+  imports: [PrismaModule, OrdersModule, AdminNotifyModule, WhatsappModule],
   controllers: [
     AdminAuthController,
     AdminOpsController,

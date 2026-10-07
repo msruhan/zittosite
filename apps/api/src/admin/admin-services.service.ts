@@ -3,9 +3,12 @@ import {
   ConflictException,
   Injectable,
   NotFoundException,
+  ServiceUnavailableException,
 } from "@nestjs/common";
 import type { FulfillmentChannel, Prisma, ServiceMenu } from "@prisma/client";
+import { whatsappConfig } from "../config/env";
 import { PrismaService } from "../prisma/prisma.service";
+import { WahaClient } from "../whatsapp/waha.client";
 import { serializeService } from "../orders/orders.serializer";
 import {
   type ExtraFieldFlags,
@@ -54,6 +57,24 @@ const SERVICE_INCLUDE = {
 } satisfies Prisma.ServiceInclude;
 
 type SupplierRoute = { supplierId?: string | null; supplierServiceId?: string | null };
+
+const WHATSAPP_GROUP_ID = /^[\d-]+@g\.us$/;
+
+/** Group for `whatsapp_admin` services (required); cleared for every other channel. */
+export function whatsappGroupFor(
+  channel: FulfillmentChannel,
+  input: string | null | undefined,
+  existing?: string | null,
+): string | null {
+  if (channel !== "whatsapp_admin") return null;
+  const id = (input === undefined ? existing : input)?.trim() || "";
+  if (!id) throw new BadRequestException("Pilih grup WhatsApp untuk jalur WhatsApp Admin.");
+  if (!WHATSAPP_GROUP_ID.test(id)) throw new BadRequestException("ID grup WhatsApp tidak valid.");
+  if (id === whatsappConfig()?.groupChatId) {
+    throw new BadRequestException("Grup Roamercheck tidak bisa dipakai untuk WhatsApp Admin.");
+  }
+  return id;
+}
 /** Layanan Spesial only; ignored (and cleared) for every other service. */
 type UsdPrices = { priceUsdCents?: number; costUsdCents?: number };
 
@@ -87,10 +108,11 @@ function extraFieldsFor(
     requireNotes: requested.requireNotes ?? current.requireNotes,
     requirePassword: requested.requirePassword ?? current.requirePassword,
     requireKeyLock: requested.requireKeyLock ?? current.requireKeyLock,
+    requireSignInPicture: requested.requireSignInPicture ?? current.requireSignInPicture,
   };
   if (inputType === "none" && !hasExtraFields(flags)) {
     throw new BadRequestException(
-      "Layanan tanpa IMEI/SN/ECID harus mewajibkan minimal satu field: Qnt, Email, Username, Password, Key Lock, atau Notes.",
+      "Layanan tanpa IMEI/SN/ECID harus mewajibkan minimal satu field: Qnt, Email, Username, Password, Key Lock, Picture on sign-in page, atau Notes.",
     );
   }
   return flags;
@@ -118,6 +140,7 @@ function serializeAdminService(service: ServiceWithAssignments) {
     ...serializeService(service),
     costPrice: service.costPrice,
     fulfillmentChannel: service.fulfillmentChannel,
+    whatsappGroupId: service.whatsappGroupId,
     supplierId: service.supplierId,
     supplierServiceId: service.supplierServiceId,
     supplierName: service.supplier?.name ?? null,
@@ -140,7 +163,23 @@ export class AdminServicesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly usdRate: UsdRateService,
+    private readonly waha: WahaClient,
   ) {}
+
+  /** Groups the bot is in that can take WhatsApp Admin cards (not the Roamercheck group). */
+  async whatsappGroups() {
+    if (!this.waha.enabled()) {
+      throw new ServiceUnavailableException("WhatsApp (WAHA) belum dikonfigurasi.");
+    }
+    let groups;
+    try {
+      groups = await this.waha.listGroups();
+    } catch {
+      throw new ServiceUnavailableException("Gagal mengambil daftar grup dari WhatsApp. Coba lagi.");
+    }
+    const roamercheck = whatsappConfig()?.groupChatId;
+    return groups.filter((group) => group.id !== roamercheck);
+  }
 
   private async usdPricing(priceUsdCents: number, costUsdCents: number) {
     const rate = await this.usdRate.get();
@@ -170,6 +209,7 @@ export class AdminServicesService {
     active?: boolean;
     hidden?: boolean;
     fulfillmentChannel?: FulfillmentChannel;
+    whatsappGroupId?: string | null;
     assignedAdminIds?: string[];
     inputType?: unknown;
     menu?: ServiceMenu;
@@ -183,6 +223,7 @@ export class AdminServicesService {
     const code = await this.uniqueCode(input.code || name);
     const adminIds = await this.validOperatorIds(input.assignedAdminIds ?? []);
     const fulfillmentChannel = input.fulfillmentChannel ?? "telegram";
+    const whatsappGroupId = whatsappGroupFor(fulfillmentChannel, input.whatsappGroupId);
     const route = await this.supplierRoute(fulfillmentChannel, input);
     const menu = input.menu ?? "ceir";
     const inputType = inputTypeFor({ fulfillmentChannel, menu }, input.inputType);
@@ -214,6 +255,7 @@ export class AdminServicesService {
         active: input.active !== false,
         ...availabilityFor(input),
         fulfillmentChannel,
+        whatsappGroupId,
         ...route,
         menu,
         inputType,
@@ -254,6 +296,7 @@ export class AdminServicesService {
       active?: boolean;
       hidden?: boolean;
       fulfillmentChannel?: FulfillmentChannel;
+      whatsappGroupId?: string | null;
       assignedAdminIds?: string[];
       inputType?: unknown;
       menu?: ServiceMenu;
@@ -262,6 +305,11 @@ export class AdminServicesService {
     const existing = await this.prisma.service.findUnique({ where: { id } });
     if (!existing) throw new NotFoundException("Layanan tidak ditemukan.");
     const fulfillmentChannel = input.fulfillmentChannel ?? existing.fulfillmentChannel;
+    const whatsappGroupId = whatsappGroupFor(
+      fulfillmentChannel,
+      input.whatsappGroupId,
+      existing.whatsappGroupId,
+    );
     const route = await this.supplierRoute(fulfillmentChannel, input, existing);
     const menu = input.menu ?? existing.menu;
     const inputType = inputTypeFor(
@@ -335,6 +383,7 @@ export class AdminServicesService {
           ...(input.fulfillmentChannel
             ? { fulfillmentChannel: input.fulfillmentChannel }
             : {}),
+          whatsappGroupId,
           ...route,
           menu,
           inputType,

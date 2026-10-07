@@ -1,6 +1,6 @@
 import { Injectable, Logger } from "@nestjs/common";
 import type { Prisma } from "@prisma/client";
-import { whatsappAdminConfig } from "../config/env";
+import { whatsappAdminEnabled } from "../config/env";
 import { PrismaService } from "../prisma/prisma.service";
 import { WahaClient, messageKey } from "./waha.client";
 import {
@@ -12,7 +12,7 @@ import { backoffMs, shouldGiveUp } from "./whatsapp-retry-policy";
 
 const STALE_SENDING_MS = 5 * 60_000;
 
-/** Order cards in the admin WhatsApp group for `whatsapp_admin` services. */
+/** Order cards in each `whatsapp_admin` service's admin WhatsApp group. */
 @Injectable()
 export class WhatsappAdminService {
   private readonly logger = new Logger(WhatsappAdminService.name);
@@ -23,13 +23,12 @@ export class WhatsappAdminService {
   ) {}
 
   enabled(): boolean {
-    return whatsappAdminConfig() !== null;
+    return whatsappAdminEnabled();
   }
 
   /** Queues a card per WhatsApp Admin order inside the settle transaction; returns the row ids. */
   async enqueueOrders(tx: Prisma.TransactionClient, orderIds: string[]): Promise<string[]> {
-    const config = whatsappAdminConfig();
-    if (!config || !orderIds.length) return [];
+    if (!this.enabled() || !orderIds.length) return [];
     const orders = await tx.order.findMany({
       where: {
         id: { in: orderIds },
@@ -43,16 +42,23 @@ export class WhatsappAdminService {
         imei: true,
         notes: true,
         isTest: true,
-        service: { select: { name: true, inputType: true } },
+        service: { select: { name: true, inputType: true, whatsappGroupId: true } },
       },
     });
     const ids: string[] = [];
     for (const order of orders) {
+      const chatId = order.service.whatsappGroupId;
+      if (!chatId) {
+        this.logger.warn(
+          `No WhatsApp group set for "${order.service.name}"; ${order.orderId} gets no card`,
+        );
+        continue;
+      }
       const row = await tx.orderWhatsappMessage.upsert({
         where: { orderId: order.id },
         create: {
           orderId: order.id,
-          chatId: config.groupChatId,
+          chatId,
           text: adminOrderCardText({
             orderId: order.orderId,
             serviceName: order.service.name,

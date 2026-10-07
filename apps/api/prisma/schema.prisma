@@ -328,6 +328,8 @@ model Service {
   hidden             Boolean             @default(false)
   /// Where paid orders are processed: Telegram operators, or the WhatsApp group (Roamercheck).
   fulfillmentChannel FulfillmentChannel  @default(telegram) @map("fulfillment_channel")
+  /// WhatsApp group (`…@g.us`) that gets the order cards of a `whatsapp_admin` service.
+  whatsappGroupId    String?             @map("whatsapp_group_id")
   supplierId         String?             @map("supplier_id")
   /// Remote Dhru SERVICEID at the supplier.
   supplierServiceId  String?             @map("supplier_service_id")
@@ -351,6 +353,8 @@ model Service {
   requirePassword    Boolean             @default(false) @map("require_password")
   /// Key Lock is stored in Order.keyLock and sent to the supplier as KEYLOCK.
   requireKeyLock     Boolean             @default(false) @map("require_key_lock")
+  /// Stored in Order.signInPicture; sent to the supplier as the "Picture on sign-in page" custom field.
+  requireSignInPicture Boolean           @default(false) @map("require_sign_in_picture")
   createdAt          DateTime            @default(now()) @map("created_at")
   updatedAt          DateTime            @updatedAt @map("updated_at")
   supplier           Supplier?           @relation(fields: [supplierId], references: [id], onDelete: SetNull)
@@ -443,6 +447,7 @@ model Order {
   /// Account password for Service.requirePassword, AES-GCM encrypted (supplier-secret).
   passwordEnc           String?                     @map("password_enc")
   keyLock               String?                     @map("key_lock")
+  signInPicture         String?                     @map("sign_in_picture")
   status                OrderStatus                 @default(waiting_payment)
   /// Snapshot of the user's testing role at creation; excluded from statistics.
   isTest                Boolean                     @default(false) @map("is_test")

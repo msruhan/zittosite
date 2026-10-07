@@ -103,13 +103,9 @@ export function whatsappConfig() {
   return { ...connection, groupChatId };
 }
 
-/** Admin WhatsApp group for `whatsapp_admin` services; null (off) until configured. */
-export function whatsappAdminConfig() {
-  const connection = wahaConnection();
-  const groupChatId = process.env.WA_ADMIN_GROUP_CHAT_ID?.trim() || "";
-  if (connection?.mock) return { ...connection, groupChatId: groupChatId || "mock-admin@g.us" };
-  if (!connection || !groupChatId) return null;
-  return { ...connection, groupChatId };
+/** Order cards for `whatsapp_admin` services; each service picks its own group. */
+export function whatsappAdminEnabled(): boolean {
+  return wahaConnection() !== null;
 }
 
 /** HMAC key WAHA signs webhook events with; inbound events are ignored without it. */
@@ -172,10 +168,8 @@ export function validateStartupEnv(warn: (message: string) => void) {
   } else if (!wahaInboundConfig()) {
     warn("WAHA_WEBHOOK_SECRET / WA_PROCESSOR_NUMBER not set — Roamercheck status updates are off");
   }
-  if (wahaConnection() && !whatsappAdminConfig()) {
-    warn("WA_ADMIN_GROUP_CHAT_ID not set — WhatsApp Admin services get no group messages");
-  } else if (whatsappAdminConfig() && !wahaWebhookSecret()) {
-    warn("WAHA_WEBHOOK_SECRET not set — admin reactions in the WhatsApp group are ignored");
+  if (whatsappAdminEnabled() && !wahaWebhookSecret()) {
+    warn("WAHA_WEBHOOK_SECRET not set — admin reactions in WhatsApp groups are ignored");
   }
 
   if (!webPublicUrl().startsWith("https://")) {

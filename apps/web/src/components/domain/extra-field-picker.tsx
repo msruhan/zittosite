@@ -8,7 +8,7 @@ export function ExtraFieldPicker({
   value,
   onToggle,
   error,
-  hint = "Yang dicentang wajib diisi user saat order dan ikut dikirim ke supplier (QNT, EMAIL, USERNAME, PASSWORD, KEYLOCK, NOTES). Qnt tidak mengubah harga.",
+  hint = "Yang dicentang wajib diisi user saat order dan ikut dikirim ke supplier (QNT, EMAIL, USERNAME, PASSWORD, KEYLOCK, Picture on sign-in page, NOTES). Qnt tidak mengubah harga.",
 }: {
   value: Partial<Record<ExtraFieldKey, boolean>>;
   onToggle: (key: ExtraFieldKey, checked: boolean) => void;

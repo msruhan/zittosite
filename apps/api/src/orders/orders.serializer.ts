@@ -55,6 +55,7 @@ export function serializeService(
     requireNotes: service.requireNotes,
     requirePassword: service.requirePassword,
     requireKeyLock: service.requireKeyLock,
+    requireSignInPicture: service.requireSignInPicture,
   };
 }
 
@@ -178,6 +179,7 @@ export function serializeOrderListItem(
     email: order.email,
     username: order.username,
     keyLock: order.keyLock,
+    signInPicture: order.signInPicture,
     hasPassword: Boolean(order.passwordEnc),
     // Only admins processing the order see it; customers just get `hasPassword`.
     ...(internal ? { password: revealPassword(order.passwordEnc) } : {}),
