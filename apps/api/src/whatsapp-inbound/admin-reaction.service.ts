@@ -3,6 +3,8 @@ import type { OrderStatus } from "@prisma/client";
 import { whatsappAdminEnabled, whatsappConfig } from "../config/env";
 import { OrdersService } from "../orders/orders.service";
 import { PrismaService } from "../prisma/prisma.service";
+import { AdminNotifyService } from "../telegram/admin-notify.service";
+import { escapeHtml } from "../telegram/telegram-messages";
 import { WahaClient } from "../whatsapp/waha.client";
 import { WhatsappAdminService } from "../whatsapp/whatsapp-admin.service";
 import { adminDailyCountText, type DailyCountRow } from "../whatsapp/whatsapp-messages";
@@ -42,10 +44,13 @@ function wibTime(date: Date): string {
   return `${String(d.getUTCHours()).padStart(2, "0")}:${String(d.getUTCMinutes()).padStart(2, "0")}`;
 }
 
-const FINAL_LABEL: Partial<Record<OrderStatus, string>> = {
-  done: "Done",
-  rejected: "ditolak",
-  cancel: "dibatalkan",
+/** Reactions on finished orders are ignored without a word. */
+const FINAL_STATUSES = new Set<OrderStatus>(["done", "rejected", "cancel"]);
+
+const ACTION_LABEL: Record<ReactionAction, string> = {
+  take: "⏳ Proses",
+  done: "✅ Done",
+  reject: "❌ Tolak",
 };
 
 type ReactingAdmin = { id: string; fullName: string; status: string };
@@ -61,6 +66,7 @@ export class AdminReactionService {
     private readonly orders: OrdersService,
     private readonly waha: WahaClient,
     private readonly cards: WhatsappAdminService,
+    private readonly notify: AdminNotifyService,
   ) {}
 
   /** Returns a short outcome for logs. */
@@ -79,23 +85,18 @@ export class AdminReactionService {
     if (payload.from !== card.chatId) return "ignored: other chat";
     const order = card.order;
 
+    // The group gets no replies; Super Admins follow status changes (and refusals) on Telegram.
     const admin = await this.resolveAdmin(payload.participant);
     if (!admin || admin.status !== "active") {
-      await this.cards.reply(order.id, {
-        kind: "refused",
-        message: "Nomor WhatsApp ini belum terdaftar sebagai admin aktif di ZittoSite.",
-      });
+      await this.warnSuperAdmins(
+        order.orderId,
+        action,
+        `pengirim ${jidPhone(String(payload.participant ?? "")) ?? "tidak dikenal"} belum terdaftar sebagai admin aktif.`,
+      );
       return `${order.orderId} ${action}: unknown sender`;
     }
 
-    const final = FINAL_LABEL[order.status];
-    if (final) {
-      const same =
-        (order.status === "done" && action === "done") ||
-        (order.status === "rejected" && action === "reject");
-      if (!same) {
-        await this.cards.reply(order.id, { kind: "refused", message: `Order sudah ${final}.` });
-      }
+    if (FINAL_STATUSES.has(order.status)) {
       return `${order.orderId} ${action}: already ${order.status}`;
     }
     if (action === "take" && order.status === "in_process" && order.assignedAdminId === admin.id) {
@@ -112,19 +113,17 @@ export class AdminReactionService {
           `Reaction ${action} on ${order.orderId} failed: ${err instanceof Error ? err.message : String(err)}`,
         );
       }
-      await this.cards.reply(order.id, { kind: "refused", message });
+      await this.warnSuperAdmins(order.orderId, action, `${admin.fullName}: ${message}`);
       return `${order.orderId} ${action}: refused (${message})`;
     }
-
-    await this.cards.reply(
-      order.id,
-      action === "take"
-        ? { kind: "taken", adminName: admin.fullName }
-        : action === "done"
-          ? { kind: "done", adminName: admin.fullName }
-          : { kind: "rejected", adminName: admin.fullName, refunded: true },
-    );
     return `${order.orderId} ${action}: applied by ${admin.fullName}`;
+  }
+
+  private async warnSuperAdmins(orderId: string, action: ReactionAction, why: string) {
+    await this.notify.notifySuperAdmins(
+      `⚠️ <b>React WhatsApp tidak diproses</b> · ${escapeHtml(orderId)}\n` +
+        `${ACTION_LABEL[action]}: ${escapeHtml(why)}`,
+    );
   }
 
   /** "/hitung" in an admin group: replies with the sender's orders handled today (WIB). */
