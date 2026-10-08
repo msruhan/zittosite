@@ -5,16 +5,18 @@ import {
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
-import type { Supplier } from "@prisma/client";
+import type { Supplier, SupplierKind } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
 import {
   checkSupplierUrl,
   DhruSupplierClient,
   SupplierRequestError,
 } from "./dhru-supplier-client";
+import { GCONTACT_DEFAULT_URL, GCONTACT_SERVICE, GContactClient } from "./gcontact-client";
 import { decryptSupplierKey, encryptSupplierKey, maskSupplierKey } from "./supplier-secret";
 
 type SupplierInput = {
+  kind?: SupplierKind;
   name?: string;
   baseUrl?: string;
   username?: string;
@@ -30,6 +32,13 @@ export function supplierClient(supplier: Supplier): DhruSupplierClient {
   });
 }
 
+export function gcontactClient(supplier: Supplier): GContactClient {
+  return new GContactClient({
+    baseUrl: supplier.baseUrl,
+    token: decryptSupplierKey(supplier.apiKeyEnc),
+  });
+}
+
 function serializeSupplier(supplier: Supplier & { _count?: { services: number } }) {
   let apiKeyHint = "••••";
   try {
@@ -39,6 +48,7 @@ function serializeSupplier(supplier: Supplier & { _count?: { services: number } 
   }
   return {
     id: supplier.id,
+    kind: supplier.kind,
     name: supplier.name,
     baseUrl: supplier.baseUrl,
     username: supplier.username,
@@ -66,17 +76,23 @@ export class SuppliersService {
   }
 
   async create(input: SupplierInput) {
+    const kind = input.kind ?? "dhru";
+    const gcontact = kind === "gcontact";
     const name = input.name?.trim() ?? "";
-    const baseUrl = input.baseUrl?.trim() ?? "";
-    const username = input.username?.trim() ?? "";
+    const baseUrl = input.baseUrl?.trim() || (gcontact ? GCONTACT_DEFAULT_URL : "");
+    const username = gcontact ? "" : input.username?.trim() ?? "";
     const apiKey = input.apiKey?.trim() ?? "";
-    if (!name || !baseUrl || !username || !apiKey) {
+    if (gcontact && (!name || !apiKey)) {
+      throw new BadRequestException("Nama dan token GContact wajib diisi.");
+    }
+    if (!gcontact && (!name || !baseUrl || !username || !apiKey)) {
       throw new BadRequestException("Nama, URL, username, dan API key wajib diisi.");
     }
     const urlError = checkSupplierUrl(baseUrl);
     if (urlError) throw new BadRequestException(urlError);
     const row = await this.prisma.supplier.create({
       data: {
+        kind,
         name,
         baseUrl,
         username,
@@ -87,9 +103,10 @@ export class SuppliersService {
     return serializeSupplier(row);
   }
 
+  /** The kind is fixed at creation: services and orders depend on it. */
   async update(id: string, input: SupplierInput) {
-    await this.find(id);
-    if (input.baseUrl !== undefined) {
+    const existing = await this.find(id);
+    if (input.baseUrl?.trim()) {
       const urlError = checkSupplierUrl(input.baseUrl);
       if (urlError) throw new BadRequestException(urlError);
     }
@@ -99,7 +116,9 @@ export class SuppliersService {
       data: {
         ...(input.name?.trim() ? { name: input.name.trim() } : {}),
         ...(input.baseUrl?.trim() ? { baseUrl: input.baseUrl.trim() } : {}),
-        ...(input.username?.trim() ? { username: input.username.trim() } : {}),
+        ...(input.username?.trim() && existing.kind === "dhru"
+          ? { username: input.username.trim() }
+          : {}),
         ...(apiKey ? { apiKeyEnc: encryptSupplierKey(apiKey) } : {}),
         ...(typeof input.isActive === "boolean" ? { isActive: input.isActive } : {}),
       },
@@ -127,6 +146,12 @@ export class SuppliersService {
     let lastBalance = supplier.lastBalance;
     let remoteServiceCount = supplier.remoteServiceCount;
     try {
+      if (supplier.kind === "gcontact") {
+        const reply = await gcontactClient(supplier).checkToken();
+        if (reply.ok) remoteServiceCount = 1;
+        else lastError = reply.message;
+        return await this.saveCheck(id, { lastBalance, lastError, remoteServiceCount });
+      }
       const client = supplierClient(supplier);
       const reply = await client.accountInfo();
       if (reply.ok) {
@@ -140,9 +165,16 @@ export class SuppliersService {
     } catch (err) {
       lastError = err instanceof Error ? err.message : String(err);
     }
+    return this.saveCheck(id, { lastBalance, lastError, remoteServiceCount });
+  }
+
+  private async saveCheck(
+    id: string,
+    check: { lastBalance: string | null; lastError: string | null; remoteServiceCount: number | null },
+  ) {
     const row = await this.prisma.supplier.update({
       where: { id },
-      data: { lastBalance, lastError, remoteServiceCount, lastCheckedAt: new Date() },
+      data: { ...check, lastCheckedAt: new Date() },
       include: { _count: { select: { services: true } } },
     });
     return serializeSupplier(row);
@@ -150,6 +182,7 @@ export class SuppliersService {
 
   async remoteServices(id: string) {
     const supplier = await this.find(id);
+    if (supplier.kind === "gcontact") return [GCONTACT_SERVICE];
     try {
       const reply = await supplierClient(supplier).serviceList();
       if (!reply.ok) throw new BadGatewayException(`Supplier: ${reply.message}`);

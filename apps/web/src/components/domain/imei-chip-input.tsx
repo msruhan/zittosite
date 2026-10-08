@@ -18,6 +18,7 @@ const PLACEHOLDER: Record<InputType, string> = {
   sn: "Contoh F2LX12AB9Q0D",
   ecid: "Contoh 000A1B2C3D4E5F",
   imei_sn: "Contoh 356938035643809 atau F2LX12AB9Q0D",
+  phone: "Contoh 081234567890",
 };
 
 /**
@@ -89,7 +90,9 @@ export function ImeiChipInput({
     const text = event.clipboardData.getData("text");
     const trimmed = text.trim();
     const single =
-      inputType === "imei"
+      inputType === "phone"
+        ? !/[\r\n,;]/.test(trimmed)
+        : inputType === "imei"
         ? !/[\r\n,;\s]/.test(trimmed) && text.replace(/\D/g, "").length <= IMEI_LENGTH
         : !/[\r\n,;]/.test(trimmed);
     if (single) return;
@@ -139,7 +142,7 @@ export function ImeiChipInput({
         ref={inputRef}
         id={id}
         name="imei"
-        inputMode={inputType === "imei" ? "numeric" : "text"}
+        inputMode={inputType === "imei" ? "numeric" : inputType === "phone" ? "tel" : "text"}
         autoCapitalize="characters"
         autoComplete="off"
         spellCheck={false}

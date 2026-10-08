@@ -62,8 +62,12 @@ export interface ServiceGroup {
   createdAt: string;
 }
 
+export type SupplierKind = "dhru" | "gcontact";
+
 export interface Supplier {
   id: string;
+  /** dhru: Dhru Fusion panel; gcontact: GContact+ phone lookup (no username). */
+  kind: SupplierKind;
   name: string;
   baseUrl: string;
   username: string;
@@ -112,7 +116,7 @@ export interface Service {
   serviceGroupId?: string | null;
   serviceGroupName?: string | null;
   /** What the user enters per order; SN/ECID/none only for Layanan Spesial. */
-  inputType?: "imei" | "sn" | "ecid" | "imei_sn" | "none";
+  inputType?: "imei" | "sn" | "ecid" | "imei_sn" | "phone" | "none";
   /** Layanan Spesial only: extra fields the user must fill per order. */
   requireQnt?: boolean;
   requireEmail?: boolean;

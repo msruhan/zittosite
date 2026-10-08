@@ -1,5 +1,5 @@
 import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from "@nestjs/common";
-import type { Supplier } from "@prisma/client";
+import type { Prisma, Supplier } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
 import { OrdersService } from "../orders/orders.service";
 import { SupplierDispatch } from "../orders/supplier-dispatch";
@@ -11,7 +11,7 @@ import { SupplierRequestError, supplierInputFields } from "./dhru-supplier-clien
 import { customerText } from "../orders/customer-text";
 import { checkSupplierCost } from "./supplier-price-guard";
 import { decryptSupplierKey } from "./supplier-secret";
-import { supplierClient } from "./suppliers.service";
+import { gcontactClient, supplierClient } from "./suppliers.service";
 
 export const MAX_SUBMIT_ATTEMPTS = 5;
 const DEFAULT_INTERVAL_MS = 5_000;
@@ -28,6 +28,9 @@ const FIRST_CHECK_DELAY_MS = 2_000;
 const PRICE_LIST_TTL_MS = 2 * 60_000;
 
 type PriceList = { at: number; currency: string; credits: Map<string, number> };
+type PendingOrder = Prisma.OrderGetPayload<{ include: { service: { include: { supplier: true } } } }>;
+/** Why a submit did not go through; `refusal` is the supplier's message, safe to show once rewritten. */
+type SubmitFailure = { failure: string; retryable: boolean; refusal: string | null };
 
 /** Supplier refusals that are about our own account and worth retrying. */
 export function isRetryableSupplierError(message: string): boolean {
@@ -149,63 +152,20 @@ export class SupplierWorkerService implements OnModuleInit, OnModuleDestroy {
       if (claimed.count !== 1) continue;
       const attempts = order.supplierAttempts + 1;
 
-      let failure: string;
-      let retryable: boolean;
-      /** The supplier's own refusal message, safe to show the customer once rewritten. */
-      let refusal: string | null;
+      let outcome: SubmitFailure | null;
       try {
-        const prices = await this.priceList(supplier);
-        const cost = checkSupplierCost({
-          credit: prices.credits.get(order.service.supplierServiceId!),
-          units: order.quantity ?? 1,
-          currency: prices.currency,
-          usdRate: await this.usdRate.get(),
-          chargedPrice: order.price,
-        });
-        if (!cost.ok) {
-          await this.hold(order, supplier, cost.reason);
-          continue;
-        }
-        const reply = await supplierClient(supplier).placeOrder(
-          order.service.supplierServiceId!,
-          order.service.inputType === "none" ? null : order.imei,
-          {
-            ...supplierInputFields(order.service.inputType, order.imei),
-            // Optional notes are meant for our admins; only a required Notes field goes upstream.
-            ...supplierExtraFields({
-              ...order,
-              notes: order.service.requireNotes ? order.notes : null,
-              password: order.passwordEnc ? decryptSupplierKey(order.passwordEnc) : null,
-            }),
-          },
-        );
-        if (reply.ok) {
-          await this.prisma.order.update({
-            where: { id: order.id },
-            data: {
-              supplierRef: reply.data.referenceId,
-              supplierSubmittedAt: new Date(),
-              supplierCheckedAt: null,
-              supplierError: null,
-            },
-          });
-          await this.orders.applyProcessorUpdate(
-            order.id,
-            { kind: "processing", note: "Sedang diproses otomatis." },
-            this.actor(),
-          );
-          this.kick(FIRST_CHECK_DELAY_MS);
-          continue;
-        }
-        failure = reply.message;
-        retryable = isRetryableSupplierError(reply.message);
-        refusal = retryable ? null : reply.message;
+        outcome =
+          supplier.kind === "gcontact"
+            ? await this.submitLookup(order, supplier)
+            : await this.submitDhru(order, supplier);
       } catch (err) {
-        failure = errorText(err);
-        retryable = err instanceof SupplierRequestError;
-        refusal = null;
+        const failure = errorText(err);
+        const retryable = err instanceof SupplierRequestError;
         if (!retryable) this.logger.error(`Supplier submit ${order.orderId} failed: ${failure}`);
+        outcome = { failure, retryable, refusal: null };
       }
+      if (!outcome) continue;
+      const { failure, retryable, refusal } = outcome;
 
       await this.prisma.order.update({
         where: { id: order.id },
@@ -224,6 +184,112 @@ export class SupplierWorkerService implements OnModuleInit, OnModuleDestroy {
         );
       }
     }
+  }
+
+  /** Places the order at a Dhru supplier; null once submitted (or held for review). */
+  private async submitDhru(order: PendingOrder, supplier: Supplier): Promise<SubmitFailure | null> {
+    const prices = await this.priceList(supplier);
+    const cost = checkSupplierCost({
+      credit: prices.credits.get(order.service.supplierServiceId!),
+      units: order.quantity ?? 1,
+      currency: prices.currency,
+      usdRate: await this.usdRate.get(),
+      chargedPrice: order.price,
+    });
+    if (!cost.ok) {
+      await this.hold(order, supplier, cost.reason);
+      return null;
+    }
+    const reply = await supplierClient(supplier).placeOrder(
+      order.service.supplierServiceId!,
+      order.service.inputType === "none" ? null : order.imei,
+      {
+        ...supplierInputFields(order.service.inputType, order.imei),
+        // Optional notes are meant for our admins; only a required Notes field goes upstream.
+        ...supplierExtraFields({
+          ...order,
+          notes: order.service.requireNotes ? order.notes : null,
+          password: order.passwordEnc ? decryptSupplierKey(order.passwordEnc) : null,
+        }),
+      },
+    );
+    if (reply.ok) {
+      await this.prisma.order.update({
+        where: { id: order.id },
+        data: {
+          supplierRef: reply.data.referenceId,
+          supplierSubmittedAt: new Date(),
+          supplierCheckedAt: null,
+          supplierError: null,
+        },
+      });
+      await this.orders.applyProcessorUpdate(
+        order.id,
+        { kind: "processing", note: "Sedang diproses otomatis." },
+        this.actor(),
+      );
+      this.kick(FIRST_CHECK_DELAY_MS);
+      return null;
+    }
+    const retryable = isRetryableSupplierError(reply.message);
+    return { failure: reply.message, retryable, refusal: retryable ? null : reply.message };
+  }
+
+  /** GContact answers at once, so a successful lookup completes the order immediately. */
+  private async submitLookup(order: PendingOrder, supplier: Supplier): Promise<SubmitFailure | null> {
+    const reply = await gcontactClient(supplier).lookup(order.imei);
+    if (!reply.ok) {
+      if (reply.account) await this.flagLookupAccount(order.orderId, supplier, reply.message);
+      return {
+        failure: reply.message,
+        retryable: reply.account,
+        refusal: reply.account ? null : reply.message,
+      };
+    }
+    const { lines, remainingQuota } = reply.data;
+    await this.prisma.order.update({
+      where: { id: order.id },
+      data: {
+        supplierRef: `GC-${order.orderId}`,
+        supplierSubmittedAt: new Date(),
+        supplierCheckedAt: new Date(),
+        supplierError: null,
+      },
+    });
+    await this.prisma.supplier.update({
+      where: { id: supplier.id },
+      data: {
+        ...(remainingQuota !== null ? { lastBalance: `${remainingQuota} kuota` } : {}),
+        lastError: null,
+        lastCheckedAt: new Date(),
+      },
+    });
+    await this.orders.applyProcessorUpdate(
+      order.id,
+      { kind: "done", note: lines.join("\n") },
+      this.actor(),
+    );
+    return null;
+  }
+
+  /** Token, quota or rate-limit trouble is ours: shown on the supplier and sent to Super Admins once. */
+  private async flagLookupAccount(orderId: string, supplier: Supplier, message: string) {
+    const error = `GContact: ${message}`;
+    const current = await this.prisma.supplier.findUnique({
+      where: { id: supplier.id },
+      select: { lastError: true },
+    });
+    if (current?.lastError === error) return;
+    await this.prisma.supplier.update({ where: { id: supplier.id }, data: { lastError: error } });
+    this.logger.warn(`GContact lookup ${orderId} refused for the account: ${message}`);
+    await this.notify.notifySuperAdmins(
+      [
+        `⚠️ <b>${escapeHtml(supplier.name)} bermasalah</b>`,
+        escapeHtml(message),
+        "",
+        `Order ${escapeHtml(orderId)} dicoba ulang otomatis; cek token/kuota di menu Supplier.`,
+      ].join("\n"),
+    );
   }
 
   /** Live supplier credits per service; a failed fetch throws so the submit is retried. */
@@ -289,6 +355,7 @@ export class SupplierWorkerService implements OnModuleInit, OnModuleDestroy {
         status: "in_process",
         supplierRef: { not: null },
         supplierId: { not: null },
+        supplier: { kind: "dhru" },
         OR: [
           { supplierCheckedAt: null },
           { supplierCheckedAt: { lt: due } },

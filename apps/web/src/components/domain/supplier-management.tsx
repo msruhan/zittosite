@@ -18,10 +18,13 @@ import { TBody, TD, TH, THead, TR, Table, TableScroll } from "@/components/ui/ta
 import { ApiError, api } from "@/lib/api";
 import { formatDateTime } from "@/lib/format";
 import { matchesSearch } from "@/lib/search";
-import type { Supplier } from "@/lib/types";
+import type { Supplier, SupplierKind } from "@/lib/types";
+
+const GCONTACT_URL = "https://gcontact.id/api";
 
 type SupplierDraft = {
   id: string | null;
+  kind: SupplierKind;
   name: string;
   baseUrl: string;
   username: string;
@@ -53,6 +56,7 @@ export function SupplierManagement({ initialSuppliers }: { initialSuppliers: Sup
   function openEdit(supplier?: Supplier) {
     setEditing({
       id: supplier?.id ?? null,
+      kind: supplier?.kind ?? "dhru",
       name: supplier?.name ?? "",
       baseUrl: supplier?.baseUrl ?? "",
       username: supplier?.username ?? "",
@@ -70,6 +74,12 @@ export function SupplierManagement({ initialSuppliers }: { initialSuppliers: Sup
       setSuppliers((current) => current.map((s) => (s.id === updated.id ? updated : s)));
       if (updated.lastError) {
         toast.error("Koneksi gagal", { description: updated.lastError });
+      } else if (updated.kind === "gcontact") {
+        toast.success("Token GContact valid", {
+          description: updated.lastBalance
+            ? `Sisa ${updated.lastBalance} (terbaca dari order terakhir).`
+            : "Sisa kuota terbaca setelah order pertama.",
+        });
       } else if (updated.remoteServiceCount === 0) {
         toast.warning("Terhubung, tetapi supplier tidak membuka layanan", {
           description: `Saldo terbaca (${updated.lastBalance ?? "-"}), namun ${updated.name} mengirim daftar layanan kosong. Aktifkan dan beri harga layanan di panel supplier, lalu sinkron ulang.`,
@@ -153,7 +163,9 @@ export function SupplierManagement({ initialSuppliers }: { initialSuppliers: Sup
                       </p>
                     </TD>
                     <TD>
-                      <p className="font-data text-body text-ink">{supplier.username}</p>
+                      <p className="font-data text-body text-ink">
+                        {supplier.kind === "gcontact" ? "GContact+ (token)" : supplier.username}
+                      </p>
                       <p className="font-data text-label text-ink-faint">{supplier.apiKeyHint}</p>
                     </TD>
                     <TD className="whitespace-nowrap">
@@ -294,6 +306,7 @@ function SupplierFormDialog({
   const [saving, setSaving] = React.useState(false);
   const [errors, setErrors] = React.useState<Partial<Record<keyof SupplierDraft, string>>>({});
   const creating = draft.id === null;
+  const gcontact = draft.kind === "gcontact";
 
   function set<K extends keyof SupplierDraft>(key: K, value: SupplierDraft[K]) {
     setDraft((current) => ({ ...current, [key]: value }));
@@ -306,17 +319,20 @@ function SupplierFormDialog({
     if (!/^https?:\/\/\S+$/i.test(draft.baseUrl.trim())) {
       next.baseUrl = "Masukkan URL lengkap, mis. https://api.supplier.com";
     }
-    if (!draft.username.trim()) next.username = "Masukkan username akun di supplier.";
-    if (creating && !draft.apiKey.trim()) next.apiKey = "Masukkan API key dari supplier.";
+    if (!gcontact && !draft.username.trim()) next.username = "Masukkan username akun di supplier.";
+    if (creating && !draft.apiKey.trim()) {
+      next.apiKey = gcontact ? "Masukkan token GContact." : "Masukkan API key dari supplier.";
+    }
     setErrors(next);
     if (Object.keys(next).length) return;
 
     setSaving(true);
     try {
       const body = JSON.stringify({
+        ...(creating ? { kind: draft.kind } : {}),
         name: draft.name.trim(),
         baseUrl: draft.baseUrl.trim(),
-        username: draft.username.trim(),
+        ...(gcontact ? {} : { username: draft.username.trim() }),
         isActive: draft.isActive,
         ...(draft.apiKey.trim() ? { apiKey: draft.apiKey.trim() } : {}),
       });
@@ -352,11 +368,46 @@ function SupplierFormDialog({
       }
     >
       <form id="supplier-form" onSubmit={handleSubmit} noValidate className="space-y-4">
+        <Field
+          label="Jenis supplier"
+          htmlFor="supplierKind"
+          hint={
+            creating
+              ? gcontact
+                ? "Cek nomor HP; hasil langsung keluar, satu order memakai satu kuota."
+                : "Panel Dhru Fusion (iSpider, InfoCeir, nexusone, dll)."
+              : "Jenis tidak bisa diubah setelah supplier dibuat."
+          }
+        >
+          <Select
+            id="supplierKind"
+            value={draft.kind}
+            disabled={!creating}
+            onValueChange={(value) => {
+              const kind = value as SupplierKind;
+              setDraft((current) => ({
+                ...current,
+                kind,
+                baseUrl:
+                  kind === "gcontact" && !current.baseUrl.trim()
+                    ? GCONTACT_URL
+                    : kind === "dhru" && current.baseUrl === GCONTACT_URL
+                      ? ""
+                      : current.baseUrl,
+              }));
+              setErrors({});
+            }}
+            options={[
+              { value: "dhru", label: "Dhru Fusion API" },
+              { value: "gcontact", label: "GContact+ (cek nomor HP)" },
+            ]}
+          />
+        </Field>
         <Field label="Nama supplier" htmlFor="supplierName" required error={errors.name}>
           <Input
             id="supplierName"
             value={draft.name}
-            placeholder="CeirBot"
+            placeholder={gcontact ? "GContact" : "CeirBot"}
             invalid={Boolean(errors.name)}
             onChange={(event) => set("name", event.target.value)}
           />
@@ -366,29 +417,35 @@ function SupplierFormDialog({
           htmlFor="supplierUrl"
           required
           error={errors.baseUrl}
-          hint="Domain API supplier. /api/index.php ditambahkan otomatis."
+          hint={
+            gcontact
+              ? "Endpoint GContact, biarkan default."
+              : "Domain API supplier. /api/index.php ditambahkan otomatis."
+          }
         >
           <Input
             id="supplierUrl"
             className="font-data"
             value={draft.baseUrl}
-            placeholder="https://api.infoceir.com"
+            placeholder={gcontact ? GCONTACT_URL : "https://api.infoceir.com"}
             invalid={Boolean(errors.baseUrl)}
             onChange={(event) => set("baseUrl", event.target.value)}
           />
         </Field>
-        <Field label="Username" htmlFor="supplierUsername" required error={errors.username}>
-          <Input
-            id="supplierUsername"
-            className="font-data"
-            value={draft.username}
-            autoComplete="off"
-            invalid={Boolean(errors.username)}
-            onChange={(event) => set("username", event.target.value)}
-          />
-        </Field>
+        {gcontact ? null : (
+          <Field label="Username" htmlFor="supplierUsername" required error={errors.username}>
+            <Input
+              id="supplierUsername"
+              className="font-data"
+              value={draft.username}
+              autoComplete="off"
+              invalid={Boolean(errors.username)}
+              onChange={(event) => set("username", event.target.value)}
+            />
+          </Field>
+        )}
         <Field
-          label="API key"
+          label={gcontact ? "Token" : "API key"}
           htmlFor="supplierKey"
           required={creating}
           error={errors.apiKey}

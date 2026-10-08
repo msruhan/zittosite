@@ -13,15 +13,18 @@ import { Throttle } from "@nestjs/throttler";
 import { AdminAuthGuard } from "../admin/admin-auth.guard";
 import { SuperAdminGuard } from "../admin/super-admin.guard";
 import { AuditLogService } from "../security/audit-log.service";
-import { optBoolean, optString } from "../security/input";
+import { optBoolean, optEnum, optString } from "../security/input";
 import { SENSITIVE_THROTTLE } from "../security/throttle";
 import { SuppliersService } from "./suppliers.service";
 
 type AdminReq = { admin: { sub: string } };
 type Json = Record<string, unknown>;
 
+const SUPPLIER_KINDS = ["dhru", "gcontact"] as const;
+
 function parseSupplier(body: Json) {
   return {
+    kind: optEnum(body.kind, SUPPLIER_KINDS, "Jenis supplier"),
     name: optString(body.name, "Nama supplier", 80),
     baseUrl: optString(body.baseUrl, "URL supplier", 300),
     username: optString(body.username, "Username", 120),

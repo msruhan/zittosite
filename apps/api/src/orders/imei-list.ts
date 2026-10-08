@@ -3,22 +3,35 @@ export const MAX_BULK_IMEIS = 6;
 export const MAX_SPECIAL_BULK = 2;
 
 /** `imei_sn` takes either: 15 digits count as an IMEI, anything else as an SN. */
-export type InputType = "imei" | "sn" | "ecid" | "imei_sn";
+export type InputType = "imei" | "sn" | "ecid" | "imei_sn" | "phone";
 
 export const INPUT_TYPE_LABEL: Record<InputType, string> = {
   imei: "IMEI",
   sn: "SN",
   ecid: "ECID",
   imei_sn: "IMEI/SN",
+  phone: "Nomor HP",
 };
 
 const CODE_MIN = 4;
 const CODE_MAX = 40;
+/** Indonesian mobile number in local form: 08 followed by 8–11 digits. */
+const PHONE_PATTERN = /^08\d{8,11}$/;
 
 export function parseInputType(value: unknown): InputType | undefined {
-  return value === "imei" || value === "sn" || value === "ecid" || value === "imei_sn"
+  return value === "imei" ||
+    value === "sn" ||
+    value === "ecid" ||
+    value === "imei_sn" ||
+    value === "phone"
     ? value
     : undefined;
+}
+
+/** "+62 812-3456-789" / "62812…" / "0812…" → "0812…". */
+export function normalizePhone(raw: string): string {
+  const digits = raw.replace(/\D/g, "");
+  return digits.startsWith("62") ? `0${digits.slice(2)}` : digits;
 }
 
 /** Whether an `imei_sn` value is an IMEI (exactly 15 digits) rather than an SN. */
@@ -32,12 +45,16 @@ export type ImeiListResult =
 
 /** IMEI keeps digits only; SN/ECID keep letters and digits, uppercased. */
 function normalize(raw: string, type: InputType): string {
+  if (type === "phone") return normalizePhone(raw);
   return type === "imei"
     ? raw.replace(/\D/g, "")
     : raw.replace(/[^0-9a-z]/gi, "").toUpperCase();
 }
 
 function lengthError(value: string, type: InputType): string | null {
+  if (type === "phone") {
+    return PHONE_PATTERN.test(value) ? null : "Nomor HP harus diawali 08 dan 10–13 digit.";
+  }
   if (type === "imei") {
     return value.length === IMEI_LENGTH
       ? null

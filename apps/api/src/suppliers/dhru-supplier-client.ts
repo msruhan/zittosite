@@ -62,7 +62,7 @@ function text(value: unknown): string {
 
 /** Dhru carries SN/ECID in their own fields; IMEI already travels as `IMEI`. */
 export function supplierInputFields(
-  inputType: "imei" | "sn" | "ecid" | "imei_sn" | "none",
+  inputType: "imei" | "sn" | "ecid" | "imei_sn" | "phone" | "none",
   value: string,
 ): Record<string, string> {
   if (inputType === "imei_sn") return looksLikeImei(value) ? {} : { SN: value };

@@ -908,6 +908,9 @@ function ServiceFormDialog({
   const costPrice = draft.costPrice ?? 0;
   const margin = draft.price - costPrice;
   const special = draft.fulfillmentChannel === "supplier" && draft.menu === "special";
+  const lookupService =
+    draft.fulfillmentChannel === "supplier" &&
+    suppliers.find((supplier) => supplier.id === draft.supplierId)?.kind === "gcontact";
   const [usdText, setUsdText] = React.useState(() => ({
     price: service.priceUsdCents != null ? (service.priceUsdCents / 100).toFixed(2) : "",
     cost: service.costUsdCents != null ? (service.costUsdCents / 100).toFixed(2) : "",
@@ -1242,8 +1245,16 @@ function ServiceFormDialog({
             usd={special}
             error={errors.supplier}
             onChange={(next) => {
+              const lookup =
+                suppliers.find((supplier) => supplier.id === next.supplierId)?.kind === "gcontact";
               setDraft((current) => ({
                 ...current,
+                // GContact lookups are Layanan Spesial taking a phone number, and only they take one.
+                ...(lookup
+                  ? { menu: "special" as const, inputType: "phone" as const }
+                  : current.inputType === "phone"
+                    ? { inputType: "imei" as const }
+                    : {}),
                 supplierId: next.supplierId,
                 supplierServiceId: next.supplierServiceId,
                 ...(next.credit !== undefined && !special
@@ -1265,6 +1276,7 @@ function ServiceFormDialog({
             <Select
               id="menu"
               value={draft.menu ?? "ceir"}
+              disabled={lookupService}
               onValueChange={(value) =>
               {
                 setDraft((current) => ({
@@ -1304,13 +1316,18 @@ function ServiceFormDialog({
                   }));
                   setErrors((current) => ({ ...current, fields: undefined }));
                 }}
-                options={[
-                  { value: "imei", label: "IMEI (15 digit)" },
-                  { value: "sn", label: "SN (Serial Number)" },
-                  { value: "ecid", label: "ECID" },
-                  { value: "imei_sn", label: "IMEI/SN (user pilih salah satu)" },
-                  { value: "none", label: "Tidak ada (tanpa IMEI/SN/ECID)" },
-                ]}
+                disabled={lookupService}
+                options={
+                  lookupService
+                    ? [{ value: "phone", label: "Nomor HP" }]
+                    : [
+                        { value: "imei", label: "IMEI (15 digit)" },
+                        { value: "sn", label: "SN (Serial Number)" },
+                        { value: "ecid", label: "ECID" },
+                        { value: "imei_sn", label: "IMEI/SN (user pilih salah satu)" },
+                        { value: "none", label: "Tidak ada (tanpa IMEI/SN/ECID)" },
+                      ]
+                }
               />
             </Field>
             <ExtraFieldPicker

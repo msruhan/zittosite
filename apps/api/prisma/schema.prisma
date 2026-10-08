@@ -83,6 +83,8 @@ enum ServiceInputType {
   ecid
   /// Either an IMEI (15 digits) or an SN; sent to the supplier as IMEI or SN accordingly.
   imei_sn
+  /// Indonesian mobile number (08…); only for GContact supplier services.
+  phone
   /// Layanan Spesial without a device value; the order carries only Qnt/Email/Username.
   none
 }
@@ -492,11 +494,19 @@ model Order {
   @@map("orders")
 }
 
-/// Upstream Dhru Fusion panel that supplier-routed services forward orders to.
+enum SupplierKind {
+  /// Dhru Fusion panel: place an order, then poll its status.
+  dhru
+  /// GContact+ phone lookup: one request answers immediately; `username` is unused.
+  gcontact
+}
+
+/// Upstream panel that supplier-routed services forward orders to.
 model Supplier {
-  id                 String    @id @default(cuid())
+  id                 String       @id @default(cuid())
+  kind               SupplierKind @default(dhru)
   name               String
-  baseUrl            String    @map("base_url")
+  baseUrl            String       @map("base_url")
   username           String
   /// AES-256-GCM, see suppliers/supplier-secret.ts.
   apiKeyEnc          String    @map("api_key_enc")

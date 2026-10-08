@@ -92,8 +92,13 @@ export function SupplierImportPanel({
   const [selected, setSelected] = React.useState<Set<string>>(new Set());
   const [markupText, setMarkupText] = React.useState("");
   const [online, setOnline] = React.useState(true);
-  const [menu, setMenu] = React.useState<ServiceMenu>("ceir");
-  const [inputType, setInputType] = React.useState<NonNullable<Service["inputType"]>>("imei");
+  const [menuChoice, setMenu] = React.useState<ServiceMenu>("ceir");
+  const [inputTypeChoice, setInputType] =
+    React.useState<NonNullable<Service["inputType"]>>("imei");
+  /** GContact lookups are always Layanan Spesial taking a phone number. */
+  const gcontact = suppliers.find((s) => s.id === supplierId)?.kind === "gcontact";
+  const menu: ServiceMenu = gcontact ? "special" : menuChoice;
+  const inputType: NonNullable<Service["inputType"]> = gcontact ? "phone" : inputTypeChoice;
   const [extraFields, setExtraFields] = React.useState<ExtraFieldFlags>(NO_EXTRA_FIELDS);
   const [fieldsError, setFieldsError] = React.useState<string>();
 
@@ -313,6 +318,7 @@ export function SupplierImportPanel({
           <Select
             id="import-menu"
             value={menu}
+            disabled={gcontact}
             onValueChange={(value) => {
               setMenu(value as ServiceMenu);
               setMarkupText("");
@@ -332,17 +338,22 @@ export function SupplierImportPanel({
             <Select
               id="import-input-type"
               value={inputType}
+              disabled={gcontact}
               onValueChange={(value) => {
                 setInputType(value as NonNullable<Service["inputType"]>);
                 setFieldsError(undefined);
               }}
-              options={[
-                { value: "imei", label: "IMEI (15 digit)" },
-                { value: "sn", label: "SN (Serial Number)" },
-                { value: "ecid", label: "ECID" },
-                { value: "imei_sn", label: "IMEI/SN (user pilih salah satu)" },
-                { value: "none", label: "Tidak ada (tanpa IMEI/SN/ECID)" },
-              ]}
+              options={
+                gcontact
+                  ? [{ value: "phone", label: "Nomor HP" }]
+                  : [
+                      { value: "imei", label: "IMEI (15 digit)" },
+                      { value: "sn", label: "SN (Serial Number)" },
+                      { value: "ecid", label: "ECID" },
+                      { value: "imei_sn", label: "IMEI/SN (user pilih salah satu)" },
+                      { value: "none", label: "Tidak ada (tanpa IMEI/SN/ECID)" },
+                    ]
+              }
             />
           </Field>
         ) : null}

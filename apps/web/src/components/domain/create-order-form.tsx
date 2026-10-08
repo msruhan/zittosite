@@ -220,7 +220,7 @@ export function CreateOrderForm({
           : `${label} terakhir belum valid: ${lengthProblem}`
         : `${label} terakhir sudah ditambahkan atau melebihi batas. Hapus dulu.`;
     } else if (finalImeis.length === 0) {
-      problem = `Masukkan ${label} perangkat Anda.`;
+      problem = inputType === "phone" ? "Masukkan nomor HP." : `Masukkan ${label} perangkat Anda.`;
     }
     setImeiError(problem);
     if (!serviceId || problem || extrasInvalid) return;
@@ -353,7 +353,9 @@ export function CreateOrderForm({
             ? `${imeis.length}/${maxBulk} IMEI · ${
                 draft.length ? `${draft.length}/${IMEI_LENGTH} digit · ` : ""
               }ketik 15 digit lalu tekan Enter untuk menambah IMEI berikutnya. Ketik *#06# pada perangkat untuk melihat IMEI.`
-            : `${imeis.length}/${maxBulk} ${label} · ketik ${
+            : inputType === "phone"
+              ? `${imeis.length}/${maxBulk} ${label} · ketik nomor HP (08… atau 62…) lalu tekan Enter untuk menambah nomor berikutnya.`
+              : `${imeis.length}/${maxBulk} ${label} · ketik ${
                 inputType === "sn"
                   ? "Serial Number (SN)"
                   : inputType === "imei_sn"

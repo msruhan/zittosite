@@ -1403,7 +1403,12 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
       maxBulk,
     });
     const label = INPUT_TYPE_LABEL[inputType];
-    const inputLabel = service.inputType === "imei" ? "IMEI 15 digit" : `${label} perangkat`;
+    const inputLabel =
+      service.inputType === "imei"
+        ? "IMEI 15 digit"
+        : service.inputType === "phone"
+          ? "Nomor HP (08…)"
+          : `${label} perangkat`;
     const description = descriptionToTelegramHtml(service.description);
     await ctx.answerCallbackQuery();
     await this.replyHtml(

@@ -38,6 +38,7 @@ export function Select({
   placeholder = "Pilih…",
   className,
   invalid,
+  disabled,
   ariaLabel,
 }: {
   id?: string;
@@ -47,10 +48,11 @@ export function Select({
   placeholder?: string;
   className?: string;
   invalid?: boolean;
+  disabled?: boolean;
   ariaLabel?: string;
 }) {
   return (
-    <SelectPrimitive.Root value={value} onValueChange={onValueChange}>
+    <SelectPrimitive.Root value={value} onValueChange={onValueChange} disabled={disabled}>
       <SelectPrimitive.Trigger
         id={id}
         aria-label={ariaLabel}

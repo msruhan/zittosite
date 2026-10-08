@@ -121,7 +121,8 @@ test("supplier fields omit empty values", () => {
 
 test("input type parsing and Telegram eligibility", () => {
   assert.equal(parseServiceInputType("none"), "none");
-  assert.equal(parseServiceInputType("phone"), undefined);
+  assert.equal(parseServiceInputType("phone"), "phone");
+  assert.equal(parseServiceInputType("email"), undefined);
   assert.equal(needsExtraInput({ ...NONE, inputType: "imei" }), false);
   assert.equal(needsExtraInput({ ...NONE, inputType: "none" }), true);
   assert.equal(needsExtraInput({ ...NONE, requireEmail: true, inputType: "sn" }), true);

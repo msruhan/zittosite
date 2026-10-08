@@ -87,7 +87,9 @@ function inputTypeFor(
   if (!isSpecialService(service)) return "imei";
   if (requested === undefined) return current;
   const type = parseServiceInputType(requested);
-  if (!type) throw new BadRequestException("Jenis input harus IMEI, SN, ECID, atau tidak ada.");
+  if (!type) {
+    throw new BadRequestException("Jenis input harus IMEI, SN, ECID, IMEI/SN, Nomor HP, atau tidak ada.");
+  }
   return type;
 }
 
@@ -226,7 +228,10 @@ export class AdminServicesService {
     const whatsappGroupId = whatsappGroupFor(fulfillmentChannel, input.whatsappGroupId);
     const route = await this.supplierRoute(fulfillmentChannel, input);
     const menu = input.menu ?? "ceir";
-    const inputType = inputTypeFor({ fulfillmentChannel, menu }, input.inputType);
+    const inputType = await this.phoneInputFor(
+      route.supplierId,
+      inputTypeFor({ fulfillmentChannel, menu }, input.inputType),
+    );
     const extraFields = extraFieldsFor({ fulfillmentChannel, menu }, inputType, input);
     const special = isSpecialService({ fulfillmentChannel, menu });
     if (special && input.priceUsdCents === undefined) {
@@ -312,10 +317,9 @@ export class AdminServicesService {
     );
     const route = await this.supplierRoute(fulfillmentChannel, input, existing);
     const menu = input.menu ?? existing.menu;
-    const inputType = inputTypeFor(
-      { fulfillmentChannel, menu },
-      input.inputType,
-      existing.inputType,
+    const inputType = await this.phoneInputFor(
+      route.supplierId,
+      inputTypeFor({ fulfillmentChannel, menu }, input.inputType, existing.inputType),
     );
     const extraFields = extraFieldsFor({ fulfillmentChannel, menu }, inputType, input, existing);
     const special = isSpecialService({ fulfillmentChannel, menu });
@@ -536,6 +540,26 @@ export class AdminServicesService {
     const supplier = await this.prisma.supplier.findUnique({ where: { id: supplierId } });
     if (!supplier) throw new BadRequestException("Supplier tidak ditemukan.");
     return { supplierId, supplierServiceId };
+  }
+
+  /** GContact services always take a phone number, and only they may. */
+  private async phoneInputFor(
+    supplierId: string | null,
+    inputType: ServiceInputType,
+  ): Promise<ServiceInputType> {
+    const supplier = supplierId
+      ? await this.prisma.supplier.findUnique({ where: { id: supplierId }, select: { kind: true } })
+      : null;
+    if (supplier?.kind === "gcontact") {
+      if (inputType !== "phone") {
+        throw new BadRequestException("Layanan GContact harus memakai jenis input Nomor HP.");
+      }
+      return inputType;
+    }
+    if (inputType === "phone") {
+      throw new BadRequestException("Jenis input Nomor HP hanya untuk layanan supplier GContact.");
+    }
+    return inputType;
   }
 
   /** Slug of the requested code (or name), suffixed `-2`, `-3`, … until unused. */
