@@ -25,6 +25,26 @@ test("HTML supplier replies become plain lines", () => {
   assert.deepEqual(resultNoteLines("A &amp; B<br/>&lt;ok&gt;"), ["A & B", "<ok>"]);
 });
 
+test("tables, lists, font colors and JSON replies become plain lines", () => {
+  assert.deepEqual(
+    resultNoteLines(
+      '<table><tr><th>Model</th><td>iPhone 11</td></tr><tr><td>Status</td><td><font color="red">Blacklisted</font></td></tr><tr><td>a</td><td>b</td><td>c</td></tr></table>',
+    ),
+    ["Model: iPhone 11", "Status: 🔴 Blacklisted", "a · b · c"],
+  );
+  assert.deepEqual(resultNoteLines("<b>Result</b><ul><li>One &amp; two</li><li>Three</li></ul>"), [
+    "Result",
+    "• One & two",
+    "• Three",
+  ]);
+  assert.deepEqual(resultNoteLines('{"message":"successfully"}'), ["Message: successfully"]);
+  assert.deepEqual(resultNoteLines('{"status":"success","order_id":123,"data":{"x":1}}'), [
+    "Status: success",
+    "Order id: 123",
+  ]);
+  assert.deepEqual(resultNoteLines("Carrier: AT&amp;T"), ["Carrier: AT&T"]);
+});
+
 test("history replies drop the duplicated bare timestamps", () => {
   assert.deepEqual(resultNoteLines(INFOCEIR_HISTORY), [
     "Result: 3 entries",

@@ -9,6 +9,11 @@ export function reactionAction(emoji: string): ReactionAction | null {
   return null;
 }
 
+/** "/hitung" (optionally followed by text) asks for the sender's daily order count. */
+export function isCountCommand(text: string): boolean {
+  return /^\/hitung(?:\s|$)/i.test(text.trim());
+}
+
 /** Digits of a WhatsApp phone JID (`628…@c.us` / `@s.whatsapp.net`); null for LIDs and groups. */
 export function jidPhone(jid: string): string | null {
   const match = /^(\d{6,20})(?::\d+)?@(c\.us|s\.whatsapp\.net)$/.exec(jid);

@@ -49,6 +49,13 @@ export class WahaWebhookController {
     try {
       if (body.event === "message") {
         const payload = body.payload as WahaMessagePayload;
+        const command = await this.reactions.handleCommand(payload);
+        if (command !== null) {
+          if (!command.startsWith("ignored: other") && command !== "off") {
+            this.logger.log(`WAHA command: ${command}`);
+          }
+          return { received: true };
+        }
         const outcome = await this.roamercheck.handle(payload);
         if (!outcome.startsWith("ignored: other") && outcome !== "off") {
           this.logger.log(`WAHA message ${String(payload.id ?? "?")}: ${outcome}`);

@@ -4,16 +4,16 @@ import { Card, CardBody, CardHeader, DetailRow } from "@/components/ui/card";
 import { DataValue, TicketId } from "@/components/ui/data-value";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { CancelOrderButton } from "@/components/domain/cancel-order-button";
-import { CeirResultView } from "@/components/domain/ceir-result-view";
-import { parseCeirResult } from "@/lib/ceir-result";
+import { CeirResultView, isStructuredResult } from "@/components/domain/ceir-result-view";
 import { deviceLabel, orderExtraRows } from "@/lib/order-fields";
 import { formatDateTime, formatRupiah } from "@/lib/format";
+import { resultPlainText } from "@/lib/supplier-result";
 import type { OrderDetail } from "@/lib/types";
 
 /** Supplier results arrive as "Result: UNKNOWN"; only the value is shown. */
 function resultText(order: OrderDetail): string | null {
   if (order.result?.resultNote) {
-    return order.result.resultNote.replace(/^\s*result\s*:\s*/i, "").trim();
+    return resultPlainText(order.result.resultNote).replace(/^\s*result\s*:\s*/i, "").trim();
   }
   if (order.status === "rejected") return order.statusReason || "Ditolak";
   if (order.status === "waiting_payment") return null;
@@ -56,7 +56,7 @@ export function CeirOrderDetail({ order }: { order: OrderDetail }) {
           </DetailRow>
         </dl>
 
-        {order.result && parseCeirResult(order.result.resultNote) ? (
+        {order.result && isStructuredResult(order.result.resultNote) ? (
           <CeirResultView text={order.result.resultNote} className="mt-4" />
         ) : result ? (
           <div className="mt-4 flex items-baseline justify-between gap-4 rounded-md border border-hairline bg-mist px-4 py-3">

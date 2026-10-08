@@ -77,3 +77,42 @@ export function adminReactionReplyText(reply: AdminReactionReply): string {
       return `⚠️ ${reply.message}`;
   }
 }
+
+export type DailyCountRow = {
+  /** "HH:mm" WIB. */
+  time: string;
+  imei: string;
+  status: "in_process" | "done" | "rejected";
+};
+
+const DAILY_COUNT_MARK: Record<DailyCountRow["status"], string> = {
+  in_process: "⏳",
+  done: "✅",
+  rejected: "❌",
+};
+
+/** Reply to "/hitung": the orders an admin handled today, oldest first. */
+export function adminDailyCountText(input: {
+  adminName: string;
+  /** "dd-mm-yyyy" WIB. */
+  date: string;
+  rows: DailyCountRow[];
+}): string {
+  const count = (status: DailyCountRow["status"]) =>
+    input.rows.filter((row) => row.status === status).length;
+  return [
+    `📊 *Order Hari Ini — ${input.adminName}*`,
+    `📅 ${input.date}`,
+    "",
+    ...(input.rows.length
+      ? input.rows.map(
+          (row, i) => `${i + 1}. [${row.time}] ${row.imei} ${DAILY_COUNT_MARK[row.status]}`,
+        )
+      : ["_Belum ada order yang diproses hari ini._"]),
+    "",
+    `Total IMEI masuk : ${input.rows.length}`,
+    `✅ Done : ${count("done")}`,
+    `⏳ Proses : ${count("in_process")}`,
+    `❌ Ditolak : ${count("rejected")}`,
+  ].join("\n");
+}

@@ -1,4 +1,5 @@
 import ExcelJS from "exceljs";
+import { resultNoteLines } from "../telegram/result-note";
 
 const WIB_OFFSET_MS = 7 * 60 * 60 * 1000;
 const RUPIAH_FORMAT = '"Rp" #,##0;[Red]-"Rp" #,##0';
@@ -170,7 +171,7 @@ const COLUMNS: Column[] = [
     value: (r) =>
       r.result ? (r.result.resultStatus === "success" ? "Berhasil" : "Gagal") : "",
   },
-  { header: "Catatan Hasil", width: 40, value: (r) => r.result?.resultNote ?? "" },
+  { header: "Catatan Hasil", width: 40, value: (r) => resultNoteLines(r.result?.resultNote).join("\n") },
   { header: "Keterangan", width: 30, value: (r) => r.statusReason ?? "" },
   { header: "Order Test", width: 11, kind: "center", value: (r) => (r.isTest ? "Ya" : "") },
 ];

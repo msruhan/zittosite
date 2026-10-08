@@ -1,6 +1,39 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { jidPhone, normalizeWhatsappNumber, reactionAction } from "./admin-reaction-parser";
+import {
+  isCountCommand,
+  jidPhone,
+  normalizeWhatsappNumber,
+  reactionAction,
+} from "./admin-reaction-parser";
+import { wibToday } from "./admin-reaction.service";
+import { adminDailyCountText } from "../whatsapp/whatsapp-messages";
+
+test("/hitung command and daily count reply", () => {
+  assert.equal(isCountCommand("/hitung"), true);
+  assert.equal(isCountCommand("  /HITUNG hari ini"), true);
+  assert.equal(isCountCommand("/hitungan"), false);
+  assert.equal(isCountCommand("hitung"), false);
+
+  const text = adminDailyCountText({
+    adminName: "msruhan",
+    date: "07-10-2026",
+    rows: [
+      { time: "08:06", imei: "358073465407810", status: "done" },
+      { time: "09:55", imei: "353909595487591", status: "in_process" },
+      { time: "11:30", imei: "359237633614420", status: "rejected" },
+    ],
+  });
+  assert.match(text, /Order Hari Ini — msruhan\*\n📅 07-10-2026/);
+  assert.match(text, /1\. \[08:06\] 358073465407810 ✅\n2\. \[09:55\] 353909595487591 ⏳\n3\. \[11:30\] 359237633614420 ❌/);
+  assert.match(text, /Total IMEI masuk : 3\n✅ Done : 1\n⏳ Proses : 1\n❌ Ditolak : 1/);
+  assert.match(adminDailyCountText({ adminName: "a", date: "x", rows: [] }), /Belum ada order/);
+
+  // 01:43 WIB on 8 Oct is still 7 Oct in UTC.
+  const today = wibToday(new Date("2026-10-07T18:43:00Z"));
+  assert.equal(today.label, "08-10-2026");
+  assert.equal(today.start.toISOString(), "2026-10-07T17:00:00.000Z");
+});
 import { messageKey, parseGroups, selfIds } from "../whatsapp/waha.client";
 import { adminOrderCardText, adminReactionReplyText } from "../whatsapp/whatsapp-messages";
 import { whatsappGroupFor } from "../admin/admin-services.service";

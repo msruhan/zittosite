@@ -1,11 +1,18 @@
 import { HttpException, Injectable, Logger } from "@nestjs/common";
 import type { OrderStatus } from "@prisma/client";
-import { whatsappAdminEnabled } from "../config/env";
+import { whatsappAdminEnabled, whatsappConfig } from "../config/env";
 import { OrdersService } from "../orders/orders.service";
 import { PrismaService } from "../prisma/prisma.service";
 import { WahaClient } from "../whatsapp/waha.client";
 import { WhatsappAdminService } from "../whatsapp/whatsapp-admin.service";
-import { jidPhone, reactionAction, type ReactionAction } from "./admin-reaction-parser";
+import { adminDailyCountText, type DailyCountRow } from "../whatsapp/whatsapp-messages";
+import {
+  isCountCommand,
+  jidPhone,
+  reactionAction,
+  type ReactionAction,
+} from "./admin-reaction-parser";
+import type { WahaMessagePayload } from "./roamercheck.service";
 
 export type WahaReactionPayload = {
   from?: unknown;
@@ -16,6 +23,24 @@ export type WahaReactionPayload = {
 
 const LID_TTL_MS = 6 * 60 * 60_000;
 const LID_MISS_TTL_MS = 10 * 60_000;
+const WIB_OFFSET_MS = 7 * 60 * 60_000;
+const DAY_MS = 24 * 60 * 60_000;
+
+/** Start of the current Asia/Jakarta day, and its "dd-mm-yyyy" label. */
+export function wibToday(now = new Date()): { start: Date; label: string } {
+  const wibMidnight = Math.floor((now.getTime() + WIB_OFFSET_MS) / DAY_MS) * DAY_MS;
+  const d = new Date(wibMidnight);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return {
+    start: new Date(wibMidnight - WIB_OFFSET_MS),
+    label: `${pad(d.getUTCDate())}-${pad(d.getUTCMonth() + 1)}-${d.getUTCFullYear()}`,
+  };
+}
+
+function wibTime(date: Date): string {
+  const d = new Date(date.getTime() + WIB_OFFSET_MS);
+  return `${String(d.getUTCHours()).padStart(2, "0")}:${String(d.getUTCMinutes()).padStart(2, "0")}`;
+}
 
 const FINAL_LABEL: Partial<Record<OrderStatus, string>> = {
   done: "Done",
@@ -100,6 +125,63 @@ export class AdminReactionService {
           : { kind: "rejected", adminName: admin.fullName, refunded: true },
     );
     return `${order.orderId} ${action}: applied by ${admin.fullName}`;
+  }
+
+  /** "/hitung" in an admin group: replies with the sender's orders handled today (WIB). */
+  async handleCommand(payload: WahaMessagePayload): Promise<string | null> {
+    const text = typeof payload.body === "string" ? payload.body : "";
+    if (!isCountCommand(text)) return null;
+    if (!whatsappAdminEnabled()) return "off";
+    if (payload.fromMe === true) return "ignored: own message";
+    const chatId = typeof payload.from === "string" ? payload.from : "";
+    if (!chatId.endsWith("@g.us") || chatId === whatsappConfig()?.groupChatId) {
+      return "ignored: other chat";
+    }
+    const replyTo = typeof payload.id === "string" ? payload.id : undefined;
+
+    const admin = await this.resolveAdmin(payload.participant);
+    if (!admin || admin.status !== "active") {
+      await this.send(chatId, "⚠️ Nomor WhatsApp ini belum terdaftar sebagai admin aktif di ZittoSite.", replyTo);
+      return "/hitung: unknown sender";
+    }
+
+    const today = wibToday();
+    const orders = await this.prisma.order.findMany({
+      where: {
+        assignedAdminId: admin.id,
+        status: { in: ["in_process", "done", "rejected"] },
+        OR: [
+          { startedAt: { gte: today.start } },
+          { completedAt: { gte: today.start } },
+          { status: "rejected", updatedAt: { gte: today.start } },
+        ],
+      },
+      select: { imei: true, status: true, startedAt: true, updatedAt: true },
+    });
+    const rows = orders
+      .map((order) => ({ at: order.startedAt ?? order.updatedAt, order }))
+      .sort((a, b) => a.at.getTime() - b.at.getTime())
+      .map(
+        ({ at, order }): DailyCountRow => ({
+          time: wibTime(at),
+          imei: order.imei,
+          status: order.status as DailyCountRow["status"],
+        }),
+      );
+    await this.send(
+      chatId,
+      adminDailyCountText({ adminName: admin.fullName, date: today.label, rows }),
+      replyTo,
+    );
+    return `/hitung: ${admin.fullName} ${rows.length} order`;
+  }
+
+  private async send(chatId: string, text: string, replyTo?: string) {
+    try {
+      await this.waha.sendText(chatId, text, replyTo);
+    } catch (err) {
+      this.logger.warn(`WhatsApp reply failed: ${err instanceof Error ? err.message : String(err)}`);
+    }
   }
 
   private async apply(
