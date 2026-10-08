@@ -174,7 +174,8 @@ export function serializeOrderListItem(
     serviceId: order.serviceId,
     channel: order.channel,
     imei: order.imei,
-    notes: order.notes,
+    // The customer's own note; among admins only Super Admins (redactUser === false) see it.
+    notes: !internal || opts?.redactUser === false ? order.notes : null,
     quantity: order.quantity,
     email: order.email,
     username: order.username,

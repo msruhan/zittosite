@@ -1,4 +1,3 @@
-import { INPUT_TYPE_LABEL } from "../orders/imei-list";
 import type { ServiceInputType } from "@prisma/client";
 
 export type PaidInvoiceInput = {
@@ -32,26 +31,21 @@ export function paidInvoiceGroupText(input: PaidInvoiceInput): string {
   ].join("\n");
 }
 
-/** Admin group card for one order; admins react to it instead of typing. */
+/**
+ * Admin group card for one order: just the service and the device value, so
+ * admins can copy the IMEI. Reactions find the order by the card's message id.
+ * The customer's note stays on the website for Super Admins.
+ */
 export function adminOrderCardText(input: {
-  orderId: string;
   serviceName: string;
   inputType: ServiceInputType;
   imei: string;
-  notes?: string | null;
   isTest?: boolean;
 }): string {
-  const notes = input.notes?.trim();
   return [
-    ...(input.isTest ? ["🧪 *TESTING* · tidak dihitung statistik"] : []),
-    `📥 *ORDER BARU* · ${input.orderId}`,
+    ...(input.isTest ? ["🧪 *TESTING*"] : []),
     input.serviceName,
-    ...(input.inputType === "none"
-      ? []
-      : [`${INPUT_TYPE_LABEL[input.inputType]}: \`${input.imei}\``]),
-    ...(notes ? [`📝 ${notes}`] : []),
-    "",
-    "_React: ⏳/🔄 proses · ✅ done · ❌ tolak_",
+    ...(input.inputType === "none" ? [] : [input.imei]),
   ].join("\n");
 }
 

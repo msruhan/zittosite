@@ -75,6 +75,18 @@ export function whatsappGroupFor(
   }
   return id;
 }
+
+/** Short card title for `whatsapp_admin` services; empty means the card shows the service name. */
+export function whatsappSlugFor(
+  channel: FulfillmentChannel,
+  input: string | null | undefined,
+  existing?: string | null,
+): string | null {
+  if (channel !== "whatsapp_admin") return null;
+  const slug = (input === undefined ? existing : input)?.replace(/\s+/g, " ").trim();
+  return slug || null;
+}
+
 /** Layanan Spesial only; ignored (and cleared) for every other service. */
 type UsdPrices = { priceUsdCents?: number; costUsdCents?: number };
 
@@ -143,6 +155,7 @@ function serializeAdminService(service: ServiceWithAssignments) {
     costPrice: service.costPrice,
     fulfillmentChannel: service.fulfillmentChannel,
     whatsappGroupId: service.whatsappGroupId,
+    whatsappSlug: service.whatsappSlug,
     supplierId: service.supplierId,
     supplierServiceId: service.supplierServiceId,
     supplierName: service.supplier?.name ?? null,
@@ -212,6 +225,7 @@ export class AdminServicesService {
     hidden?: boolean;
     fulfillmentChannel?: FulfillmentChannel;
     whatsappGroupId?: string | null;
+    whatsappSlug?: string | null;
     assignedAdminIds?: string[];
     inputType?: unknown;
     menu?: ServiceMenu;
@@ -226,6 +240,7 @@ export class AdminServicesService {
     const adminIds = await this.validOperatorIds(input.assignedAdminIds ?? []);
     const fulfillmentChannel = input.fulfillmentChannel ?? "telegram";
     const whatsappGroupId = whatsappGroupFor(fulfillmentChannel, input.whatsappGroupId);
+    const whatsappSlug = whatsappSlugFor(fulfillmentChannel, input.whatsappSlug);
     const route = await this.supplierRoute(fulfillmentChannel, input);
     const menu = input.menu ?? "ceir";
     const inputType = await this.phoneInputFor(
@@ -261,6 +276,7 @@ export class AdminServicesService {
         ...availabilityFor(input),
         fulfillmentChannel,
         whatsappGroupId,
+        whatsappSlug,
         ...route,
         menu,
         inputType,
@@ -302,6 +318,7 @@ export class AdminServicesService {
       hidden?: boolean;
       fulfillmentChannel?: FulfillmentChannel;
       whatsappGroupId?: string | null;
+      whatsappSlug?: string | null;
       assignedAdminIds?: string[];
       inputType?: unknown;
       menu?: ServiceMenu;
@@ -314,6 +331,11 @@ export class AdminServicesService {
       fulfillmentChannel,
       input.whatsappGroupId,
       existing.whatsappGroupId,
+    );
+    const whatsappSlug = whatsappSlugFor(
+      fulfillmentChannel,
+      input.whatsappSlug,
+      existing.whatsappSlug,
     );
     const route = await this.supplierRoute(fulfillmentChannel, input, existing);
     const menu = input.menu ?? existing.menu;
@@ -388,6 +410,7 @@ export class AdminServicesService {
             ? { fulfillmentChannel: input.fulfillmentChannel }
             : {}),
           whatsappGroupId,
+          whatsappSlug,
           ...route,
           menu,
           inputType,

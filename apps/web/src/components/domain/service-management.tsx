@@ -235,6 +235,8 @@ export function ServiceManagement({
             fulfillmentChannel: next.fulfillmentChannel ?? "telegram",
             whatsappGroupId:
               next.fulfillmentChannel === "whatsapp_admin" ? (next.whatsappGroupId ?? null) : null,
+            whatsappSlug:
+              next.fulfillmentChannel === "whatsapp_admin" ? next.whatsappSlug?.trim() || null : null,
             assignedAdminIds: next.assignedAdminIds,
             supplierId: next.supplierId ?? null,
             supplierServiceId: next.supplierServiceId ?? null,
@@ -269,6 +271,8 @@ export function ServiceManagement({
             fulfillmentChannel: next.fulfillmentChannel ?? "telegram",
             whatsappGroupId:
               next.fulfillmentChannel === "whatsapp_admin" ? (next.whatsappGroupId ?? null) : null,
+            whatsappSlug:
+              next.fulfillmentChannel === "whatsapp_admin" ? next.whatsappSlug?.trim() || null : null,
             assignedAdminIds: next.assignedAdminIds,
             supplierId: next.supplierId ?? null,
             supplierServiceId: next.supplierServiceId ?? null,
@@ -1233,6 +1237,21 @@ function ServiceFormDialog({
                     ? [{ value: draft.whatsappGroupId, label: draft.whatsappGroupId }]
                     : []),
                 ]}
+              />
+            </Field>
+            <Field
+              label="Slug WhatsApp"
+              htmlFor="whatsappSlug"
+              hint={`Judul singkat di pesan grup, mis. "3B". Kosongkan untuk memakai nama layanan.`}
+            >
+              <Input
+                id="whatsappSlug"
+                value={draft.whatsappSlug ?? ""}
+                maxLength={60}
+                placeholder={draft.name || "3B"}
+                onChange={(event) =>
+                  setDraft((current) => ({ ...current, whatsappSlug: event.target.value }))
+                }
               />
             </Field>
           </>

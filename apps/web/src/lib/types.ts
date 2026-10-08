@@ -131,6 +131,8 @@ export interface Service {
   fulfillmentChannel?: FulfillmentChannel;
   /** WhatsApp group (`…@g.us`) of a WhatsApp Admin service. */
   whatsappGroupId?: string | null;
+  /** Short title on the WhatsApp Admin card; empty uses the service name. */
+  whatsappSlug?: string | null;
   /** Admin panel only: upstream supplier route when fulfillmentChannel is "supplier". */
   supplierId?: string | null;
   supplierServiceId?: string | null;

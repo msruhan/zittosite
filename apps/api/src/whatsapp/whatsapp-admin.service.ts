@@ -40,9 +40,10 @@ export class WhatsappAdminService {
         id: true,
         orderId: true,
         imei: true,
-        notes: true,
         isTest: true,
-        service: { select: { name: true, inputType: true, whatsappGroupId: true } },
+        service: {
+          select: { name: true, whatsappSlug: true, inputType: true, whatsappGroupId: true },
+        },
       },
     });
     const ids: string[] = [];
@@ -60,11 +61,9 @@ export class WhatsappAdminService {
           orderId: order.id,
           chatId,
           text: adminOrderCardText({
-            orderId: order.orderId,
-            serviceName: order.service.name,
+            serviceName: order.service.whatsappSlug || order.service.name,
             inputType: order.service.inputType,
             imei: order.imei,
-            notes: order.notes,
             isTest: order.isTest,
           }),
         },

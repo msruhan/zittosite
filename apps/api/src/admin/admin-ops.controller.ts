@@ -49,6 +49,7 @@ type Json = Record<string, unknown>;
 
 const TOTP_HEADER = "x-totp-code";
 const FULFILLMENT_CHANNELS = ["telegram", "whatsapp", "whatsapp_admin", "supplier"] as const;
+const WHATSAPP_SLUG_MAX = 60;
 const INPUT_TYPES = ["imei", "sn", "ecid", "imei_sn", "phone", "none"] as const;
 const SERVICE_MENUS = ["ceir", "special"] as const;
 const USER_ROLES = ["customer", "testing"] as const;
@@ -287,6 +288,7 @@ export class AdminOpsController {
       hidden: optBoolean(body.hidden, "Sembunyikan"),
       fulfillmentChannel: optEnum(body.fulfillmentChannel, FULFILLMENT_CHANNELS, "Jalur proses"),
       whatsappGroupId: optNullableString(body.whatsappGroupId, "Grup WhatsApp", 60),
+      whatsappSlug: optNullableString(body.whatsappSlug, "Slug WhatsApp", WHATSAPP_SLUG_MAX),
       assignedAdminIds: optIdList(body.assignedAdminIds, "Assign admin"),
       supplierId: optNullableString(body.supplierId, "Supplier", 40),
       supplierServiceId: optNullableString(body.supplierServiceId, "Layanan supplier", 120),
@@ -328,6 +330,7 @@ export class AdminOpsController {
       hidden: optBoolean(body.hidden, "Sembunyikan"),
       fulfillmentChannel: optEnum(body.fulfillmentChannel, FULFILLMENT_CHANNELS, "Jalur proses"),
       whatsappGroupId: optNullableString(body.whatsappGroupId, "Grup WhatsApp", 60),
+      whatsappSlug: optNullableString(body.whatsappSlug, "Slug WhatsApp", WHATSAPP_SLUG_MAX),
       assignedAdminIds: optIdList(body.assignedAdminIds, "Assign admin"),
       supplierId: optNullableString(body.supplierId, "Supplier", 40),
       supplierServiceId: optNullableString(body.supplierServiceId, "Layanan supplier", 120),

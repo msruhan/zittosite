@@ -129,21 +129,15 @@ test("reactions match cards on the bare message id", () => {
 });
 
 test("admin group card and replies", () => {
-  const card = adminOrderCardText({
-    orderId: "ZT2610060012",
-    serviceName: "1B",
-    inputType: "imei",
-    imei: "353249109618062",
-    notes: "cepat ya",
-  });
-  assert.match(card, /ZT2610060012/);
-  assert.match(card, /IMEI: `353249109618062`/);
-  assert.match(card, /📝 cepat ya/);
-  assert.match(card, /⏳\/🔄 proses · ✅ done · ❌ tolak/);
-  assert.doesNotMatch(
-    adminOrderCardText({ orderId: "X", serviceName: "S", inputType: "none", imei: "-" }),
-    /IMEI/,
+  assert.equal(
+    adminOrderCardText({ serviceName: "Layanan Tes Api 3B", inputType: "imei", imei: "357001184891312" }),
+    "Layanan Tes Api 3B\n357001184891312",
   );
+  assert.equal(
+    adminOrderCardText({ serviceName: "1B", inputType: "imei", imei: "353249109618062", isTest: true }),
+    "🧪 *TESTING*\n1B\n353249109618062",
+  );
+  assert.equal(adminOrderCardText({ serviceName: "S", inputType: "none", imei: "-" }), "S");
   assert.equal(adminReactionReplyText({ kind: "done", adminName: "Admin HJ" }), "Done ✅ · Admin HJ");
   assert.match(
     adminReactionReplyText({ kind: "rejected", adminName: "Admin HJ", refunded: true }),

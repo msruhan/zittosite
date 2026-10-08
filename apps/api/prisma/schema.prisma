@@ -332,6 +332,8 @@ model Service {
   fulfillmentChannel FulfillmentChannel  @default(telegram) @map("fulfillment_channel")
   /// WhatsApp group (`…@g.us`) that gets the order cards of a `whatsapp_admin` service.
   whatsappGroupId    String?             @map("whatsapp_group_id")
+  /// Short title on the WhatsApp Admin card (e.g. "3B"); the card falls back to `name`.
+  whatsappSlug       String?             @map("whatsapp_slug")
   supplierId         String?             @map("supplier_id")
   /// Remote Dhru SERVICEID at the supplier.
   supplierServiceId  String?             @map("supplier_service_id")
