@@ -83,6 +83,17 @@ export interface Supplier {
   createdAt: string;
 }
 
+/** Result of "Sync ulang harga": only the cost follows the supplier. */
+export interface SupplierPriceSync {
+  supplierName: string;
+  checked: number;
+  unchanged: number;
+  /** USD cents for Layanan Spesial, Rupiah otherwise. */
+  changed: Array<{ name: string; before: number; after: number; usd: boolean }>;
+  offline: string[];
+  belowCost: string[];
+}
+
 export interface SupplierRemoteService {
   id: string;
   name: string;

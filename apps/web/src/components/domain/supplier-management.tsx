@@ -3,7 +3,13 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowsClockwise, PencilSimple, Plus, Trash } from "@phosphor-icons/react";
+import {
+  ArrowsClockwise,
+  CurrencyCircleDollar,
+  PencilSimple,
+  Plus,
+  Trash,
+} from "@phosphor-icons/react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -16,9 +22,9 @@ import { Select } from "@/components/ui/select";
 import { Tag } from "@/components/ui/status-badge";
 import { TBody, TD, TH, THead, TR, Table, TableScroll } from "@/components/ui/table";
 import { ApiError, api } from "@/lib/api";
-import { formatDateTime } from "@/lib/format";
+import { formatDateTime, formatRupiah, formatUsd } from "@/lib/format";
 import { matchesSearch } from "@/lib/search";
-import type { Supplier, SupplierKind } from "@/lib/types";
+import type { Supplier, SupplierKind, SupplierPriceSync } from "@/lib/types";
 
 const GCONTACT_URL = "https://gcontact.id/api";
 
@@ -42,6 +48,8 @@ export function SupplierManagement({ initialSuppliers }: { initialSuppliers: Sup
   const [editing, setEditing] = React.useState<SupplierDraft | null>(null);
   const [deleting, setDeleting] = React.useState<Supplier | null>(null);
   const [testingId, setTestingId] = React.useState<string | null>(null);
+  const [syncingId, setSyncingId] = React.useState<string | null>(null);
+  const [syncResult, setSyncResult] = React.useState<SupplierPriceSync | null>(null);
   const [busy, setBusy] = React.useState(false);
   const [query, setQuery] = React.useState("");
   const filtered = suppliers.filter((supplier) =>
@@ -93,6 +101,21 @@ export function SupplierManagement({ initialSuppliers }: { initialSuppliers: Sup
       toast.error("Gagal", { description: errorMessage(err, "Tes koneksi gagal") });
     } finally {
       setTestingId(null);
+    }
+  }
+
+  async function handleSync(supplier: Supplier) {
+    setSyncingId(supplier.id);
+    try {
+      const result = await api<SupplierPriceSync>(`/admin/suppliers/${supplier.id}/sync`, {
+        method: "POST",
+      });
+      setSyncResult(result);
+      await reload();
+    } catch (err) {
+      toast.error("Sync gagal", { description: errorMessage(err, "Sync ulang harga gagal") });
+    } finally {
+      setSyncingId(null);
     }
   }
 
@@ -150,7 +173,7 @@ export function SupplierManagement({ initialSuppliers }: { initialSuppliers: Sup
                   <TH>Saldo</TH>
                   <TH>Layanan</TH>
                   <TH>Status</TH>
-                  <TH className="w-32">Aksi</TH>
+                  <TH className="w-40">Aksi</TH>
                 </TR>
               </THead>
               <TBody>
@@ -219,6 +242,19 @@ export function SupplierManagement({ initialSuppliers }: { initialSuppliers: Sup
                         >
                           <ArrowsClockwise className="size-4 text-action" />
                         </Button>
+                        {supplier.kind === "dhru" ? (
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            aria-label={`Sync ulang harga ${supplier.name}`}
+                            title="Sync ulang harga dari panel supplier"
+                            loading={syncingId === supplier.id}
+                            disabled={syncingId !== null}
+                            onClick={() => void handleSync(supplier)}
+                          >
+                            <CurrencyCircleDollar className="size-4 text-action" />
+                          </Button>
+                        ) : null}
                         <Button
                           size="icon"
                           variant="ghost"
@@ -261,6 +297,12 @@ export function SupplierManagement({ initialSuppliers }: { initialSuppliers: Sup
               setEditing(null);
             }}
           />
+        ) : null}
+      </Dialog>
+
+      <Dialog open={Boolean(syncResult)} onOpenChange={(open) => !open && setSyncResult(null)}>
+        {syncResult ? (
+          <SyncResultDialog result={syncResult} onClose={() => setSyncResult(null)} />
         ) : null}
       </Dialog>
 
@@ -477,6 +519,60 @@ function SupplierFormDialog({
           />
         </Field>
       </form>
+    </DialogContent>
+  );
+}
+
+function SyncList({ title, tone, items }: { title: string; tone?: string; items: React.ReactNode[] }) {
+  if (!items.length) return null;
+  return (
+    <section className="space-y-1.5">
+      <h3 className={`text-label font-bold uppercase ${tone ?? "text-ink-soft"}`}>
+        {title} ({items.length})
+      </h3>
+      <ul className="max-h-48 space-y-1 overflow-y-auto rounded-md border border-hairline px-3 py-2 text-body">
+        {items.map((item, i) => (
+          <li key={i}>{item}</li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+function SyncResultDialog({ result, onClose }: { result: SupplierPriceSync; onClose: () => void }) {
+  const money = (amount: number, usd: boolean) => (usd ? formatUsd(amount) : formatRupiah(amount));
+  return (
+    <DialogContent
+      title={`Sync harga ${result.supplierName}`}
+      description={`${result.checked} layanan dicek · ${result.changed.length} harga modal berubah · ${result.unchanged} tetap. Harga jual tidak diubah.`}
+      footer={<Button onClick={onClose}>Tutup</Button>}
+    >
+      <div className="space-y-4">
+        {!result.changed.length && !result.offline.length && !result.belowCost.length ? (
+          <p className="text-body text-ink-soft">Semua harga modal sudah sesuai panel supplier.</p>
+        ) : null}
+        <SyncList
+          title="Harga modal berubah"
+          items={result.changed.map((c) => (
+            <span key={c.name} className="flex justify-between gap-3">
+              <span className="min-w-0 truncate text-ink">{c.name}</span>
+              <span className="shrink-0 font-data tabular text-ink-soft">
+                {money(c.before, c.usd)} → <span className="text-ink">{money(c.after, c.usd)}</span>
+              </span>
+            </span>
+          ))}
+        />
+        <SyncList
+          title="Di-Offline-kan (tidak ada lagi di panel supplier)"
+          tone="text-hold-ink"
+          items={result.offline}
+        />
+        <SyncList
+          title="Harga jual di bawah modal, perlu disesuaikan"
+          tone="text-refused-ink"
+          items={result.belowCost}
+        />
+      </div>
     </DialogContent>
   );
 }

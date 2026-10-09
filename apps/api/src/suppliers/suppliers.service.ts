@@ -13,6 +13,8 @@ import {
   SupplierRequestError,
 } from "./dhru-supplier-client";
 import { GCONTACT_DEFAULT_URL, GCONTACT_SERVICE, GContactClient } from "./gcontact-client";
+import { UsdRateService } from "../orders/usd-rate.service";
+import { planPriceSync } from "./supplier-price-sync";
 import { decryptSupplierKey, encryptSupplierKey, maskSupplierKey } from "./supplier-secret";
 
 type SupplierInput = {
@@ -65,7 +67,10 @@ function serializeSupplier(supplier: Supplier & { _count?: { services: number } 
 
 @Injectable()
 export class SuppliersService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly usdRate: UsdRateService,
+  ) {}
 
   async list() {
     const rows = await this.prisma.supplier.findMany({
@@ -191,6 +196,48 @@ export class SuppliersService {
       if (err instanceof SupplierRequestError) throw new BadGatewayException(err.message);
       throw err;
     }
+  }
+
+  /** Pulls the supplier's current prices into the linked services' cost. */
+  async syncPrices(id: string) {
+    const supplier = await this.find(id);
+    if (supplier.kind === "gcontact") {
+      throw new BadRequestException("GContact tidak punya daftar harga untuk disinkronkan.");
+    }
+    const remote = await this.remoteServices(id);
+    const services = await this.prisma.service.findMany({
+      where: { supplierId: id, fulfillmentChannel: "supplier", supplierServiceId: { not: null } },
+      select: {
+        id: true,
+        name: true,
+        menu: true,
+        active: true,
+        price: true,
+        costPrice: true,
+        costUsdCents: true,
+        supplierServiceId: true,
+      },
+    });
+    const plan = planPriceSync(
+      services.map((s) => ({ ...s, supplierServiceId: s.supplierServiceId! })),
+      remote,
+      await this.usdRate.get(),
+    );
+    await this.prisma.$transaction([
+      ...plan.updates.map((u) => this.prisma.service.update({ where: { id: u.id }, data: u.data })),
+      this.prisma.supplier.update({
+        where: { id },
+        data: { remoteServiceCount: remote.length, lastCheckedAt: new Date() },
+      }),
+    ]);
+    return {
+      supplierName: supplier.name,
+      checked: services.length,
+      unchanged: plan.unchanged,
+      changed: plan.changed,
+      offline: plan.offline,
+      belowCost: plan.belowCost,
+    };
   }
 
   private async find(id: string) {

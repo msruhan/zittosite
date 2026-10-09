@@ -90,6 +90,20 @@ export class SuppliersController {
     return this.suppliers.test(id);
   }
 
+  @Post(":id/sync")
+  @Throttle(SENSITIVE_THROTTLE)
+  async syncPrices(@Req() req: AdminReq, @Param("id") id: string) {
+    const result = await this.suppliers.syncPrices(id);
+    this.audit.record("admin.supplier.synced", {
+      actorId: req.admin.sub,
+      supplierId: id,
+      supplierName: result.supplierName,
+      changed: result.changed.length,
+      offline: result.offline.length,
+    });
+    return result;
+  }
+
   @Get(":id/services")
   remoteServices(@Param("id") id: string) {
     return this.suppliers.remoteServices(id);

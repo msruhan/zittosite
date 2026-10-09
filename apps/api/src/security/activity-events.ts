@@ -413,6 +413,12 @@ export const ACTIVITY_EVENTS = {
         ? `${fields.active ? "Mengaktifkan" : "Menonaktifkan"} supplier ${fields.supplierName ?? ""}`
         : `Memperbarui supplier ${fields.supplierName ?? ""}${fields.keyRotated ? " (API key diganti)" : ""}`,
   },
+  "admin.supplier.synced": {
+    category: "service",
+    label: "Harga supplier disinkronkan",
+    summary: ({ fields }) =>
+      `Sync ulang harga ${fields.supplierName ?? ""}: ${fields.changed ?? 0} harga modal berubah, ${fields.offline ?? 0} layanan di-Offline-kan`,
+  },
   "admin.supplier.deleted": {
     category: "service",
     label: "Supplier API dihapus",
