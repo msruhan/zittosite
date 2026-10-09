@@ -27,7 +27,20 @@ test("/hitung command and daily count reply", () => {
   assert.match(text, /Order Hari Ini — msruhan\*\n📅 07-10-2026/);
   assert.match(text, /1\. \[08:06\] 358073465407810 ✅\n2\. \[09:55\] 353909595487591 ⏳\n3\. \[11:30\] 359237633614420 ❌/);
   assert.match(text, /Total IMEI masuk : 3\n✅ Done : 1\n⏳ Proses : 1\n❌ Ditolak : 1/);
-  assert.match(adminDailyCountText({ adminName: "a", date: "x", rows: [] }), /Belum ada order/);
+  const empty = adminDailyCountText({ adminName: "", date: "x", rows: [] });
+  assert.match(empty, /^📊 \*Order Hari Ini\*\n/);
+  assert.match(empty, /Belum ada order/);
+  assert.match(
+    adminDailyCountText({
+      adminName: "MAF, IpanC",
+      date: "x",
+      rows: [
+        { time: "08:06", imei: "1", status: "done", adminName: "MAF" },
+        { time: "09:00", imei: "2", status: "done", adminName: "IpanC" },
+      ],
+    }),
+    /Order Hari Ini — MAF, IpanC\*[\s\S]*1\. \[08:06\] 1 ✅ · MAF\n2\. \[09:00\] 2 ✅ · IpanC/,
+  );
 
   // 01:43 WIB on 8 Oct is still 7 Oct in UTC.
   const today = wibToday(new Date("2026-10-07T18:43:00Z"));

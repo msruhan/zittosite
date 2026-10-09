@@ -77,6 +77,8 @@ export type DailyCountRow = {
   time: string;
   imei: string;
   status: "in_process" | "done" | "rejected";
+  /** Set when several admins handled the group's orders. */
+  adminName?: string;
 };
 
 const DAILY_COUNT_MARK: Record<DailyCountRow["status"], string> = {
@@ -85,8 +87,9 @@ const DAILY_COUNT_MARK: Record<DailyCountRow["status"], string> = {
   rejected: "❌",
 };
 
-/** Reply to "/hitung": the orders an admin handled today, oldest first. */
+/** Reply to "/hitung": the group's orders handled today, oldest first. */
 export function adminDailyCountText(input: {
+  /** Admins who handled the orders; empty when none did. */
   adminName: string;
   /** "dd-mm-yyyy" WIB. */
   date: string;
@@ -95,12 +98,14 @@ export function adminDailyCountText(input: {
   const count = (status: DailyCountRow["status"]) =>
     input.rows.filter((row) => row.status === status).length;
   return [
-    `📊 *Order Hari Ini — ${input.adminName}*`,
+    input.adminName ? `📊 *Order Hari Ini — ${input.adminName}*` : "📊 *Order Hari Ini*",
     `📅 ${input.date}`,
     "",
     ...(input.rows.length
       ? input.rows.map(
-          (row, i) => `${i + 1}. [${row.time}] ${row.imei} ${DAILY_COUNT_MARK[row.status]}`,
+          (row, i) =>
+            `${i + 1}. [${row.time}] ${row.imei} ${DAILY_COUNT_MARK[row.status]}` +
+            (row.adminName ? ` · ${row.adminName}` : ""),
         )
       : ["_Belum ada order yang diproses hari ini._"]),
     "",

@@ -126,10 +126,12 @@ Setup:
 
 Reactions only count in the group the card was posted to.
 
-An admin can send `/hitung` in any admin group: the bot replies with the orders
-assigned to them that were taken, finished or rejected today (WIB), each with its
-time, IMEI and status, plus totals (masuk, done, proses, ditolak). This counts
-every channel, not only WhatsApp Admin services.
+Any active admin, Super Admin included, can send `/hitung` in an admin group: the
+bot replies with that group's orders (cards posted there) that its admins took,
+finished or rejected today (WIB), each with its time, IMEI and status, plus totals
+(masuk, done, proses, ditolak). Orders handled by a Super Admin — on the web,
+Telegram or in the group — are left out. When several admins work the group, each
+line also names who handled it.
 
 Card delivery state is in `order_whatsapp_messages` (same retry policy as
 below).

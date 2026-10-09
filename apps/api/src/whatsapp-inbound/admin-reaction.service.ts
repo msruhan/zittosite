@@ -127,7 +127,11 @@ export class AdminReactionService {
     );
   }
 
-  /** "/hitung" in an admin group: replies with the sender's orders handled today (WIB). */
+  /**
+   * "/hitung" in an admin group, sent by any active admin (Super Admin included): replies with
+   * today's (WIB) orders of that group handled by its admins. Orders a Super Admin took — on the
+   * web, Telegram or in the group — stay out of the recap.
+   */
   async handleCommand(payload: WahaMessagePayload): Promise<string | null> {
     const text = typeof payload.body === "string" ? payload.body : "";
     if (!isCountCommand(text)) return null;
@@ -148,28 +152,37 @@ export class AdminReactionService {
     const today = wibToday();
     const orders = await this.prisma.order.findMany({
       where: {
-        assignedAdminId: admin.id,
+        whatsappAdminMessage: { chatId },
+        assignedAdmin: { role: { not: "super_admin" } },
         status: { in: ["in_process", "done", "rejected"] },
         ...orderDayWhere({ gte: today.start, lt: new Date(today.start.getTime() + DAY_MS) }),
       },
-      select: { imei: true, status: true, startedAt: true, updatedAt: true },
+      select: {
+        imei: true,
+        status: true,
+        startedAt: true,
+        updatedAt: true,
+        assignedAdmin: { select: { fullName: true } },
+      },
     });
-    const rows = orders
+    const sorted = orders
       .map((order) => ({ at: order.startedAt ?? order.updatedAt, order }))
-      .sort((a, b) => a.at.getTime() - b.at.getTime())
-      .map(
-        ({ at, order }): DailyCountRow => ({
-          time: wibTime(at),
-          imei: order.imei,
-          status: order.status as DailyCountRow["status"],
-        }),
-      );
+      .sort((a, b) => a.at.getTime() - b.at.getTime());
+    const handlers = [...new Set(sorted.map(({ order }) => order.assignedAdmin?.fullName ?? "-"))];
+    const rows = sorted.map(
+      ({ at, order }): DailyCountRow => ({
+        time: wibTime(at),
+        imei: order.imei,
+        status: order.status as DailyCountRow["status"],
+        ...(handlers.length > 1 ? { adminName: order.assignedAdmin?.fullName ?? "-" } : {}),
+      }),
+    );
     await this.send(
       chatId,
-      adminDailyCountText({ adminName: admin.fullName, date: today.label, rows }),
+      adminDailyCountText({ adminName: handlers.join(", "), date: today.label, rows }),
       replyTo,
     );
-    return `/hitung: ${admin.fullName} ${rows.length} order`;
+    return `/hitung: ${admin.fullName} → ${chatId} ${rows.length} order`;
   }
 
   private async send(chatId: string, text: string, replyTo?: string) {
