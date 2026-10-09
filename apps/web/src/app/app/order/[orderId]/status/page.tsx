@@ -82,7 +82,7 @@ export default async function OrderStatusPage({
                 <div key={row.label} className="min-w-0">
                   <dt className="text-label uppercase text-ink-soft">{row.label}</dt>
                   <dd className="mt-0.5">
-                    <DataValue className="break-all">{row.value}</DataValue>
+                    <DataValue className="break-all whitespace-pre-wrap">{row.value}</DataValue>
                   </dd>
                 </div>
               ))}

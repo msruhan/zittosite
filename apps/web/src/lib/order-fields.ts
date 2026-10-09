@@ -3,6 +3,9 @@ import type { Order, Service } from "@/lib/types";
 
 /** Same name as the supplier's custom field. */
 export const SIGN_IN_PICTURE_LABEL = "Picture on sign-in page";
+/** Same name as the supplier's custom field; limit matches apps/api special-fields.ts. */
+export const CODE_LABEL = "Code";
+export const CODE_MAX = 2000;
 
 /** Layanan Spesial extra fields an admin can require; keys match the Service flags. */
 export const EXTRA_FIELD_OPTIONS = [
@@ -12,6 +15,7 @@ export const EXTRA_FIELD_OPTIONS = [
   { key: "requirePassword", label: "Password" },
   { key: "requireKeyLock", label: "Key Lock" },
   { key: "requireSignInPicture", label: SIGN_IN_PICTURE_LABEL },
+  { key: "requireCode", label: CODE_LABEL },
   { key: "requireNotes", label: "Notes" },
 ] as const satisfies ReadonlyArray<{ key: keyof Service; label: string }>;
 
@@ -26,6 +30,7 @@ export const NO_EXTRA_FIELDS: ExtraFieldFlags = {
   requirePassword: false,
   requireKeyLock: false,
   requireSignInPicture: false,
+  requireCode: false,
 };
 
 export function hasExtraFields(flags: Partial<ExtraFieldFlags>): boolean {
@@ -41,7 +46,14 @@ export function deviceLabel(inputType: Service["inputType"]): string | null {
 export function orderExtraRows(
   order: Pick<
     Order,
-    "quantity" | "email" | "username" | "hasPassword" | "password" | "keyLock" | "signInPicture"
+    | "quantity"
+    | "email"
+    | "username"
+    | "hasPassword"
+    | "password"
+    | "keyLock"
+    | "signInPicture"
+    | "codeText"
   >,
 ): Array<{ label: string; value: string }> {
   const rows: Array<{ label: string; value: string }> = [];
@@ -52,6 +64,7 @@ export function orderExtraRows(
   else if (order.hasPassword) rows.push({ label: "Password", value: "••••••••" });
   if (order.keyLock) rows.push({ label: "Key Lock", value: order.keyLock });
   if (order.signInPicture) rows.push({ label: SIGN_IN_PICTURE_LABEL, value: order.signInPicture });
+  if (order.codeText) rows.push({ label: CODE_LABEL, value: order.codeText });
   if (order.email) rows.push({ label: "Email", value: order.email });
   return rows;
 }

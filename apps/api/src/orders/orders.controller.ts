@@ -11,6 +11,7 @@ import {
 import { UserAuthGuard } from "../auth/user-auth.guard";
 import { OrdersService } from "./orders.service";
 import { optString, optStringList } from "../security/input";
+import { CODE_MAX } from "./special-fields";
 import { parseVia } from "./supplier-routed";
 
 @Controller("orders")
@@ -36,6 +37,7 @@ export class OrdersController {
       password: optString(body.password, "Password", 128),
       keyLock: optString(body.keyLock, "Key Lock", 100),
       signInPicture: optString(body.signInPicture, "Picture on sign-in page", 500),
+      codeText: optString(body.codeText, "Code", CODE_MAX),
       channel: "web",
     });
   }

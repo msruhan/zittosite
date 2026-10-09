@@ -359,6 +359,8 @@ model Service {
   requireKeyLock     Boolean             @default(false) @map("require_key_lock")
   /// Stored in Order.signInPicture; sent to the supplier as the "Picture on sign-in page" custom field.
   requireSignInPicture Boolean           @default(false) @map("require_sign_in_picture")
+  /// Stored in Order.codeText (multi-line); sent to the supplier as the "Code" custom field.
+  requireCode        Boolean             @default(false) @map("require_code")
   createdAt          DateTime            @default(now()) @map("created_at")
   updatedAt          DateTime            @updatedAt @map("updated_at")
   supplier           Supplier?           @relation(fields: [supplierId], references: [id], onDelete: SetNull)
@@ -452,6 +454,7 @@ model Order {
   passwordEnc           String?                     @map("password_enc")
   keyLock               String?                     @map("key_lock")
   signInPicture         String?                     @map("sign_in_picture")
+  codeText              String?                     @map("code_text")
   status                OrderStatus                 @default(waiting_payment)
   /// Snapshot of the user's testing role at creation; excluded from statistics.
   isTest                Boolean                     @default(false) @map("is_test")

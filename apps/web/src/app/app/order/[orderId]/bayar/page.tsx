@@ -115,7 +115,7 @@ export default async function PaymentPage({
             <div key={row.label} className="flex items-baseline justify-between gap-4 py-2.5">
               <dt className="text-body text-ink-soft">{row.label}</dt>
               <dd className="min-w-0 text-right">
-                <DataValue className="break-all">{row.value}</DataValue>
+                <DataValue className="break-all whitespace-pre-wrap">{row.value}</DataValue>
               </dd>
             </div>
           ))}

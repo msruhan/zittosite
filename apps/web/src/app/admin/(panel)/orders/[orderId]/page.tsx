@@ -99,7 +99,7 @@ export default async function AdminOrderDetailPage({
                 ) : null}
                 {orderExtraRows(order).map((row) => (
                   <DetailRow key={row.label} label={row.label}>
-                    <DataValue className="break-all">{row.value}</DataValue>
+                    <DataValue className="break-all whitespace-pre-wrap">{row.value}</DataValue>
                   </DetailRow>
                 ))}
                 <DetailRow label="Harga dibebankan">

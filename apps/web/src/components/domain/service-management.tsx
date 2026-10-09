@@ -249,6 +249,7 @@ export function ServiceManagement({
             requirePassword: next.requirePassword ?? false,
             requireKeyLock: next.requireKeyLock ?? false,
             requireSignInPicture: next.requireSignInPicture ?? false,
+            requireCode: next.requireCode ?? false,
             ...(next.priceUsdCents != null
               ? {
                   priceUsd: next.priceUsdCents / 100,
@@ -285,6 +286,7 @@ export function ServiceManagement({
             requirePassword: next.requirePassword ?? false,
             requireKeyLock: next.requireKeyLock ?? false,
             requireSignInPicture: next.requireSignInPicture ?? false,
+            requireCode: next.requireCode ?? false,
             ...(next.priceUsdCents != null
               ? {
                   priceUsd: next.priceUsdCents / 100,

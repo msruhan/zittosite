@@ -125,6 +125,7 @@ export interface Service {
   requirePassword?: boolean;
   requireKeyLock?: boolean;
   requireSignInPicture?: boolean;
+  requireCode?: boolean;
   /** Off and also left out of the order menu (otherwise shown as Offline). */
   hidden?: boolean;
   /** Admin panel only: where paid orders are processed. */
@@ -296,6 +297,7 @@ export interface Order {
   password?: string | null;
   keyLock?: string | null;
   signInPicture?: string | null;
+  codeText?: string | null;
   status: OrderStatus;
   /** Keterangan for rejected/cancelled orders; null means none. */
   statusReason?: string | null;

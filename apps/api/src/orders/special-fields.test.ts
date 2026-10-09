@@ -17,6 +17,7 @@ const ALL = {
   requirePassword: true,
   requireKeyLock: true,
   requireSignInPicture: true,
+  requireCode: true,
 };
 const NONE = NO_EXTRA_FIELDS;
 
@@ -29,6 +30,7 @@ test("required extras are validated and trimmed (password kept verbatim)", () =>
     password: " Rahasia 123",
     keyLock: " KL-77 ",
     signInPicture: " https://postimg.cc/abc ",
+    codeText: " 1234\n5678 ",
   });
   assert.deepEqual(ok, {
     ok: true,
@@ -40,6 +42,7 @@ test("required extras are validated and trimmed (password kept verbatim)", () =>
       password: " Rahasia 123",
       keyLock: "KL-77",
       signInPicture: "https://postimg.cc/abc",
+      codeText: "1234\n5678",
     },
   });
 
@@ -51,9 +54,10 @@ test("required extras are validated and trimmed (password kept verbatim)", () =>
     password: "  ",
     keyLock: "",
     signInPicture: "",
+    codeText: " ",
   });
   assert.equal(bad.ok, false);
-  if (!bad.ok) assert.equal(bad.errors.length, 7);
+  if (!bad.ok) assert.equal(bad.errors.length, 8);
 
   assert.equal(
     parseOrderExtras(ALL, {
@@ -79,6 +83,10 @@ test("required extras are validated and trimmed (password kept verbatim)", () =>
     parseOrderExtras({ ...NONE, requireSignInPicture: true }, { signInPicture: "a\nb" }).ok,
     false,
   );
+  assert.equal(
+    parseOrderExtras({ ...NONE, requireCode: true }, { codeText: "x".repeat(2001) }).ok,
+    false,
+  );
 });
 
 test("fields the service does not require are dropped", () => {
@@ -91,6 +99,7 @@ test("fields the service does not require are dropped", () => {
       password: "p",
       keyLock: "k",
       signInPicture: "p",
+      codeText: "c",
     }),
     { ok: true, extras: NO_EXTRAS },
   );
@@ -106,6 +115,7 @@ test("supplier fields omit empty values", () => {
       password: "s3cret",
       keyLock: "KL-1",
       signInPicture: "https://postimg.cc/abc",
+      codeText: "1234\n5678",
     }),
     {
       QNT: "2",
@@ -114,6 +124,7 @@ test("supplier fields omit empty values", () => {
       PASSWORD: "s3cret",
       KEYLOCK: "KL-1",
       "Picture on sign-in page": "https://postimg.cc/abc",
+      Code: "1234\n5678",
     },
   );
   assert.deepEqual(supplierExtraFields(NO_EXTRAS), {});
@@ -129,4 +140,5 @@ test("input type parsing and Telegram eligibility", () => {
   assert.equal(needsExtraInput({ ...NONE, requireNotes: true, inputType: "imei" }), true);
   assert.equal(needsExtraInput({ ...NONE, requirePassword: true, inputType: "imei" }), true);
   assert.equal(needsExtraInput({ ...NONE, requireSignInPicture: true, inputType: "imei" }), true);
+  assert.equal(needsExtraInput({ ...NONE, requireCode: true, inputType: "imei" }), true);
 });

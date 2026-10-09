@@ -227,6 +227,7 @@ export class OrdersService {
       password?: string;
       keyLock?: string;
       signInPicture?: string;
+      codeText?: string;
       channel?: OrderChannel;
       apiKeyId?: string;
       balanceOnly?: boolean;

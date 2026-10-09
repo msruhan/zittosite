@@ -54,6 +54,7 @@ export type ExportOrderRow = {
   username: string | null;
   keyLock: string | null;
   signInPicture: string | null;
+  codeText: string | null;
   status: string;
   isTest: boolean;
   statusReason: string | null;
@@ -140,6 +141,7 @@ const COLUMNS: Column[] = [
   { header: "Username Tambahan", width: 18, value: (r) => r.username ?? "" },
   { header: "Key Lock", width: 18, value: (r) => r.keyLock ?? "" },
   { header: "Picture on sign-in page", width: 28, value: (r) => r.signInPicture ?? "" },
+  { header: "Code", width: 28, value: (r) => r.codeText ?? "" },
   { header: "Catatan User", width: 28, value: (r) => r.notes ?? "" },
   { header: "Harga Jual", width: 15, kind: "money", value: (r) => r.price },
   { header: "Harga Modal", width: 15, kind: "money", value: (r) => r.costPrice },

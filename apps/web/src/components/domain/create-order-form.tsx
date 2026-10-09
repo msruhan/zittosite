@@ -21,7 +21,7 @@ import {
   inputLengthError,
   type InputType,
 } from "@/lib/imei-list";
-import { SIGN_IN_PICTURE_LABEL } from "@/lib/order-fields";
+import { CODE_LABEL, CODE_MAX, SIGN_IN_PICTURE_LABEL } from "@/lib/order-fields";
 import type { Service } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -36,6 +36,7 @@ type ExtraValues = {
   password: string;
   keyLock: string;
   signInPicture: string;
+  codeText: string;
 };
 type ExtraErrors = Partial<Record<keyof ExtraValues, string>>;
 const EMPTY_EXTRAS: ExtraValues = {
@@ -45,6 +46,7 @@ const EMPTY_EXTRAS: ExtraValues = {
   password: "",
   keyLock: "",
   signInPicture: "",
+  codeText: "",
 };
 
 const ALL_GROUPS = "__all__";
@@ -75,6 +77,9 @@ function validateExtras(service: Service, values: ExtraValues): ExtraErrors {
   }
   if (service.requireSignInPicture && !values.signInPicture.trim()) {
     errors.signInPicture = `Masukkan ${SIGN_IN_PICTURE_LABEL}.`;
+  }
+  if (service.requireCode && !values.codeText.trim()) {
+    errors.codeText = `Masukkan ${CODE_LABEL}.`;
   }
   return errors;
 }
@@ -245,6 +250,7 @@ export function CreateOrderForm({
           ...(service?.requireSignInPicture
             ? { signInPicture: extras.signInPicture.trim() }
             : {}),
+          ...(service?.requireCode ? { codeText: extras.codeText.trim() } : {}),
         }),
       });
       const title = quantity > 1 ? `${quantity} order dibuat` : "Order dibuat";
@@ -481,6 +487,21 @@ export function CreateOrderForm({
             value={extras.signInPicture}
             invalid={Boolean(extraErrors.signInPicture)}
             onChange={(event) => updateExtra("signInPicture", event.target.value)}
+          />
+        </Field>
+      ) : null}
+
+      {service?.requireCode ? (
+        <Field label={CODE_LABEL} htmlFor="orderCode" error={extraErrors.codeText} required>
+          <Textarea
+            id="orderCode"
+            autoComplete="off"
+            spellCheck={false}
+            maxLength={CODE_MAX}
+            className="font-data"
+            value={extras.codeText}
+            invalid={Boolean(extraErrors.codeText)}
+            onChange={(event) => updateExtra("codeText", event.target.value)}
           />
         </Field>
       ) : null}

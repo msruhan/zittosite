@@ -165,6 +165,7 @@ export class DhruService {
       password: params.PASSWORD,
       keyLock: params.KEYLOCK,
       signInPicture: params[SIGN_IN_PICTURE_FIELD.toUpperCase()] || params.SIGNINPICTURE,
+      codeText: params.CODE,
     });
     if (!extras.ok) throw new DhruFailure(extras.errors.join(" "));
     const type = service.inputType;
@@ -199,6 +200,7 @@ export class DhruService {
         password: extras.password ?? undefined,
         keyLock: extras.keyLock ?? undefined,
         signInPicture: extras.signInPicture ?? undefined,
+        codeText: extras.codeText ?? undefined,
         channel: "api",
         apiKeyId: caller.apiKeyId,
         balanceOnly: true,
