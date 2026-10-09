@@ -1,3 +1,5 @@
+import type { AdminDayStats, SuperAdminRecap } from "./order-recap.service";
+
 export const DAILY_RECAP_HOUR = 23;
 export const DAILY_RECAP_MINUTE = 0;
 
@@ -11,4 +13,19 @@ export function msUntilJakartaTime(now: Date, hour: number, minute: number): num
   let target = dayStart + (hour * 60 + minute) * 60 * 1000;
   if (target <= local) target += DAY_MS;
   return target - local;
+}
+
+function handledAny(stats: AdminDayStats): boolean {
+  return stats.taken + stats.done + stats.rejected > 0;
+}
+
+/** A day without new orders, payments or handled orders gets no scheduled recap. */
+export function recapHasActivity(recap: SuperAdminRecap): boolean {
+  return (
+    recap.created.total > 0 ||
+    recap.revenue.payments > 0 ||
+    handledAny(recap.handled) ||
+    handledAny(recap.whatsapp) ||
+    recap.perAdmin.some((admin) => admin.orders.length > 0)
+  );
 }

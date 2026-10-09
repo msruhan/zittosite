@@ -2,6 +2,7 @@ import { Injectable } from "@nestjs/common";
 import type { OrderStatus, Prisma } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
 import { addJakartaDays, jakartaDayStart } from "../admin/admin-reports.service";
+import { orderDayWhere } from "../orders/order-day";
 import { assignedServiceFilter } from "../orders/orders.service";
 
 export type AdminDayStats = {
@@ -118,15 +119,12 @@ export class OrderRecapService {
   }
 
   private activityWhere(range: { gte: Date; lt: Date }) {
+    const day = { ...orderDayWhere(range), isTest: false };
     return {
       taken: { startedAt: range, isTest: false } satisfies Prisma.OrderWhereInput,
-      done: { status: "done", completedAt: range, isTest: false } satisfies Prisma.OrderWhereInput,
-      rejected: {
-        status: "rejected",
-        updatedAt: range,
-        isTest: false,
-      } satisfies Prisma.OrderWhereInput,
-      inProcess: { status: "in_process", isTest: false } satisfies Prisma.OrderWhereInput,
+      done: { ...day, status: "done" } satisfies Prisma.OrderWhereInput,
+      rejected: { ...day, status: "rejected" } satisfies Prisma.OrderWhereInput,
+      inProcess: { ...day, status: "in_process" } satisfies Prisma.OrderWhereInput,
     };
   }
 

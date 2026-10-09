@@ -1,6 +1,7 @@
 import { HttpException, Injectable, Logger } from "@nestjs/common";
 import type { OrderStatus } from "@prisma/client";
 import { whatsappAdminEnabled, whatsappConfig } from "../config/env";
+import { orderDayWhere } from "../orders/order-day";
 import { OrdersService } from "../orders/orders.service";
 import { PrismaService } from "../prisma/prisma.service";
 import { AdminNotifyService } from "../telegram/admin-notify.service";
@@ -149,11 +150,7 @@ export class AdminReactionService {
       where: {
         assignedAdminId: admin.id,
         status: { in: ["in_process", "done", "rejected"] },
-        OR: [
-          { startedAt: { gte: today.start } },
-          { completedAt: { gte: today.start } },
-          { status: "rejected", updatedAt: { gte: today.start } },
-        ],
+        ...orderDayWhere({ gte: today.start, lt: new Date(today.start.getTime() + DAY_MS) }),
       },
       select: { imei: true, status: true, startedAt: true, updatedAt: true },
     });

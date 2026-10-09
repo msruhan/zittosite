@@ -21,6 +21,7 @@ import {
   DAILY_RECAP_HOUR,
   DAILY_RECAP_MINUTE,
   msUntilJakartaTime,
+  recapHasActivity,
 } from "./daily-recap-schedule";
 import {
   AdminTelegramInviteService,
@@ -332,6 +333,10 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
   async sendDailyRecaps() {
     if (!this.bot) return;
     const recap = await this.recap.superAdmin();
+    if (!recapHasActivity(recap)) {
+      this.logger.log("Daily recap skipped: no orders today");
+      return;
+    }
     const delivery = await this.deliverAdminRecaps(recap);
 
     const superAdmins = await this.prisma.admin.findMany({
