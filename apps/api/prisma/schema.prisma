@@ -83,16 +83,41 @@ enum ServiceInputType {
   ecid
   /// Either an IMEI (15 digits) or an SN; sent to the supplier as IMEI or SN accordingly.
   imei_sn
-  /// Indonesian mobile number (08…); only for GContact supplier services.
+  /// Indonesian mobile number (08…); GContact services and supplier services declared `INPUTTYPE=phone`.
   phone
   /// Layanan Spesial without a device value; the order carries only Qnt/Email/Username.
   none
 }
 
-/// User menu for supplier services: Order Ceir or Layanan Spesial.
-enum ServiceMenu {
+/// How a user menu behaves: `ceir` = receipt-style results, bulk up to 6;
+/// `special` = Service Group headings, extra order fields, smaller bulk.
+enum MenuStyle {
   ceir
   special
+}
+
+enum MenuCurrency {
+  IDR
+  USD
+}
+
+/// User ordering menu for supplier services, created by Super Admin.
+model ServiceMenu {
+  id            String       @id @default(cuid())
+  /// URL and Telegram key (`/app/m/<slug>`, `uord:cat:<slug>`).
+  slug          String       @unique
+  label         String
+  enabled       Boolean      @default(true)
+  sortOrder     Int          @default(0) @map("sort_order")
+  /// Fixed at creation: service prices depend on it.
+  style         MenuStyle    @default(ceir)
+  /// Fixed at creation: USD menus keep USD cents next to the Rupiah price.
+  priceCurrency MenuCurrency @default(IDR) @map("price_currency")
+  createdAt     DateTime     @default(now()) @map("created_at")
+  updatedAt     DateTime     @updatedAt @map("updated_at")
+  services      Service[]
+
+  @@map("service_menus")
 }
 
 enum InvoicePurpose {
@@ -337,9 +362,10 @@ model Service {
   supplierId         String?             @map("supplier_id")
   /// Remote Dhru SERVICEID at the supplier.
   supplierServiceId  String?             @map("supplier_service_id")
-  /// Which user menu lists a supplier service; ignored for Telegram/WhatsApp services.
-  menu               ServiceMenu         @default(ceir)
-  /// Layanan Spesial are priced in USD cents; price/costPrice hold the Rupiah value at the current rate.
+  /// Which user menu lists a supplier service; null for Telegram/WhatsApp services.
+  menuId             String?             @map("menu_id")
+  menu               ServiceMenu?        @relation(fields: [menuId], references: [id], onDelete: Restrict)
+  /// USD-menu services are priced in USD cents; price/costPrice hold the Rupiah value at the current rate.
   priceUsdCents      Int?                @map("price_usd_cents")
   costUsdCents       Int?                @map("cost_usd_cents")
   /// Layanan Spesial only: admin grouping for bulk price edits and the user's service picker.
@@ -370,6 +396,7 @@ model Service {
   groupPrices        UserGroupPrice[]
 
   @@index([serviceGroupId])
+  @@index([menuId])
   @@map("services")
 }
 

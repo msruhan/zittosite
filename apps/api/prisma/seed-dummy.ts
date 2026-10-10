@@ -197,9 +197,15 @@ async function main() {
     : await prisma.supplier.create({ data: supplierData });
 
   const groupIds = new Map<string, string>();
-  for (const name of new Set(SERVICES.flatMap((s) => (s.group ? [s.group] : [])))) {
-    const group = await prisma.serviceGroup.upsert({ where: { name }, create: { name }, update: {} });
+  for (const name of new Set(SERVICES.flatMap((s) => (s.group ? [s.group] : [])))) {    const group = await prisma.serviceGroup.upsert({ where: { name }, create: { name }, update: {} });
     groupIds.set(name, group.id);
+  }
+
+  const menuIds = new Map<string, string>();
+  for (const slug of new Set(SERVICES.flatMap((s) => (s.menu ? [s.menu] : [])))) {
+    const menu = await prisma.serviceMenu.findUnique({ where: { slug } });
+    if (!menu) throw new Error(`Menu "${slug}" belum ada; jalankan migrasi dulu.`);
+    menuIds.set(slug, menu.id);
   }
 
   const operator = await prisma.admin.findUnique({ where: { username: "operator" } });
@@ -218,7 +224,7 @@ async function main() {
       costUsdCents: s.usd?.cost ?? null,
       supplierId: supplierRouted ? supplier.id : null,
       supplierServiceId: supplierRouted ? s.supplierServiceId! : null,
-      menu: s.menu ?? "ceir",
+      menuId: supplierRouted ? menuIds.get(s.menu ?? "ceir")! : null,
       serviceGroupId: s.group ? groupIds.get(s.group)! : null,
       inputType: s.inputType ?? "imei",
       requireQnt: s.requireQnt ?? false,

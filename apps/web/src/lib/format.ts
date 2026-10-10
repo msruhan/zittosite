@@ -52,6 +52,33 @@ export function usdCentsToIdr(cents: number, rate: number): number {
   return Math.round((cents * rate) / 100);
 }
 
+// Keep in sync with apps/api/src/orders/usd-pricing.ts.
+/**
+ * Supplier credit in the menu's price unit (Rupiah or USD cents). A supplier that
+ * does not state its currency is assumed to bill in the menu's currency.
+ */
+export function supplierCreditToMenuUnits(
+  credit: number,
+  creditCurrency: "IDR" | "USD" | null,
+  menuCurrency: "IDR" | "USD",
+  rate: number,
+): number {
+  const from = creditCurrency ?? menuCurrency;
+  if (from === menuCurrency) return Math.round(credit * (menuCurrency === "USD" ? 100 : 1));
+  return menuCurrency === "USD" ? Math.round((credit * 100) / rate) : Math.round(credit * rate);
+}
+
+/** Supplier credit as shown to admins, in the currency the supplier bills in. */
+export function formatSupplierCredit(
+  credit: number,
+  creditCurrency: "IDR" | "USD" | null,
+  menuCurrency: "IDR" | "USD",
+): string {
+  return (creditCurrency ?? menuCurrency) === "USD"
+    ? formatUsd(Math.round(credit * 100))
+    : formatRupiah(Math.round(credit));
+}
+
 /** Dollar input ("1.25" or "1,25") to cents; null when empty or invalid. */
 export function parseUsdInput(raw: string): number | null {
   const dollars = Number(raw.replace(",", "."));

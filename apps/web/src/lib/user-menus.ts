@@ -1,29 +1,37 @@
-/** The three user ordering menus; names and switches are set by Super Admin. */
-export const USER_MENU_KEYS = ["order", "ceir", "special"] as const;
-export type UserMenuKey = (typeof USER_MENU_KEYS)[number];
+import type { MenuStyle, ServiceMenu } from "@/lib/types";
 
+/** The manual Order menu; its name and switch are set by Super Admin. */
 export type UserMenu = { label: string; enabled: boolean };
-export type UserMenus = Record<UserMenuKey, UserMenu>;
+
+/** A supplier service menu as listed in settings and the sidebar. */
+export type UserServiceMenu = ServiceMenu & { enabled: boolean; sortOrder: number };
+
+/** The manual Order menu followed by the service menus, in sidebar order. */
+export type UserMenus = { order: UserMenu; menus: UserServiceMenu[] };
 
 export const MENU_LABEL_MAX = 30;
+export const MAX_MENUS = 20;
+
+export const ORDER_MENU_HREF = "/app/order";
 
 export const DEFAULT_USER_MENUS: UserMenus = {
   order: { label: "Order", enabled: true },
-  ceir: { label: "Order Ceir", enabled: true },
-  special: { label: "Layanan Spesial", enabled: true },
+  menus: [],
 };
 
-/** Sidebar entry of each menu. */
-export const USER_MENU_HREF: Record<UserMenuKey, string> = {
-  order: "/app/order",
-  ceir: "/app/ceir/order",
-  special: "/app/spesial/order",
-};
-
-export function userMenuNavLabels(menus: UserMenus): Record<string, string> {
-  return Object.fromEntries(USER_MENU_KEYS.map((key) => [USER_MENU_HREF[key], menus[key].label]));
+export function menuHistoryHref(slug: string): string {
+  return `/app/m/${slug}`;
 }
 
-export function disabledUserMenuHrefs(menus: UserMenus): string[] {
-  return USER_MENU_KEYS.filter((key) => !menus[key].enabled).map((key) => USER_MENU_HREF[key]);
+export function menuOrderHref(slug: string): string {
+  return `/app/m/${slug}/order`;
+}
+
+/** Sidebar entry of a service menu; serializable so it can cross into the client shell. */
+export type MenuNavItem = { href: string; label: string; style: MenuStyle };
+
+export function menuNavItems(menus: UserMenus): MenuNavItem[] {
+  return menus.menus
+    .filter((menu) => menu.enabled)
+    .map((menu) => ({ href: menuOrderHref(menu.slug), label: menu.label, style: menu.style }));
 }

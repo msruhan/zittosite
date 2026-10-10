@@ -47,12 +47,24 @@ export type ResultStatus = "success" | "failed";
 
 export type FulfillmentChannel = "telegram" | "whatsapp" | "whatsapp_admin" | "supplier";
 
-export type ServiceMenu = "ceir" | "special";
+/** ceir: plain service list; special: grouped list, extra order fields, max 2 per bulk order. */
+export type MenuStyle = "ceir" | "special";
+export type MenuCurrency = "IDR" | "USD";
 
-export const SERVICE_MENU_LABEL: Record<ServiceMenu, string> = {
-  ceir: "Order Ceir",
-  special: "Layanan Spesial",
+export const MENU_STYLE_LABEL: Record<MenuStyle, string> = {
+  ceir: "Ceir",
+  special: "Spesial",
 };
+
+/** Super Admin-defined user menu that supplier services are shown under. */
+export interface ServiceMenu {
+  id: string;
+  slug: string;
+  label: string;
+  style: MenuStyle;
+  /** USD menus are priced in USD cents and follow the Rupiah rate. */
+  priceCurrency: MenuCurrency;
+}
 
 /** Admin-defined group of Layanan Spesial services. */
 export interface ServiceGroup {
@@ -101,6 +113,10 @@ export interface SupplierRemoteService {
   credit: number;
   time: string;
   info: string;
+  /** What the supplier expects per order, when it says so (CeirBot catalog metadata). */
+  inputType: "imei" | "sn" | "ecid" | "imei_sn" | "phone" | "none" | null;
+  /** Currency of `credit`, when the supplier says so; otherwise the menu's currency. */
+  currency: MenuCurrency | null;
 }
 
 export interface Service {
@@ -115,8 +131,10 @@ export interface Service {
   active: boolean;
   /** "supplier" services run automatically via Supplier API; the rest go to the regular Order menu. */
   via?: "supplier" | "manual";
-  /** User menu of a supplier service (Order Ceir or Layanan Spesial); null for manual services. */
+  /** User menu of a supplier service; null for manual services. */
   menu?: ServiceMenu | null;
+  /** Admin panel only: id of `menu`. */
+  menuId?: string | null;
   /** User service list only: Layanan Spesial group name, used as a heading in the picker. */
   group?: string | null;
   /** Layanan Spesial USD price in cents; `price` is its Rupiah value at the current rate. */

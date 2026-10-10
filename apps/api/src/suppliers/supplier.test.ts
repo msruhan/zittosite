@@ -112,7 +112,41 @@ test("status, account info, and service list parsing", async () => {
       },
       bad: null,
     }),
-    [{ id: "12", name: "Check", group: "Carrier", credit: 15000.5, time: "1h", info: "" }],
+    [
+      {
+        id: "12",
+        name: "Check",
+        group: "Carrier",
+        credit: 15000.5,
+        time: "1h",
+        info: "",
+        inputType: null,
+        currency: null,
+      },
+    ],
+  );
+  const catalog = parseServiceList({
+    G1: {
+      GROUPNAME: "CEIR",
+      SERVICES: {
+        "ceir-getcontact": {
+          SERVICEID: "ceir-getcontact",
+          SERVICENAME: "GetContact",
+          CREDIT: "3000",
+          INPUTTYPE: "phone",
+          CURRENCY: "IDR",
+          CATEGORY: "CEIR",
+        },
+        "x-1": { SERVICEID: "x-1", SERVICENAME: "Odd", CREDIT: "1", INPUTTYPE: "weird", CURRENCY: "EUR" },
+      },
+    },
+  });
+  assert.deepEqual(
+    catalog.map((service) => [service.id, service.inputType, service.currency]),
+    [
+      ["ceir-getcontact", "phone", "IDR"],
+      ["x-1", null, null],
+    ],
   );
 });
 

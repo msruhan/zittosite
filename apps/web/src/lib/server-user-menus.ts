@@ -1,7 +1,12 @@
 import { redirect } from "next/navigation";
 import { ApiError } from "@/lib/api";
 import { serverApi } from "@/lib/server-api";
-import { DEFAULT_USER_MENUS, type UserMenuKey, type UserMenus } from "@/lib/user-menus";
+import {
+  DEFAULT_USER_MENUS,
+  type UserMenu,
+  type UserMenus,
+  type UserServiceMenu,
+} from "@/lib/user-menus";
 
 /** Menu settings for the signed-in user; defaults when the API cannot answer. */
 export async function loadUserMenus(): Promise<UserMenus> {
@@ -13,9 +18,16 @@ export async function loadUserMenus(): Promise<UserMenus> {
   }
 }
 
-/** Order page guard: a disabled menu sends the user back to the dashboard. */
-export async function requireUserMenu(key: UserMenuKey): Promise<UserMenus[UserMenuKey]> {
-  const menu = (await loadUserMenus())[key];
+/** Order page guard: a disabled Order menu sends the user back to the dashboard. */
+export async function requireOrderMenu(): Promise<UserMenu> {
+  const menu = (await loadUserMenus()).order;
   if (!menu.enabled) redirect("/app/dashboard");
+  return menu;
+}
+
+/** Service menu page guard: unknown or disabled menus send the user back to the dashboard. */
+export async function requireServiceMenu(slug: string): Promise<UserServiceMenu> {
+  const menu = (await loadUserMenus()).menus.find((entry) => entry.slug === slug);
+  if (!menu?.enabled) redirect("/app/dashboard");
   return menu;
 }

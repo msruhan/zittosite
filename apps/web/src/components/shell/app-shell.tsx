@@ -6,6 +6,7 @@ import { List, X } from "@phosphor-icons/react";
 import { BrandLockup } from "@/components/shell/brand";
 import { LogoutLink, NavList } from "@/components/shell/nav-list";
 import type { NavVariant } from "@/lib/navigation";
+import type { MenuNavItem } from "@/lib/user-menus";
 import { cn } from "@/lib/utils";
 
 const SIDEBAR_WIDTH = "w-[240px]";
@@ -17,6 +18,8 @@ interface AppShellProps {
   hideHrefs?: string[];
   /** Label overrides by nav href. */
   navLabels?: Record<string, string>;
+  /** Admin-defined service menus, listed after Order. */
+  menuItems?: MenuNavItem[];
   topbarRight?: React.ReactNode;
   /** Full-width strip under the top bar (e.g. the announcement ticker). */
   banner?: React.ReactNode;
@@ -28,12 +31,14 @@ function SidebarBody({
   navLabel,
   hideHrefs,
   navLabels,
+  menuItems,
   onNavigate,
 }: {
   variant: NavVariant;
   navLabel?: string;
   hideHrefs?: string[];
   navLabels?: Record<string, string>;
+  menuItems?: MenuNavItem[];
   onNavigate?: () => void;
 }) {
   return (
@@ -46,6 +51,7 @@ function SidebarBody({
           sectionLabel={navLabel ?? "Menu"}
           hideHrefs={hideHrefs}
           labels={navLabels}
+          menuItems={menuItems}
           onNavigate={onNavigate}
         />
 
@@ -62,6 +68,7 @@ export function AppShell({
   navLabel,
   hideHrefs,
   navLabels,
+  menuItems,
   topbarRight,
   banner,
   children,
@@ -83,6 +90,7 @@ export function AppShell({
           navLabel={navLabel}
           hideHrefs={hideHrefs}
           navLabels={navLabels}
+          menuItems={menuItems}
         />
       </aside>
 
@@ -122,6 +130,7 @@ export function AppShell({
               navLabel={navLabel}
               hideHrefs={hideHrefs}
               navLabels={navLabels}
+              menuItems={menuItems}
               onNavigate={closeDrawer}
             />
           </DialogPrimitive.Content>

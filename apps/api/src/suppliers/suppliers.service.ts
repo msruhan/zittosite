@@ -210,7 +210,7 @@ export class SuppliersService {
       select: {
         id: true,
         name: true,
-        menu: true,
+        menu: { select: { priceCurrency: true } },
         active: true,
         price: true,
         costPrice: true,

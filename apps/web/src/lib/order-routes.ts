@@ -1,4 +1,5 @@
 import type { Service } from "@/lib/types";
+import { ORDER_MENU_HREF, menuOrderHref } from "@/lib/user-menus";
 
 export type OrderMenu = {
   listHref: string;
@@ -6,26 +7,12 @@ export type OrderMenu = {
   createHref: string;
 };
 
-const REGULAR: OrderMenu = {
-  listHref: "/app/riwayat",
-  listLabel: "Riwayat order",
-  createHref: "/app/order",
-};
-
-const CEIR: OrderMenu = {
-  listHref: "/app/riwayat",
-  listLabel: "Riwayat order",
-  createHref: "/app/ceir/order",
-};
-
-const SPECIAL: OrderMenu = {
-  listHref: "/app/riwayat",
-  listLabel: "Riwayat order",
-  createHref: "/app/spesial/order",
-};
-
-/** Supplier API services are created under Order Ceir or Layanan Spesial; all orders share one history. */
+/** Supplier API services are created under their service menu; all orders share one history. */
 export function orderMenu(service?: Pick<Service, "via" | "menu"> | null): OrderMenu {
-  if (service?.via !== "supplier") return REGULAR;
-  return service.menu === "special" ? SPECIAL : CEIR;
+  const slug = service?.via === "supplier" ? service.menu?.slug : undefined;
+  return {
+    listHref: "/app/riwayat",
+    listLabel: "Riwayat order",
+    createHref: slug ? menuOrderHref(slug) : ORDER_MENU_HREF,
+  };
 }

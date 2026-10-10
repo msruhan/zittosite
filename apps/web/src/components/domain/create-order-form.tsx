@@ -23,6 +23,7 @@ import {
 } from "@/lib/imei-list";
 import { CODE_LABEL, CODE_MAX, SIGN_IN_PICTURE_LABEL } from "@/lib/order-fields";
 import type { Service } from "@/lib/types";
+import { menuOrderHref } from "@/lib/user-menus";
 import { cn } from "@/lib/utils";
 
 // Keep in sync with apps/api/src/orders/special-fields.ts.
@@ -538,7 +539,7 @@ export function CreateOrderForm({
           <span className="font-semibold">UNKNOWN</span>. Silahkan cek Status
           IMEI melalui menu{" "}
           <Link
-            href="/app/ceir/order"
+            href={menuOrderHref("ceir")}
             className="font-semibold underline underline-offset-2 hover:opacity-80"
           >
             Order Ceir

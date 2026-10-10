@@ -67,10 +67,10 @@ import { maxBulkFor } from "../orders/supplier-routed";
 import { needsExtraInput } from "../orders/special-fields";
 import { UserMenusService } from "../orders/user-menus.service";
 import {
-  ORDER_CATEGORIES,
-  type OrderCategory,
   categoryLabel,
   categoryOfService,
+  isGroupedCategory,
+  orderCategories,
   pageOf,
   parseOrderCategory,
 } from "./order-picker";
@@ -584,12 +584,10 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
           await this.showOrderPicker(ctx, true);
         } else if (data.startsWith("uord:cat:")) {
           const [rawKey, rawPage] = data.slice("uord:cat:".length).split(":");
-          const key = parseOrderCategory(rawKey ?? "");
-          if (key) await this.showOrderCategory(ctx, key, Number(rawPage));
-          else await ctx.answerCallbackQuery();
+          await this.showOrderCategory(ctx, rawKey ?? "", Number(rawPage));
         } else if (data.startsWith("uord:grp:")) {
-          const [groupKey, rawPage] = data.slice("uord:grp:".length).split(":");
-          await this.showSpecialGroup(ctx, groupKey ?? "", Number(rawPage));
+          const [menuKey, groupKey, rawPage] = data.slice("uord:grp:".length).split(":");
+          await this.showSpecialGroup(ctx, menuKey ?? "", groupKey ?? "", Number(rawPage));
         } else if (data.startsWith("uord:svc:")) {
           await this.handleUserServicePick(ctx, data.slice("uord:svc:".length));
         } else if (data.startsWith("uord:qris:")) {
@@ -992,13 +990,18 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
     await this.replyHtml(ctx, html, { reply_markup: keyboard });
   }
 
-  private async showOrderCategory(ctx: Context, key: OrderCategory, page: number) {
+  private async showOrderCategory(ctx: Context, rawKey: string, page: number) {
     const actor = await this.requireMember(ctx);
     if (!actor) return;
     const [services, menus] = await Promise.all([
       this.botServices(actor.user.id),
       this.userMenus.get(),
     ]);
+    const key = parseOrderCategory(rawKey, menus);
+    if (!key) {
+      await ctx.answerCallbackQuery();
+      return;
+    }
     const inCategory = services
       .filter((service) => categoryOfService(service) === key)
       .sort(
@@ -1009,8 +1012,8 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
       await ctx.answerCallbackQuery({ text: "Belum ada layanan di kategori ini", show_alert: true });
       return;
     }
-    if (key === "special" && inCategory.some((service) => service.groupId)) {
-      await this.showSpecialGroups(ctx, inCategory, categoryLabel(key, menus), page);
+    if (isGroupedCategory(key, menus) && inCategory.some((service) => service.groupId)) {
+      await this.showSpecialGroups(ctx, key, inCategory, categoryLabel(key, menus), page);
       return;
     }
     await this.showServiceList(ctx, {
@@ -1022,9 +1025,10 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
     });
   }
 
-  /** Layanan Spesial first asks for a group (as set in Grup Layanan Spesial), then lists its services. */
+  /** Spesial-style menus first ask for a group (as set in Grup Layanan Spesial), then list its services. */
   private async showSpecialGroups(
     ctx: Context,
+    menuKey: string,
     services: Array<{ group: string | null; groupId: string | null }>,
     title: string,
     page: number,
@@ -1048,10 +1052,12 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
     ];
     const view = pageOf(options, page);
     const keyboard = new InlineKeyboard();
-    for (const option of view.items) keyboard.text(option.label, `uord:grp:${option.key}`).row();
+    for (const option of view.items) {
+      keyboard.text(option.label, `uord:grp:${menuKey}:${option.key}`).row();
+    }
     if (view.pages > 1) {
-      if (view.page > 1) keyboard.text("◀️ Sebelumnya", `uord:cat:special:${view.page - 1}`);
-      if (view.page < view.pages) keyboard.text("Berikutnya ▶️", `uord:cat:special:${view.page + 1}`);
+      if (view.page > 1) keyboard.text("◀️ Sebelumnya", `uord:cat:${menuKey}:${view.page - 1}`);
+      if (view.page < view.pages) keyboard.text("Berikutnya ▶️", `uord:cat:${menuKey}:${view.page + 1}`);
       keyboard.row();
     }
     keyboard.text("⬅️ Jenis layanan", "uord:cats").text("🏠 Menu", "menu:home");
@@ -1063,7 +1069,7 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
     );
   }
 
-  private async showSpecialGroup(ctx: Context, groupKey: string, page: number) {
+  private async showSpecialGroup(ctx: Context, menuKey: string, groupKey: string, page: number) {
     const actor = await this.requireMember(ctx);
     if (!actor) return;
     const [services, menus] = await Promise.all([
@@ -1073,7 +1079,7 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
     const inGroup = services
       .filter(
         (service) =>
-          categoryOfService(service) === "special" &&
+          categoryOfService(service) === menuKey &&
           (groupKey === "none" ? !service.groupId : service.groupId === groupKey),
       )
       .sort((a, b) => a.name.localeCompare(b.name));
@@ -1083,11 +1089,11 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
     }
     const groupName = groupKey === "none" ? "Lainnya" : inGroup[0].group ?? "Grup";
     await this.showServiceList(ctx, {
-      title: `${categoryLabel("special", menus)} › ${groupName}`,
+      title: `${categoryLabel(menuKey, menus)} › ${groupName}`,
       services: inGroup,
       page,
-      pageData: (p) => `uord:grp:${groupKey}:${p}`,
-      back: ["⬅️ Grup layanan", "uord:cat:special"],
+      pageData: (p) => `uord:grp:${menuKey}:${groupKey}:${p}`,
+      back: ["⬅️ Grup layanan", `uord:cat:${menuKey}`],
     });
   }
 
@@ -1149,13 +1155,13 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
         });
         return;
       }
-      const counts = new Map<OrderCategory, number>();
+      const counts = new Map<string, number>();
       for (const service of services) {
         const key = categoryOfService(service);
         counts.set(key, (counts.get(key) ?? 0) + 1);
       }
       const keyboard = new InlineKeyboard();
-      for (const key of ORDER_CATEGORIES) {
+      for (const key of orderCategories(menus)) {
         const count = counts.get(key);
         if (count) keyboard.text(`${categoryLabel(key, menus)} (${count})`, `uord:cat:${key}:1`).row();
       }
@@ -1396,7 +1402,7 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
       return;
     }
     const inputType = service.inputType;
-    const maxBulk = maxBulkFor({ fulfillmentChannel: service.via, menu: service.menu ?? "ceir" });
+    const maxBulk = maxBulkFor({ fulfillmentChannel: service.via, menu: service.menu });
     const chatId = String(ctx.chat?.id ?? "");
     this.sessions.set(chatId, {
       kind: "user_imei",

@@ -1,32 +1,38 @@
 import type { UserMenus } from "../orders/user-menus";
 
-/** Bot /order first lists these categories; each opens its own service list. */
-export const ORDER_CATEGORIES = ["order", "ceir", "special"] as const;
-export type OrderCategory = (typeof ORDER_CATEGORIES)[number];
+/** Bot /order first lists the manual "order" category, then one per service menu (by slug). */
+export const ORDER_CATEGORY = "order";
 
 export const SERVICES_PER_PAGE = 15;
 
-const EMOJI: Record<OrderCategory, string> = {
-  order: "📱",
+const STYLE_EMOJI: Record<string, string> = {
   ceir: "🔎",
   special: "✨",
 };
 
-export function parseOrderCategory(value: string): OrderCategory | null {
-  return ORDER_CATEGORIES.find((key) => key === value) ?? null;
+export function orderCategories(menus: UserMenus): string[] {
+  return [ORDER_CATEGORY, ...menus.menus.map((menu) => menu.slug)];
+}
+
+export function parseOrderCategory(value: string, menus: UserMenus): string | null {
+  return orderCategories(menus).find((key) => key === value) ?? null;
 }
 
 /** Manual services are "Order IMEI"; supplier services follow their menu. */
-export function categoryOfService(service: { menu: string | null }): OrderCategory {
-  if (service.menu === "special") return "special";
-  if (service.menu === "ceir") return "ceir";
-  return "order";
+export function categoryOfService(service: { menu?: { slug: string } | null }): string {
+  return service.menu?.slug ?? ORDER_CATEGORY;
+}
+
+/** Spesial-style menus first ask for a service group. */
+export function isGroupedCategory(key: string, menus: UserMenus): boolean {
+  return menus.menus.some((menu) => menu.slug === key && menu.style === "special");
 }
 
 /** Button label; the regular menu is shown as "Order IMEI" in the bot. */
-export function categoryLabel(key: OrderCategory, menus: UserMenus): string {
-  const label = key === "order" ? "Order IMEI" : menus[key].label;
-  return `${EMOJI[key]} ${label}`;
+export function categoryLabel(key: string, menus: UserMenus): string {
+  if (key === ORDER_CATEGORY) return "📱 Order IMEI";
+  const menu = menus.menus.find((entry) => entry.slug === key);
+  return menu ? `${STYLE_EMOJI[menu.style] ?? "📦"} ${menu.label}` : key;
 }
 
 export function pageOf<T>(items: T[], page: number, size = SERVICES_PER_PAGE) {

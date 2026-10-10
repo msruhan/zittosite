@@ -12,12 +12,12 @@ export class UsdRateService {
     return Number.isFinite(rate) && rate > 0 ? rate : DEFAULT_USD_RATE;
   }
 
-  /** Saves the rate and reprices every USD-priced Layanan Spesial in Rupiah. */
+  /** Saves the rate and reprices every service of a USD menu in Rupiah. */
   async set(rate: number, actorId: string): Promise<{ rate: number; repriced: number }> {
     const services = await this.prisma.service.findMany({
       where: {
         fulfillmentChannel: "supplier",
-        menu: "special",
+        menu: { priceCurrency: "USD" },
         OR: [{ priceUsdCents: { not: null } }, { costUsdCents: { not: null } }],
       },
       select: { id: true, priceUsdCents: true, costUsdCents: true },

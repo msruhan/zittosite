@@ -7,9 +7,11 @@ import { toast } from "sonner";
 import {
   NAV_BY_VARIANT,
   isNavItemActive,
+  navItemsWithMenus,
   type NavVariant,
 } from "@/lib/navigation";
 import { api } from "@/lib/api";
+import type { MenuNavItem } from "@/lib/user-menus";
 import { cn } from "@/lib/utils";
 
 const itemBase = [
@@ -25,16 +27,18 @@ export function NavList({
   sectionLabel = "Menu",
   hideHrefs,
   labels,
+  menuItems,
 }: {
   variant: NavVariant;
   onNavigate?: () => void;
   sectionLabel?: string;
   hideHrefs?: string[];
   labels?: Record<string, string>;
+  menuItems?: MenuNavItem[];
 }) {
   const pathname = usePathname();
   const hidden = new Set(hideHrefs ?? []);
-  const items = NAV_BY_VARIANT[variant].filter(
+  const items = navItemsWithMenus(NAV_BY_VARIANT[variant], menuItems).filter(
     (item) => !hidden.has(item.href),
   );
 

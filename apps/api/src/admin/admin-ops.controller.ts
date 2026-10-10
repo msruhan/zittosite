@@ -31,7 +31,7 @@ import { parseAdjustment } from "../orders/balance";
 import { type PriceAdjustment, ROUND_TO } from "./service-group-pricing";
 import { parseUsdCents, parseUsdRate } from "../orders/usd-pricing";
 import { UsdRateService } from "../orders/usd-rate.service";
-import { USER_MENU_KEYS, parseUserMenusInput } from "../orders/user-menus";
+import { parseNewMenuInput, parseUserMenusInput } from "../orders/user-menus";
 import { UserMenusService } from "../orders/user-menus.service";
 import {
   optBoolean,
@@ -51,7 +51,6 @@ const TOTP_HEADER = "x-totp-code";
 const FULFILLMENT_CHANNELS = ["telegram", "whatsapp", "whatsapp_admin", "supplier"] as const;
 const WHATSAPP_SLUG_MAX = 60;
 const INPUT_TYPES = ["imei", "sn", "ecid", "imei_sn", "phone", "none"] as const;
-const SERVICE_MENUS = ["ceir", "special"] as const;
 const USER_ROLES = ["customer", "testing"] as const;
 const WIB_OFFSET_MS = 7 * 60 * 60 * 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -293,7 +292,7 @@ export class AdminOpsController {
       supplierId: optNullableString(body.supplierId, "Supplier", 40),
       supplierServiceId: optNullableString(body.supplierServiceId, "Layanan supplier", 120),
       inputType: optEnum(body.inputType, INPUT_TYPES, "Jenis input"),
-      menu: optEnum(body.menu, SERVICE_MENUS, "Menu layanan"),
+      menuId: optNullableString(body.menuId, "Menu layanan", 40),
       priceUsdCents: parseUsdCents(body.priceUsd, "Harga USD"),
       costUsdCents: parseUsdCents(body.costPriceUsd, "Harga modal USD"),
       requireQnt: optBoolean(body.requireQnt, "Field Qnt"),
@@ -336,7 +335,7 @@ export class AdminOpsController {
       supplierId: optNullableString(body.supplierId, "Supplier", 40),
       supplierServiceId: optNullableString(body.supplierServiceId, "Layanan supplier", 120),
       inputType: optEnum(body.inputType, INPUT_TYPES, "Jenis input"),
-      menu: optEnum(body.menu, SERVICE_MENUS, "Menu layanan"),
+      menuId: optNullableString(body.menuId, "Menu layanan", 40),
       priceUsdCents: parseUsdCents(body.priceUsd, "Harga USD"),
       costUsdCents: parseUsdCents(body.costPriceUsd, "Harga modal USD"),
       requireQnt: optBoolean(body.requireQnt, "Field Qnt"),
@@ -368,7 +367,7 @@ export class AdminOpsController {
       requireKeyLock: input.requireKeyLock,
       requireSignInPicture: input.requireSignInPicture,
       requireCode: input.requireCode,
-      menu: input.menu,
+      menuId: input.menuId,
       assignedAdmins: input.assignedAdminIds?.join(","),
     });
     return service;
@@ -482,11 +481,33 @@ export class AdminOpsController {
     const menus = await this.userMenus.set(parseUserMenusInput(body), req.admin.sub);
     this.audit.record("admin.user_menus.updated", {
       actorId: req.admin.sub,
-      summary: USER_MENU_KEYS.map(
-        (key) => `${menus[key].label} (${menus[key].enabled ? "aktif" : "nonaktif"})`,
-      ).join(", "),
+      summary: [menus.order, ...menus.menus]
+        .map((menu) => `${menu.label} (${menu.enabled ? "aktif" : "nonaktif"})`)
+        .join(", "),
     });
     return menus;
+  }
+
+  @Post("user-menus")
+  @UseGuards(SuperAdminGuard)
+  async createUserMenu(@Req() req: AdminReq, @Body() body: Json) {
+    const menu = await this.userMenus.create(parseNewMenuInput(body));
+    this.audit.record("admin.user_menus.updated", {
+      actorId: req.admin.sub,
+      summary: `Menu baru: ${menu.label} (/${menu.slug}, ${menu.style}, ${menu.priceCurrency})`,
+    });
+    return menu;
+  }
+
+  @Delete("user-menus/:id")
+  @UseGuards(SuperAdminGuard)
+  async deleteUserMenu(@Req() req: AdminReq, @Param("id") id: string) {
+    const menu = await this.userMenus.remove(id);
+    this.audit.record("admin.user_menus.updated", {
+      actorId: req.admin.sub,
+      summary: `Menu dihapus: ${menu.label} (/${menu.slug})`,
+    });
+    return { ok: true };
   }
 
   @Get("usd-rate")

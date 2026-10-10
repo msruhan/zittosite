@@ -5,7 +5,7 @@ import {
   NotFoundException,
   ServiceUnavailableException,
 } from "@nestjs/common";
-import type { FulfillmentChannel, Prisma, ServiceMenu } from "@prisma/client";
+import type { FulfillmentChannel, Prisma } from "@prisma/client";
 import { whatsappConfig } from "../config/env";
 import { PrismaService } from "../prisma/prisma.service";
 import { WahaClient } from "../whatsapp/waha.client";
@@ -17,7 +17,14 @@ import {
   hasExtraFields,
   parseServiceInputType,
 } from "../orders/special-fields";
-import { isSpecialService } from "../orders/supplier-routed";
+import {
+  MENU_SELECT,
+  type MenuInfo,
+  isSpecialService,
+  isUsdService,
+} from "../orders/supplier-routed";
+import { SupplierRequestError } from "../suppliers/dhru-supplier-client";
+import { supplierClient } from "../suppliers/suppliers.service";
 import { usdCentsToIdr } from "../orders/usd-pricing";
 import { UsdRateService } from "../orders/usd-rate.service";
 import { type PriceAdjustment, adjustedPrice, adjustmentError } from "./service-group-pricing";
@@ -54,7 +61,10 @@ const SERVICE_INCLUDE = {
   },
   supplier: { select: { id: true, name: true } },
   serviceGroup: { select: { id: true, name: true } },
+  menu: { select: MENU_SELECT },
 } satisfies Prisma.ServiceInclude;
+
+type RoutedService = { fulfillmentChannel: FulfillmentChannel; menu: MenuInfo | null };
 
 type SupplierRoute = { supplierId?: string | null; supplierServiceId?: string | null };
 
@@ -87,29 +97,34 @@ export function whatsappSlugFor(
   return slug || null;
 }
 
-/** Layanan Spesial only; ignored (and cleared) for every other service. */
+/** USD menus only; ignored (and cleared) for every other service. */
 type UsdPrices = { priceUsdCents?: number; costUsdCents?: number };
 
-/** SN/ECID/none are only for Layanan Spesial; regular and Ceir services always take an IMEI. */
-function inputTypeFor(
-  service: { fulfillmentChannel: FulfillmentChannel; menu: ServiceMenu },
+/**
+ * Manual services always take an IMEI. Supplier services take what the supplier
+ * needs; "none" relies on extra fields, which only Spesial-style menus collect.
+ */
+export function inputTypeFor(
+  service: RoutedService,
   requested: unknown,
   current: ServiceInputType = "imei",
 ): ServiceInputType {
-  if (!isSpecialService(service)) return "imei";
-  if (requested === undefined) return current;
-  const type = parseServiceInputType(requested);
+  if (service.fulfillmentChannel !== "supplier") return "imei";
+  const type = requested === undefined ? current : parseServiceInputType(requested);
   if (!type) {
     throw new BadRequestException("Jenis input harus IMEI, SN, ECID, IMEI/SN, Nomor HP, atau tidak ada.");
+  }
+  if (type === "none" && !isSpecialService(service)) {
+    throw new BadRequestException("Layanan tanpa IMEI/SN/ECID hanya untuk menu bertipe Spesial.");
   }
   return type;
 }
 
 type ExtraFieldInput = Partial<ExtraFieldFlags>;
 
-/** Extra order fields are Layanan Spesial only; a service without a device value needs at least one. */
+/** Extra order fields are Spesial-style menus only; a service without a device value needs at least one. */
 function extraFieldsFor(
-  service: { fulfillmentChannel: FulfillmentChannel; menu: ServiceMenu },
+  service: RoutedService,
   inputType: ServiceInputType,
   requested: ExtraFieldInput,
   current: ExtraFieldFlags = NO_EXTRA_FIELDS,
@@ -160,7 +175,7 @@ function serializeAdminService(service: ServiceWithAssignments) {
     supplierId: service.supplierId,
     supplierServiceId: service.supplierServiceId,
     supplierName: service.supplier?.name ?? null,
-    menu: service.menu,
+    menuId: service.menuId,
     priceUsdCents: service.priceUsdCents,
     costUsdCents: service.costUsdCents,
     serviceGroupId: service.serviceGroupId,
@@ -229,7 +244,7 @@ export class AdminServicesService {
     whatsappSlug?: string | null;
     assignedAdminIds?: string[];
     inputType?: unknown;
-    menu?: ServiceMenu;
+    menuId?: string | null;
   } & SupplierRoute & UsdPrices & ExtraFieldInput) {
     const name = String(input.name ?? "").trim();
     const description = sanitizeDescription(String(input.description ?? "")) || name;
@@ -243,17 +258,17 @@ export class AdminServicesService {
     const whatsappGroupId = whatsappGroupFor(fulfillmentChannel, input.whatsappGroupId);
     const whatsappSlug = whatsappSlugFor(fulfillmentChannel, input.whatsappSlug);
     const route = await this.supplierRoute(fulfillmentChannel, input);
-    const menu = input.menu ?? "ceir";
+    const menu = await this.menuFor(fulfillmentChannel, input.menuId);
     const inputType = await this.phoneInputFor(
-      route.supplierId,
+      route,
       inputTypeFor({ fulfillmentChannel, menu }, input.inputType),
     );
     const extraFields = extraFieldsFor({ fulfillmentChannel, menu }, inputType, input);
-    const special = isSpecialService({ fulfillmentChannel, menu });
-    if (special && input.priceUsdCents === undefined) {
-      throw new BadRequestException("Harga USD wajib untuk Layanan Spesial.");
+    const priceInUsd = isUsdService({ fulfillmentChannel, menu });
+    if (priceInUsd && input.priceUsdCents === undefined) {
+      throw new BadRequestException(`Harga USD wajib untuk menu ${menu!.label}.`);
     }
-    const usd = special
+    const usd = priceInUsd
       ? await this.usdPricing(input.priceUsdCents!, input.costUsdCents ?? 0)
       : null;
     const price = usd ? usd.price : Number(input.price);
@@ -279,7 +294,7 @@ export class AdminServicesService {
         whatsappGroupId,
         whatsappSlug,
         ...route,
-        menu,
+        menuId: menu?.id ?? null,
         inputType,
         ...extraFields,
         priceUsdCents: usd?.priceUsdCents ?? null,
@@ -322,10 +337,13 @@ export class AdminServicesService {
       whatsappSlug?: string | null;
       assignedAdminIds?: string[];
       inputType?: unknown;
-      menu?: ServiceMenu;
+      menuId?: string | null;
     } & SupplierRoute & UsdPrices & ExtraFieldInput,
   ) {
-    const existing = await this.prisma.service.findUnique({ where: { id } });
+    const existing = await this.prisma.service.findUnique({
+      where: { id },
+      include: { menu: { select: MENU_SELECT } },
+    });
     if (!existing) throw new NotFoundException("Layanan tidak ditemukan.");
     const fulfillmentChannel = input.fulfillmentChannel ?? existing.fulfillmentChannel;
     const whatsappGroupId = whatsappGroupFor(
@@ -339,18 +357,22 @@ export class AdminServicesService {
       existing.whatsappSlug,
     );
     const route = await this.supplierRoute(fulfillmentChannel, input, existing);
-    const menu = input.menu ?? existing.menu;
+    const menu = await this.menuFor(
+      fulfillmentChannel,
+      input.menuId !== undefined ? input.menuId : existing.menuId,
+    );
     const inputType = await this.phoneInputFor(
-      route.supplierId,
+      route,
       inputTypeFor({ fulfillmentChannel, menu }, input.inputType, existing.inputType),
+      existing,
     );
     const extraFields = extraFieldsFor({ fulfillmentChannel, menu }, inputType, input, existing);
-    const special = isSpecialService({ fulfillmentChannel, menu });
+    const priceInUsd = isUsdService({ fulfillmentChannel, menu });
     const priceUsdCents = input.priceUsdCents ?? existing.priceUsdCents;
-    if (special && priceUsdCents === null) {
-      throw new BadRequestException("Harga USD wajib untuk Layanan Spesial.");
+    if (priceInUsd && priceUsdCents === null) {
+      throw new BadRequestException(`Harga USD wajib untuk menu ${menu!.label}.`);
     }
-    const usd = special
+    const usd = priceInUsd
       ? await this.usdPricing(priceUsdCents!, input.costUsdCents ?? existing.costUsdCents ?? 0)
       : null;
 
@@ -413,7 +435,7 @@ export class AdminServicesService {
           whatsappGroupId,
           whatsappSlug,
           ...route,
-          menu,
+          menuId: menu?.id ?? null,
           inputType,
           ...extraFields,
           ...(isSpecialService({ fulfillmentChannel, menu }) ? {} : { serviceGroupId: null }),
@@ -535,11 +557,11 @@ export class AdminServicesService {
     const unique = [...new Set(ids)];
     if (!unique.length) return [];
     const found = await this.prisma.service.findMany({
-      where: { id: { in: unique }, fulfillmentChannel: "supplier", menu: "special" },
+      where: { id: { in: unique }, fulfillmentChannel: "supplier", menu: { style: "special" } },
       select: { id: true },
     });
     if (found.length !== unique.length) {
-      throw new BadRequestException("Grup hanya bisa berisi layanan di menu Layanan Spesial.");
+      throw new BadRequestException("Grup hanya bisa berisi layanan di menu bertipe Spesial.");
     }
     return unique;
   }
@@ -566,13 +588,30 @@ export class AdminServicesService {
     return { supplierId, supplierServiceId };
   }
 
-  /** GContact services always take a phone number, and only they may. */
+  /** Supplier services need a menu (the first one when none is picked); other channels have none. */
+  private async menuFor(channel: FulfillmentChannel, menuId: string | null | undefined) {
+    if (channel !== "supplier") return null;
+    const menu = menuId
+      ? await this.prisma.serviceMenu.findUnique({ where: { id: menuId }, select: MENU_SELECT })
+      : await this.prisma.serviceMenu.findFirst({
+          select: MENU_SELECT,
+          orderBy: [{ sortOrder: "asc" }, { label: "asc" }],
+        });
+    if (!menu) throw new BadRequestException("Pilih menu tempat layanan ini ditampilkan.");
+    return menu;
+  }
+
+  /**
+   * GContact services always take a phone number. A Dhru supplier service may
+   * too when the supplier lists it with `INPUTTYPE=phone` (e.g. CeirBot Getcontact).
+   */
   private async phoneInputFor(
-    supplierId: string | null,
+    route: { supplierId: string | null; supplierServiceId: string | null },
     inputType: ServiceInputType,
+    existing?: { inputType: ServiceInputType; supplierId: string | null; supplierServiceId: string | null },
   ): Promise<ServiceInputType> {
-    const supplier = supplierId
-      ? await this.prisma.supplier.findUnique({ where: { id: supplierId }, select: { kind: true } })
+    const supplier = route.supplierId
+      ? await this.prisma.supplier.findUnique({ where: { id: route.supplierId } })
       : null;
     if (supplier?.kind === "gcontact") {
       if (inputType !== "phone") {
@@ -580,10 +619,30 @@ export class AdminServicesService {
       }
       return inputType;
     }
-    if (inputType === "phone") {
-      throw new BadRequestException("Jenis input Nomor HP hanya untuk layanan supplier GContact.");
+    if (inputType !== "phone") return inputType;
+    const unchanged =
+      existing?.inputType === "phone" &&
+      existing.supplierId === route.supplierId &&
+      existing.supplierServiceId === route.supplierServiceId;
+    if (unchanged) return inputType;
+    if (supplier && route.supplierServiceId) {
+      let remote;
+      try {
+        remote = await supplierClient(supplier).serviceList();
+      } catch (err) {
+        if (err instanceof SupplierRequestError) {
+          throw new BadRequestException(`Jenis input supplier tidak bisa dicek: ${err.message}`);
+        }
+        throw err;
+      }
+      const declared = remote.ok
+        ? remote.data.find((svc) => svc.id === route.supplierServiceId)?.inputType
+        : null;
+      if (declared === "phone") return inputType;
     }
-    return inputType;
+    throw new BadRequestException(
+      "Jenis input Nomor HP hanya untuk layanan GContact atau layanan supplier yang memintanya.",
+    );
   }
 
   /** Slug of the requested code (or name), suffixed `-2`, `-3`, … until unused. */

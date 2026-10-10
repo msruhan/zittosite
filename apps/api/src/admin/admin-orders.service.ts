@@ -6,7 +6,7 @@ import {
 import { Prisma, type OrderStatus } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
 import { serializeOrderListItem } from "../orders/orders.serializer";
-import { SUPPLIER_ROUTED_ORDER } from "../orders/supplier-routed";
+import { MENU_SELECT, SUPPLIER_ROUTED_ORDER } from "../orders/supplier-routed";
 import {
   refundNote,
   refundOrderToBalance,
@@ -32,7 +32,7 @@ export function jakartaDayStart(value?: string): Date | null {
 }
 
 const orderInclude = {
-  service: true,
+  service: { include: { menu: { select: MENU_SELECT } } },
   user: true,
   assignedAdmin: true,
   invoice: {
@@ -49,7 +49,9 @@ const orderInclude = {
 } satisfies Prisma.OrderInclude;
 
 const exportInclude = {
-  service: { select: { name: true, fulfillmentChannel: true, menu: true, inputType: true } },
+  service: {
+    select: { name: true, fulfillmentChannel: true, menu: { select: { label: true } }, inputType: true },
+  },
   user: { select: { fullName: true, username: true } },
   assignedAdmin: { select: { fullName: true } },
   invoice: { select: { invoiceId: true, paymentStatus: true, paidAt: true } },

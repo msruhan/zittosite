@@ -14,6 +14,7 @@ import {
   formatUsd,
   parseUsdInput,
   sanitizeUsdInput,
+  supplierCreditToMenuUnits,
   usdCentsToIdr,
 } from "@/lib/format";
 import { ExtraFieldPicker } from "@/components/domain/extra-field-picker";
@@ -21,12 +22,23 @@ import { NO_EXTRA_FIELDS, hasExtraFields, type ExtraFieldFlags } from "@/lib/ord
 import { RICH_DESCRIPTION_MAX } from "@/lib/rich-text";
 import { cn } from "@/lib/utils";
 import {
-  SERVICE_MENU_LABEL,
+  MENU_STYLE_LABEL,
   type Service,
   type ServiceMenu,
   type Supplier,
   type SupplierRemoteService,
 } from "@/lib/types";
+
+type InputType = NonNullable<Service["inputType"]>;
+
+const INPUT_TYPE_SHORT: Record<InputType, string> = {
+  imei: "IMEI",
+  sn: "SN",
+  ecid: "ECID",
+  imei_sn: "IMEI/SN",
+  phone: "Nomor HP",
+  none: "Tanpa IMEI",
+};
 
 const CODE_MAX = 40;
 
@@ -60,12 +72,13 @@ function supplierDescription(info: string, name: string): string {
 
 /**
  * "Tambah dari API": lists a supplier's services; ticked ones become local
- * services on the API Supplier route, priced at supplier cost plus markup.
- * Layanan Spesial treat the supplier credit as USD; Order Ceir as Rupiah.
+ * services on the API Supplier route under the chosen menu, priced at supplier
+ * cost (converted to the menu's currency) plus markup.
  */
 export function SupplierImportPanel({
   formId,
   suppliers,
+  menus,
   existingServices,
   usdRate,
   onBusyChange,
@@ -74,6 +87,7 @@ export function SupplierImportPanel({
 }: {
   formId: string;
   suppliers: Supplier[];
+  menus: ServiceMenu[];
   existingServices: Service[];
   usdRate: number;
   onBusyChange: (busy: boolean) => void;
@@ -92,13 +106,20 @@ export function SupplierImportPanel({
   const [selected, setSelected] = React.useState<Set<string>>(new Set());
   const [markupText, setMarkupText] = React.useState("");
   const [online, setOnline] = React.useState(true);
-  const [menuChoice, setMenu] = React.useState<ServiceMenu>("ceir");
-  const [inputTypeChoice, setInputType] =
-    React.useState<NonNullable<Service["inputType"]>>("imei");
-  /** GContact lookups are always Layanan Spesial taking a phone number. */
+  const [menuId, setMenuId] = React.useState<string | null>(() => menus[0]?.id ?? null);
+  const menu = menus.find((entry) => entry.id === menuId) ?? null;
+  const usd = menu?.priceCurrency === "USD";
+  const special = menu?.style === "special";
+  const [inputTypeChoice, setInputType] = React.useState<InputType>("imei");
+  const inputType: InputType = special || inputTypeChoice !== "none" ? inputTypeChoice : "imei";
+  /** GContact lookups always take a phone number. */
   const gcontact = suppliers.find((s) => s.id === supplierId)?.kind === "gcontact";
-  const menu: ServiceMenu = gcontact ? "special" : menuChoice;
-  const inputType: NonNullable<Service["inputType"]> = gcontact ? "phone" : inputTypeChoice;
+  /** The supplier's own input type (CeirBot catalog metadata) wins over the panel's choice. */
+  const inputTypeFor = (svc: SupplierRemoteService): InputType => {
+    if (gcontact) return "phone";
+    if (svc.inputType && (svc.inputType !== "none" || special)) return svc.inputType;
+    return inputType;
+  };
   const [extraFields, setExtraFields] = React.useState<ExtraFieldFlags>(NO_EXTRA_FIELDS);
   const [fieldsError, setFieldsError] = React.useState<string>();
 
@@ -185,22 +206,21 @@ export function SupplierImportPanel({
     });
   }
 
-  const usd = menu === "special";
   const markup = usd ? (parseUsdInput(markupText) ?? 0) : Number(markupText) || 0;
-  /** Rupiah for Order Ceir, USD cents for Layanan Spesial. */
+  /** In the menu's price unit: Rupiah, or USD cents. */
   const costFor = (svc: SupplierRemoteService) =>
-    usd ? Math.round(svc.credit * 100) : Math.round(svc.credit);
+    supplierCreditToMenuUnits(svc.credit, svc.currency, menu?.priceCurrency ?? "IDR", usdRate);
   const priceFor = (svc: SupplierRemoteService) => Math.max(1, costFor(svc) + markup);
   const money = (amount: number) => (usd ? formatUsd(amount) : formatRupiah(amount));
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
-    if (!supplierId || !rows || selected.size === 0) return;
-    if (usd && inputType === "none" && !hasExtraFields(extraFields)) {
+    if (!supplierId || !rows || !menu || selected.size === 0) return;
+    const picks = rows.filter((svc) => selected.has(svc.id) && !imported.has(svc.id));
+    if (special && picks.some((svc) => inputTypeFor(svc) === "none") && !hasExtraFields(extraFields)) {
       setFieldsError("Tanpa IMEI/SN/ECID, centang minimal satu field: Qnt, Email, Username, atau Notes.");
       return;
     }
-    const picks = rows.filter((svc) => selected.has(svc.id) && !imported.has(svc.id));
     const taken = new Set(existingServices.map((s) => s.code ?? "").filter(Boolean));
     onBusyChange(true);
     const failed: string[] = [];
@@ -224,8 +244,9 @@ export function SupplierImportPanel({
             assignedAdminIds: [],
             supplierId,
             supplierServiceId: svc.id,
-            menu,
-            ...(usd ? { inputType, ...extraFields } : { inputType: "imei" }),
+            menuId: menu.id,
+            inputType: inputTypeFor(svc),
+            ...(special ? extraFields : NO_EXTRA_FIELDS),
           }),
         });
         created++;
@@ -235,7 +256,7 @@ export function SupplierImportPanel({
     }
     onBusyChange(false);
     if (created) {
-      toast.success(`${created} layanan ditambahkan ke ${SERVICE_MENU_LABEL[menu]}`, {
+      toast.success(`${created} layanan ditambahkan ke ${menu.label}`, {
         description: failed.length ? `${failed.length} gagal. ${failed[0]}` : undefined,
       });
       await onImported();
@@ -250,6 +271,17 @@ export function SupplierImportPanel({
         Belum ada supplier.{" "}
         <Link href="/admin/suppliers" className="font-bold text-action hover:underline">
           Tambahkan di Supplier API
+        </Link>{" "}
+        terlebih dahulu.
+      </p>
+    );
+  }
+  if (menus.length === 0) {
+    return (
+      <p className="rounded-md border border-dashed border-hairline px-3.5 py-3 text-body text-ink-soft">
+        Belum ada menu layanan.{" "}
+        <Link href="/admin/settings" className="font-bold text-action hover:underline">
+          Tambahkan di Settings › Menu user
         </Link>{" "}
         terlebih dahulu.
       </p>
@@ -310,56 +342,51 @@ export function SupplierImportPanel({
           label="Tampilkan di menu"
           htmlFor="import-menu"
           hint={
-            menu === "ceir"
-              ? "User memesan lewat menu Order Ceir. Harga supplier dibaca sebagai Rupiah."
-              : `Harga supplier dibaca sebagai dolar (USD), kurs ${formatRupiah(usdRate)} per $1.`
+            usd
+              ? `Harga dalam USD, kurs ${formatRupiah(usdRate)} per $1. Harga supplier dikonversi otomatis.`
+              : "Harga dalam Rupiah. Harga supplier dikonversi otomatis."
           }
         >
           <Select
             id="import-menu"
-            value={menu}
-            disabled={gcontact}
+            value={menu?.id}
             onValueChange={(value) => {
-              setMenu(value as ServiceMenu);
+              setMenuId(value);
               setMarkupText("");
             }}
-            options={[
-              { value: "ceir", label: SERVICE_MENU_LABEL.ceir },
-              { value: "special", label: SERVICE_MENU_LABEL.special },
-            ]}
+            options={menus.map((entry) => ({
+              value: entry.id,
+              label: entry.label,
+              hint: `${MENU_STYLE_LABEL[entry.style]} · ${entry.priceCurrency}`,
+            }))}
           />
         </Field>
-        {menu === "special" ? (
+        {gcontact ? null : (
           <Field
             label="Field yang diisi user"
             htmlFor="import-input-type"
-            hint="Berlaku untuk semua layanan yang dipilih."
+            hint="Untuk layanan yang jenis inputnya tidak ditentukan supplier."
           >
             <Select
               id="import-input-type"
               value={inputType}
-              disabled={gcontact}
               onValueChange={(value) => {
-                setInputType(value as NonNullable<Service["inputType"]>);
+                setInputType(value as InputType);
                 setFieldsError(undefined);
               }}
-              options={
-                gcontact
-                  ? [{ value: "phone", label: "Nomor HP" }]
-                  : [
-                      { value: "imei", label: "IMEI (15 digit)" },
-                      { value: "sn", label: "SN (Serial Number)" },
-                      { value: "ecid", label: "ECID" },
-                      { value: "imei_sn", label: "IMEI/SN (user pilih salah satu)" },
-                      { value: "none", label: "Tidak ada (tanpa IMEI/SN/ECID)" },
-                    ]
-              }
+              options={[
+                { value: "imei", label: "IMEI (15 digit)" },
+                { value: "sn", label: "SN (Serial Number)" },
+                { value: "ecid", label: "ECID" },
+                { value: "imei_sn", label: "IMEI/SN (user pilih salah satu)" },
+                ...(special ? [{ value: "none", label: "Tidak ada (tanpa IMEI/SN/ECID)" }] : []),
+              ]}
             />
           </Field>
-        ) : null}
+        )}
       </div>
 
-      {menu === "special" ? (
+      {special ? (
         <ExtraFieldPicker
           value={extraFields}
           error={fieldsError}
@@ -441,9 +468,11 @@ export function SupplierImportPanel({
                           />
                           <span className="min-w-0 flex-1">
                             <span className="block text-body font-medium text-ink">{svc.name}</span>
-                            {svc.time ? (
-                              <span className="block text-label text-ink-faint">{svc.time}</span>
-                            ) : null}
+                            <span className="block text-label text-ink-faint">
+                              {[svc.time, INPUT_TYPE_SHORT[inputTypeFor(svc)]]
+                                .filter(Boolean)
+                                .join(" · ")}
+                            </span>
                           </span>
                           <span className="shrink-0 text-right">
                             {done ? (

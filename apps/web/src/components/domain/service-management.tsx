@@ -27,7 +27,9 @@ import { ExtraFieldPicker } from "@/components/domain/extra-field-picker";
 import { NO_EXTRA_FIELDS, hasExtraFields } from "@/lib/order-fields";
 import {
   formatRupiah,
+  formatSupplierCredit,
   formatUsd,
+  supplierCreditToMenuUnits,
   parseUsdInput,
   sanitizeUsdInput,
   usdCentsToIdr,
@@ -37,7 +39,7 @@ import { RICH_DESCRIPTION_MAX, descriptionToPlain, isBlankRichText } from "@/lib
 import { RichTextEditor } from "@/components/ui/rich-text-editor";
 import { cn } from "@/lib/utils";
 import {
-  SERVICE_MENU_LABEL,
+  MENU_STYLE_LABEL,
   type Admin,
   type FulfillmentChannel,
   type Service,
@@ -57,6 +59,15 @@ const CHANNEL_LABEL: Record<FulfillmentChannel, string> = {
 };
 
 type ServiceDraft = Service & { assignedAdminIds: string[] };
+
+const INPUT_TYPE_OPTION_LABEL: Record<NonNullable<Service["inputType"]>, string> = {
+  imei: "IMEI (15 digit)",
+  sn: "SN (Serial Number)",
+  ecid: "ECID",
+  imei_sn: "IMEI/SN (user pilih salah satu)",
+  phone: "Nomor HP",
+  none: "Tidak ada (tanpa IMEI/SN/ECID)",
+};
 
 type Availability = "online" | "offline" | "hidden";
 
@@ -88,12 +99,14 @@ export function ServiceManagement({
   initialUsdRate,
   operators,
   suppliers,
+  menus,
 }: {
   initialServices: Service[];
   initialGroups: ServiceGroup[];
   initialUsdRate: number;
   operators: Admin[];
   suppliers: Supplier[];
+  menus: ServiceMenu[];
 }) {
   const [services, setServices] = React.useState(initialServices);
   const [groups, setGroups] = React.useState(initialGroups);
@@ -146,7 +159,11 @@ export function ServiceManagement({
     [services],
   );
   const specialServices = React.useMemo(
-    () => apiServices.filter((service) => service.menu === "special"),
+    () => apiServices.filter((service) => service.menu?.style === "special"),
+    [apiServices],
+  );
+  const usdServiceCount = React.useMemo(
+    () => apiServices.filter((service) => service.menu?.priceCurrency === "USD").length,
     [apiServices],
   );
   const tabServices = listTab === "api" ? apiServices : manualServices;
@@ -197,7 +214,7 @@ export function ServiceManagement({
     return tabServices.filter((service) => {
       if (activeSupplier !== "all" && service.supplierId !== activeSupplier) return false;
       if (activeGroup === "none") {
-        if (service.menu !== "special" || service.serviceGroupId) return false;
+        if (service.menu?.style !== "special" || service.serviceGroupId) return false;
       } else if (activeGroup !== "all" && service.serviceGroupId !== activeGroup) {
         return false;
       }
@@ -240,7 +257,7 @@ export function ServiceManagement({
             assignedAdminIds: next.assignedAdminIds,
             supplierId: next.supplierId ?? null,
             supplierServiceId: next.supplierServiceId ?? null,
-            menu: next.menu ?? "ceir",
+            menuId: next.menuId ?? null,
             inputType: next.inputType ?? "imei",
             requireQnt: next.requireQnt ?? false,
             requireEmail: next.requireEmail ?? false,
@@ -277,7 +294,7 @@ export function ServiceManagement({
             assignedAdminIds: next.assignedAdminIds,
             supplierId: next.supplierId ?? null,
             supplierServiceId: next.supplierServiceId ?? null,
-            menu: next.menu ?? "ceir",
+            menuId: next.menuId ?? null,
             inputType: next.inputType ?? "imei",
             requireQnt: next.requireQnt ?? false,
             requireEmail: next.requireEmail ?? false,
@@ -403,7 +420,7 @@ export function ServiceManagement({
           <UsdRateCard
             key={usdRate}
             rate={usdRate}
-            serviceCount={specialServices.length}
+            serviceCount={usdServiceCount}
             onSaved={async (rate) => {
               setUsdRate(rate);
               await reload();
@@ -522,7 +539,7 @@ export function ServiceManagement({
                         </Tag>
                         {service.fulfillmentChannel === "supplier" ? (
                           <p className="mt-1 whitespace-nowrap text-label text-ink-soft">
-                            Menu {SERVICE_MENU_LABEL[service.menu ?? "ceir"]}
+                            Menu {service.menu?.label ?? "belum dipilih"}
                             {service.serviceGroupName ? ` · ${service.serviceGroupName}` : ""}
                           </p>
                         ) : null}
@@ -654,6 +671,7 @@ export function ServiceManagement({
             service={editing}
             operators={operators}
             suppliers={suppliers}
+            menus={menus}
             creating={creating}
             initialTab={listTab}
             existingServices={services}
@@ -864,6 +882,7 @@ function ServiceFormDialog({
   service,
   operators,
   suppliers,
+  menus,
   creating,
   initialTab,
   existingServices,
@@ -877,6 +896,7 @@ function ServiceFormDialog({
   service: ServiceDraft;
   operators: Admin[];
   suppliers: Supplier[];
+  menus: ServiceMenu[];
   creating: boolean;
   initialTab: CreateTab;
   existingServices: Service[];
@@ -907,16 +927,39 @@ function ServiceFormDialog({
     costPrice?: string;
     estimate?: string;
     supplier?: string;
+    menu?: string;
     waGroup?: string;
     fields?: string;
     description?: string;
   }>({});
   const costPrice = draft.costPrice ?? 0;
   const margin = draft.price - costPrice;
-  const special = draft.fulfillmentChannel === "supplier" && draft.menu === "special";
+  const supplierRouted = draft.fulfillmentChannel === "supplier";
+  const menu = supplierRouted
+    ? (menus.find((entry) => entry.id === draft.menuId) ?? menus[0] ?? null)
+    : null;
+  const usd = menu?.priceCurrency === "USD";
+  const special = menu?.style === "special";
   const lookupService =
-    draft.fulfillmentChannel === "supplier" &&
+    supplierRouted &&
     suppliers.find((supplier) => supplier.id === draft.supplierId)?.kind === "gcontact";
+  /** The supplier's own input type (CeirBot catalog metadata) wins over the admin's choice. */
+  const [remoteInputType, setRemoteInputType] = React.useState<SupplierRemoteService["inputType"]>(null);
+  const lockedInputType: Service["inputType"] | null = lookupService
+    ? "phone"
+    : supplierRouted && remoteInputType && (remoteInputType !== "none" || special)
+      ? remoteInputType
+      : null;
+  const inputTypeOptions: SelectOption[] = lockedInputType
+    ? [{ value: lockedInputType, label: INPUT_TYPE_OPTION_LABEL[lockedInputType] }]
+    : (["imei", "sn", "ecid", "imei_sn", ...(special ? (["none"] as const) : [])] as const).map(
+        (value) => ({ value, label: INPUT_TYPE_OPTION_LABEL[value] }),
+      );
+  const inputType: NonNullable<Service["inputType"]> =
+    lockedInputType ??
+    (inputTypeOptions.some((option) => option.value === draft.inputType)
+      ? (draft.inputType ?? "imei")
+      : "imei");
   const [usdText, setUsdText] = React.useState(() => ({
     price: service.priceUsdCents != null ? (service.priceUsdCents / 100).toFixed(2) : "",
     cost: service.costUsdCents != null ? (service.costUsdCents / 100).toFixed(2) : "",
@@ -930,7 +973,7 @@ function ServiceFormDialog({
     if (!draft.name.trim()) {
       nextErrors.name = "Masukkan nama layanan.";
     }
-    if (special) {
+    if (usd) {
       if (!priceUsdCents) nextErrors.price = "Harga harus lebih dari $0.";
       else if (costUsdCents > priceUsdCents) {
         nextErrors.costPrice = "Harga modal melebihi harga jual.";
@@ -949,6 +992,9 @@ function ServiceFormDialog({
     ) {
       nextErrors.supplier = "Pilih supplier dan layanan supplier.";
     }
+    if (supplierRouted && !menu) {
+      nextErrors.menu = "Buat menu dulu di Settings › Menu user.";
+    }
     if (draft.fulfillmentChannel === "whatsapp_admin" && !draft.whatsappGroupId) {
       nextErrors.waGroup = "Pilih grup WhatsApp tujuan order.";
     }
@@ -958,7 +1004,7 @@ function ServiceFormDialog({
     if (draft.description.length > RICH_DESCRIPTION_MAX) {
       nextErrors.description = "Deskripsi terlalu panjang. Kurangi teks atau gambar dari URL luar.";
     }
-    if (special && draft.inputType === "none" && !hasExtraFields(draft)) {
+    if (special && inputType === "none" && !hasExtraFields(draft)) {
       nextErrors.fields =
         "Tanpa IMEI/SN/ECID, centang minimal satu field: Qnt, Email, Username, atau Notes.";
     }
@@ -969,8 +1015,11 @@ function ServiceFormDialog({
     try {
       await onSave({
         ...draft,
-        priceUsdCents: special ? priceUsdCents : null,
-        costUsdCents: special ? costUsdCents : null,
+        menuId: menu?.id ?? null,
+        inputType: supplierRouted ? inputType : "imei",
+        ...(special ? {} : NO_EXTRA_FIELDS),
+        priceUsdCents: usd ? priceUsdCents : null,
+        costUsdCents: usd ? costUsdCents : null,
         name: draft.name.trim(),
         description: isBlankRichText(draft.description) ? "" : draft.description.trim(),
         estimate: draft.estimate.trim(),
@@ -1041,6 +1090,7 @@ function ServiceFormDialog({
         <SupplierImportPanel
           formId="supplier-import-form"
           suppliers={suppliers}
+          menus={menus}
           existingServices={existingServices}
           usdRate={usdRate}
           onBusyChange={setImportBusy}
@@ -1094,7 +1144,7 @@ function ServiceFormDialog({
             />
           </Field>
         )}
-        {special ? (
+        {usd ? (
           <UsdPriceFields
             priceText={usdText.price}
             costText={usdText.cost}
@@ -1263,94 +1313,93 @@ function ServiceFormDialog({
             suppliers={suppliers}
             supplierId={draft.supplierId ?? null}
             supplierServiceId={draft.supplierServiceId ?? null}
-            usd={special}
+            menuCurrency={menu?.priceCurrency ?? "IDR"}
             error={errors.supplier}
+            onResolved={(remote) => setRemoteInputType(remote?.inputType ?? null)}
             onChange={(next) => {
-              const lookup =
-                suppliers.find((supplier) => supplier.id === next.supplierId)?.kind === "gcontact";
+              const remote = next.remote;
+              const cost = remote
+                ? supplierCreditToMenuUnits(remote.credit, remote.currency, menu?.priceCurrency ?? "IDR", usdRate)
+                : undefined;
               setDraft((current) => ({
                 ...current,
-                // GContact lookups are Layanan Spesial taking a phone number, and only they take one.
-                ...(lookup
-                  ? { menu: "special" as const, inputType: "phone" as const }
-                  : current.inputType === "phone"
-                    ? { inputType: "imei" as const }
-                    : {}),
                 supplierId: next.supplierId,
                 supplierServiceId: next.supplierServiceId,
-                ...(next.credit !== undefined && !special
-                  ? { costPrice: Math.round(next.credit) }
-                  : {}),
+                ...(cost !== undefined && !usd ? { costPrice: cost } : {}),
               }));
-              if (next.credit !== undefined && special) {
-                setUsdText((current) => ({ ...current, cost: next.credit!.toFixed(2) }));
+              if (cost !== undefined && usd) {
+                setUsdText((current) => ({ ...current, cost: (cost / 100).toFixed(2) }));
               }
             }}
           />
         ) : null}
-        {draft.fulfillmentChannel === "supplier" ? (
+        {supplierRouted ? (
           <Field
             label="Tampilkan di menu"
             htmlFor="menu"
-            hint="Menu user tempat layanan ini bisa dipesan."
+            error={errors.menu}
+            hint={
+              menu
+                ? `Tipe ${MENU_STYLE_LABEL[menu.style]}, harga dalam ${menu.priceCurrency === "USD" ? "USD" : "Rupiah"}. Tambah menu di Settings › Menu user.`
+                : "Belum ada menu. Tambah menu di Settings › Menu user."
+            }
           >
             <Select
               id="menu"
-              value={draft.menu ?? "ceir"}
-              disabled={lookupService}
-              onValueChange={(value) =>
-              {
+              value={menu?.id}
+              placeholder="Pilih menu"
+              invalid={Boolean(errors.menu)}
+              onValueChange={(value) => {
+                const next = menus.find((entry) => entry.id === value);
+                if (!next) return;
                 setDraft((current) => ({
                   ...current,
-                  menu: value as ServiceMenu,
-                  ...(value === "ceir" ? { inputType: "imei" as const, ...NO_EXTRA_FIELDS } : {}),
+                  menuId: next.id,
+                  ...(next.style === "special" ? {} : NO_EXTRA_FIELDS),
                 }));
-                if (value === "special" && !usdText.price && draft.price > 0) {
+                setErrors((current) => ({ ...current, menu: undefined }));
+                if (next.priceCurrency === "USD" && !usdText.price && draft.price > 0) {
                   setUsdText({
                     price: (draft.price / usdRate).toFixed(2),
                     cost: costPrice > 0 ? (costPrice / usdRate).toFixed(2) : "",
                   });
                 }
-              }
-              }
-              options={[
-                { value: "ceir", label: SERVICE_MENU_LABEL.ceir },
-                { value: "special", label: SERVICE_MENU_LABEL.special },
-              ]}
+              }}
+              options={menus.map((entry) => ({
+                value: entry.id,
+                label: entry.label,
+                hint: `${MENU_STYLE_LABEL[entry.style]} · ${entry.priceCurrency}`,
+              }))}
             />
           </Field>
         ) : null}
-        {draft.fulfillmentChannel === "supplier" && draft.menu === "special" ? (
+        {supplierRouted ? (
+          <Field
+            label="Field yang diisi user"
+            htmlFor="inputType"
+            hint={
+              lockedInputType
+                ? "Ditentukan oleh supplier."
+                : "Data yang diisi user saat order."
+            }
+          >
+            <Select
+              id="inputType"
+              value={inputType}
+              onValueChange={(value) => {
+                setDraft((current) => ({
+                  ...current,
+                  inputType: value as NonNullable<Service["inputType"]>,
+                }));
+                setErrors((current) => ({ ...current, fields: undefined }));
+              }}
+              disabled={Boolean(lockedInputType)}
+              options={inputTypeOptions}
+            />
+          </Field>
+        ) : null}
+        {special ? (
           <>
-            <Field
-              label="Field yang diisi user"
-              htmlFor="inputType"
-              hint="Khusus Layanan Spesial. Data perangkat yang diisi user saat order."
-            >
-              <Select
-                id="inputType"
-                value={draft.inputType ?? "imei"}
-                onValueChange={(value) => {
-                  setDraft((current) => ({
-                    ...current,
-                    inputType: value as NonNullable<Service["inputType"]>,
-                  }));
-                  setErrors((current) => ({ ...current, fields: undefined }));
-                }}
-                disabled={lookupService}
-                options={
-                  lookupService
-                    ? [{ value: "phone", label: "Nomor HP" }]
-                    : [
-                        { value: "imei", label: "IMEI (15 digit)" },
-                        { value: "sn", label: "SN (Serial Number)" },
-                        { value: "ecid", label: "ECID" },
-                        { value: "imei_sn", label: "IMEI/SN (user pilih salah satu)" },
-                        { value: "none", label: "Tidak ada (tanpa IMEI/SN/ECID)" },
-                      ]
-                }
-              />
-            </Field>
             <ExtraFieldPicker
               value={draft}
               error={errors.fields}
@@ -1382,20 +1431,23 @@ function SupplierPicker({
   suppliers,
   supplierId,
   supplierServiceId,
-  usd,
+  menuCurrency,
   error,
+  onResolved,
   onChange,
 }: {
   suppliers: Supplier[];
   supplierId: string | null;
   supplierServiceId: string | null;
-  /** Layanan Spesial: the supplier credit is in USD. */
-  usd: boolean;
+  /** Currency assumed for suppliers that do not state theirs. */
+  menuCurrency: "IDR" | "USD";
   error?: string;
+  /** The selected supplier service once the list is loaded (null when gone or not chosen). */
+  onResolved: (remote: SupplierRemoteService | null) => void;
   onChange: (next: {
     supplierId: string | null;
     supplierServiceId: string | null;
-    credit?: number;
+    remote?: SupplierRemoteService;
   }) => void;
 }) {
   const [loaded, setLoaded] = React.useState<{
@@ -1428,6 +1480,15 @@ function SupplierPicker({
     };
   }, [supplierId]);
 
+  const resolved = !supplierId
+    ? null
+    : remote
+      ? (remote.find((svc) => svc.id === supplierServiceId) ?? null)
+      : undefined;
+  React.useEffect(() => {
+    if (resolved !== undefined) onResolved(resolved);
+  }, [resolved, onResolved]);
+
   if (suppliers.length === 0) {
     return (
       <p className="rounded-md border border-dashed border-hairline px-3.5 py-3 text-body text-ink-soft">
@@ -1439,9 +1500,7 @@ function SupplierPicker({
   const selected = remote?.find((svc) => svc.id === supplierServiceId);
   const options: SelectOption[] = (remote ?? []).map((svc) => ({
     value: svc.id,
-    label: `${svc.name} — ${
-      usd ? formatUsd(Math.round(svc.credit * 100)) : formatRupiah(Math.round(svc.credit))
-    }`,
+    label: `${svc.name} — ${formatSupplierCredit(svc.credit, svc.currency, menuCurrency)}`,
     group: svc.group,
   }));
   if (supplierServiceId && !selected) {
@@ -1487,7 +1546,7 @@ function SupplierPicker({
               onChange({
                 supplierId,
                 supplierServiceId: value,
-                credit: remote?.find((svc) => svc.id === value)?.credit,
+                remote: remote?.find((svc) => svc.id === value),
               })
             }
             options={options}

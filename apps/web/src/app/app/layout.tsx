@@ -8,11 +8,7 @@ import { ApiError } from "@/lib/api";
 import { serverApi } from "@/lib/server-api";
 import type { OrderDetail, RunningAd, User } from "@/lib/types";
 import { loadUserMenus } from "@/lib/server-user-menus";
-import {
-  disabledUserMenuHrefs,
-  userMenuNavLabels,
-  type UserMenus,
-} from "@/lib/user-menus";
+import { ORDER_MENU_HREF, menuNavItems, type UserMenus } from "@/lib/user-menus";
 
 export default async function UserPortalLayout({
   children,
@@ -53,10 +49,11 @@ export default async function UserPortalLayout({
     <AppShell
       variant="user"
       hideHrefs={[
-        ...disabledUserMenuHrefs(menus),
+        ...(menus.order.enabled ? [] : [ORDER_MENU_HREF]),
         ...(user.apiEnabled ? [] : ["/app/api", "/app/docs"]),
       ]}
-      navLabels={userMenuNavLabels(menus)}
+      navLabels={{ [ORDER_MENU_HREF]: menus.order.label }}
+      menuItems={menuNavItems(menus)}
       banner={<AdsRunnerTicker items={ads} />}
       topbarRight={
         <>

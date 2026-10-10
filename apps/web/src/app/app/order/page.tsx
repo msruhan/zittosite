@@ -6,7 +6,7 @@ import { Card, CardBody } from "@/components/ui/card";
 import { CreateOrderForm } from "@/components/domain/create-order-form";
 import { ApiError } from "@/lib/api";
 import { serverApi } from "@/lib/server-api";
-import { requireUserMenu } from "@/lib/server-user-menus";
+import { requireOrderMenu } from "@/lib/server-user-menus";
 import type { Service, User } from "@/lib/types";
 
 export const metadata: Metadata = {
@@ -14,7 +14,7 @@ export const metadata: Metadata = {
 };
 
 export default async function CreateOrderPage() {
-  const menu = await requireUserMenu("order");
+  const menu = await requireOrderMenu();
   let services: Service[] = [];
   let balance = 0;
   try {

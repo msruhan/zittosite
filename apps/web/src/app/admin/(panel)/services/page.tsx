@@ -6,6 +6,7 @@ import { ApiError } from "@/lib/api";
 import { DEFAULT_USD_RATE } from "@/lib/format";
 import { serverApi } from "@/lib/server-api";
 import type { Admin, Service, ServiceGroup, Supplier } from "@/lib/types";
+import type { UserMenus, UserServiceMenu } from "@/lib/user-menus";
 
 export const metadata: Metadata = {
   title: "Services",
@@ -28,16 +29,20 @@ export default async function AdminServicesPage() {
   let suppliers: Supplier[] = [];
   let groups: ServiceGroup[] = [];
   let usdRate = DEFAULT_USD_RATE;
+  let menus: UserServiceMenu[] = [];
   try {
     let rate: { rate: number };
-    [services, admins, suppliers, groups, rate] = await Promise.all([
+    let userMenus: UserMenus;
+    [services, admins, suppliers, groups, rate, userMenus] = await Promise.all([
       serverApi<Service[]>("/admin/services"),
       serverApi<Admin[]>("/admin/admins"),
       serverApi<Supplier[]>("/admin/suppliers"),
       serverApi<ServiceGroup[]>("/admin/service-groups"),
       serverApi<{ rate: number }>("/admin/usd-rate"),
+      serverApi<UserMenus>("/admin/user-menus"),
     ]);
     usdRate = rate.rate;
+    menus = userMenus.menus;
   } catch (err) {
     if (err instanceof ApiError && err.status === 401) redirect("/admin/login");
     if (err instanceof ApiError && err.status === 403) redirect("/admin/orders");
@@ -59,6 +64,7 @@ export default async function AdminServicesPage() {
           ...admins.filter((admin) => admin.role !== "super_admin"),
         ]}
         suppliers={suppliers}
+        menus={menus}
       />
     </>
   );

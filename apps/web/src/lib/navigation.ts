@@ -22,6 +22,8 @@ import {
   Wallet,
 } from "@phosphor-icons/react";
 import type { Icon } from "@phosphor-icons/react";
+import type { MenuStyle } from "@/lib/types";
+import type { MenuNavItem } from "@/lib/user-menus";
 
 export interface NavItem {
   href: string;
@@ -34,8 +36,6 @@ export interface NavItem {
 export const userNav: NavItem[] = [
   { href: "/app/dashboard", label: "Dashboard", icon: SquaresFour },
   { href: "/app/order", label: "Order", icon: Package, nested: true },
-  { href: "/app/ceir/order", label: "Order Ceir", icon: DeviceMobile },
-  { href: "/app/spesial/order", label: "Layanan Spesial", icon: Sparkle },
   { href: "/app/riwayat", label: "Riwayat Order", icon: ClockCounterClockwise },
   { href: "/app/topup", label: "Topup Saldo", icon: Wallet, nested: true },
   { href: "/app/api", label: "API Access", icon: Code },
@@ -71,6 +71,28 @@ export const NAV_BY_VARIANT = {
 } as const;
 
 export type NavVariant = keyof typeof NAV_BY_VARIANT;
+
+/** Icon of an admin-defined service menu, by its style. */
+export const MENU_STYLE_ICON: Record<MenuStyle, Icon> = {
+  ceir: DeviceMobile,
+  special: Sparkle,
+};
+
+/** Service menus are listed right after this entry. */
+export const MENU_NAV_ANCHOR = "/app/order";
+
+/** Static items plus the service menus (inserted after the Order entry). */
+export function navItemsWithMenus(items: NavItem[], menus: MenuNavItem[] | undefined): NavItem[] {
+  if (!menus?.length) return items;
+  const extra: NavItem[] = menus.map((menu) => ({
+    href: menu.href,
+    label: menu.label,
+    icon: MENU_STYLE_ICON[menu.style],
+  }));
+  const at = items.findIndex((item) => item.href === MENU_NAV_ANCHOR);
+  if (at < 0) return [...items, ...extra];
+  return [...items.slice(0, at + 1), ...extra, ...items.slice(at + 1)];
+}
 
 export function isNavItemActive(item: NavItem, pathname: string): boolean {
   if (item.nested) return pathname.startsWith(item.href);

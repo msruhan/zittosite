@@ -31,6 +31,7 @@ import { parseImeiList } from "./imei-list";
 import { NO_DEVICE_VALUE, parseOrderExtras } from "./special-fields";
 import { encryptSupplierKey } from "../suppliers/supplier-secret";
 import {
+  MENU_SELECT,
   type OrderVia,
   maxBulkFor,
   orderViaWhere,
@@ -60,7 +61,7 @@ const CANCELLABLE_BY_ADMIN: OrderStatus[] = [
 ];
 
 const orderInclude = {
-  service: true,
+  service: { include: { menu: { select: MENU_SELECT } } },
   user: true,
   assignedAdmin: true,
   invoice: {
@@ -125,6 +126,7 @@ export class OrdersService {
         groupPrices: { where: { groupId: groupId ?? "" }, select: { price: true } },
         userPrices: { where: { userId }, select: { price: true } },
         serviceGroup: { select: { name: true } },
+        menu: { select: MENU_SELECT },
       },
     });
     return services.map(({ groupPrices, userPrices, serviceGroup, ...service }) => {
@@ -256,13 +258,16 @@ export class OrdersService {
 
     const [user, service] = await Promise.all([
       this.prisma.user.findUniqueOrThrow({ where: { id: userId } }),
-      this.prisma.service.findUnique({ where: { id: serviceId } }),
+      this.prisma.service.findUnique({
+        where: { id: serviceId },
+        include: { menu: { select: MENU_SELECT } },
+      }),
     ]);
     if (!service || !service.active) {
       throw new BadRequestException("Layanan tidak tersedia.");
     }
     if (channel === "web") {
-      const menu = (await this.userMenus.get())[menuOfService(service)];
+      const menu = menuOfService(service, (await this.userMenus.get()).order);
       if (!menu.enabled) {
         throw new BadRequestException(`Menu ${menu.label} sedang dinonaktifkan.`);
       }

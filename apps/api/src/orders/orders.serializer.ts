@@ -9,13 +9,17 @@ import type {
 } from "@prisma/client";
 import { customerActor, customerText } from "./customer-text";
 import { decryptSupplierKey } from "../suppliers/supplier-secret";
+import type { MenuInfo } from "./supplier-routed";
 
 type InvoiceWithOrders = PaymentInvoice & {
   orders?: Array<Pick<Order, "orderId" | "imei" | "status">>;
 };
 
+/** Services are always loaded with their menu (`include: { menu: { select: MENU_SELECT } }`). */
+export type ServiceWithMenu = Service & { menu: MenuInfo | null };
+
 type OrderWithRelations = Order & {
-  service: Service;
+  service: ServiceWithMenu;
   user: User;
   assignedAdmin: Admin | null;
   invoice: InvoiceWithOrders | null;
@@ -33,8 +37,18 @@ function iso(value: Date | null | undefined): string | null {
   return value ? value.toISOString() : null;
 }
 
+export function serializeMenu(menu: MenuInfo) {
+  return {
+    id: menu.id,
+    slug: menu.slug,
+    label: menu.label,
+    style: menu.style,
+    priceCurrency: menu.priceCurrency,
+  };
+}
+
 export function serializeService(
-  service: Service,
+  service: ServiceWithMenu,
   effectivePrice?: number,
 ) {
   return {
@@ -47,7 +61,8 @@ export function serializeService(
     active: service.active,
     hidden: service.hidden,
     via: service.fulfillmentChannel === "supplier" ? "supplier" : "manual",
-    menu: service.fulfillmentChannel === "supplier" ? service.menu : null,
+    menu:
+      service.fulfillmentChannel === "supplier" && service.menu ? serializeMenu(service.menu) : null,
     inputType: service.inputType,
     requireQnt: service.requireQnt,
     requireEmail: service.requireEmail,

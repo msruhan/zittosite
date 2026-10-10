@@ -25,7 +25,7 @@ function row(overrides: Partial<ExportOrderRow> = {}): ExportOrderRow {
     startedAt: null,
     completedAt: new Date("2026-10-03T03:30:00Z"),
     createdAt: new Date("2026-10-03T03:00:00Z"),
-    service: { name: "Cek Status", fulfillmentChannel: "telegram", menu: "ceir", inputType: "imei" },
+    service: { name: "Cek Status", fulfillmentChannel: "telegram", menu: null, inputType: "imei" },
     user: { fullName: "Budi", username: "budi" },
     assignedAdmin: { fullName: "Admin Satu" },
     invoice: { invoiceId: "INV-1", paymentStatus: "paid", paidAt: new Date("2026-10-03T03:01:00Z") },
@@ -74,8 +74,10 @@ test("summary sheet leaves test orders out of the totals", async () => {
 });
 
 test("route label and file stamp", () => {
-  assert.equal(serviceRouteLabel({ name: "", fulfillmentChannel: "supplier", menu: "special", inputType: "sn" }), "Layanan Spesial");
-  assert.equal(serviceRouteLabel({ name: "", fulfillmentChannel: "supplier", menu: "ceir", inputType: "imei" }), "Order Ceir");
-  assert.equal(serviceRouteLabel({ name: "", fulfillmentChannel: "whatsapp", menu: "ceir", inputType: "imei" }), "Manual");
+  const special = { label: "Layanan Spesial" };
+  const phone = { label: "Cek Nomor HP" };
+  assert.equal(serviceRouteLabel({ name: "", fulfillmentChannel: "supplier", menu: special, inputType: "sn" }), "Layanan Spesial");
+  assert.equal(serviceRouteLabel({ name: "", fulfillmentChannel: "supplier", menu: phone, inputType: "phone" }), "Cek Nomor HP");
+  assert.equal(serviceRouteLabel({ name: "", fulfillmentChannel: "whatsapp", menu: null, inputType: "imei" }), "Manual");
   assert.equal(wibStamp(new Date("2026-10-03T17:30:00Z")), "20261004-0030");
 });

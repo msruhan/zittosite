@@ -52,10 +52,11 @@ test("more than 6 rejected", () => {
 });
 
 test("Layanan Spesial caps a bulk order at 2", () => {
-  const special = maxBulkFor({ fulfillmentChannel: "supplier", menu: "special" });
+  const special = maxBulkFor({ fulfillmentChannel: "supplier", menu: { style: "special" } });
   assert.equal(special, 2);
-  assert.equal(maxBulkFor({ fulfillmentChannel: "supplier", menu: "ceir" }), 6);
-  assert.equal(maxBulkFor({ fulfillmentChannel: "telegram", menu: "special" }), 6);
+  assert.equal(maxBulkFor({ fulfillmentChannel: "supplier", menu: { style: "ceir" } }), 6);
+  assert.equal(maxBulkFor({ fulfillmentChannel: "supplier", menu: null }), 6);
+  assert.equal(maxBulkFor({ fulfillmentChannel: "telegram", menu: { style: "special" } }), 6);
   assert.deepEqual(parseImeiList("C02XK0ABJG5H\nF2LX12AB9Q0D\nDMPXK1ABCD12", "sn", special), {
     ok: false,
     errors: ["Maksimal 2 SN per order (saat ini 3)."],

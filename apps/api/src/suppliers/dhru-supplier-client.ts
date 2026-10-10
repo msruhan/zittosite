@@ -8,6 +8,9 @@ import { looksLikeImei } from "../orders/imei-list";
 
 export type SupplierConfig = { baseUrl: string; username: string; apiKey: string };
 
+export type RemoteInputType = "imei" | "sn" | "ecid" | "imei_sn" | "phone" | "none";
+export type RemoteCurrency = "IDR" | "USD";
+
 export type RemoteService = {
   id: string;
   name: string;
@@ -15,7 +18,22 @@ export type RemoteService = {
   credit: number;
   time: string;
   info: string;
+  /** Catalog metadata (CeirBot `INPUTTYPE`/`CURRENCY`); null when the panel does not send it. */
+  inputType: RemoteInputType | null;
+  currency: RemoteCurrency | null;
 };
+
+const REMOTE_INPUT_TYPES: readonly RemoteInputType[] = ["imei", "sn", "ecid", "imei_sn", "phone", "none"];
+
+function remoteInputType(value: unknown): RemoteInputType | null {
+  const type = text(value).toLowerCase();
+  return REMOTE_INPUT_TYPES.find((known) => known === type) ?? null;
+}
+
+function remoteCurrency(value: unknown): RemoteCurrency | null {
+  const code = text(value).toUpperCase();
+  return code === "IDR" || code === "USD" ? code : null;
+}
 
 export type DhruReply<T> = { ok: true; data: T } | { ok: false; message: string };
 
@@ -89,6 +107,8 @@ export function parseServiceList(list: unknown): RemoteService[] {
         credit: Number.parseFloat(text(svc.CREDIT)) || 0,
         time: text(svc.TIME),
         info: text(svc.INFO),
+        inputType: remoteInputType(svc.INPUTTYPE),
+        currency: remoteCurrency(svc.CURRENCY),
       });
     }
   }

@@ -9,6 +9,22 @@ export function usdCentsToIdr(cents: number, rate: number): number {
   return Math.round((cents * rate) / 100);
 }
 
+/**
+ * Supplier credit in the units of a menu: USD cents for USD menus, Rupiah
+ * otherwise. Without a declared currency, USD menus read the credit as dollars
+ * and Rupiah menus as Rupiah.
+ */
+export function supplierCreditToMenuUnits(
+  credit: number,
+  creditCurrency: "IDR" | "USD" | null,
+  menuCurrency: "IDR" | "USD",
+  rate: number,
+): number {
+  const from = creditCurrency ?? menuCurrency;
+  if (from === menuCurrency) return Math.round(credit * (menuCurrency === "USD" ? 100 : 1));
+  return menuCurrency === "USD" ? Math.round((credit * 100) / rate) : Math.round(credit * rate);
+}
+
 /** Dollars from the client (e.g. 1.25) to whole cents; undefined when absent. */
 export function parseUsdCents(value: unknown, field: string): number | undefined {
   if (value === undefined || value === null || value === "") return undefined;

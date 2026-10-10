@@ -68,7 +68,7 @@ export type ExportOrderRow = {
   service: {
     name: string;
     fulfillmentChannel: string;
-    menu: string;
+    menu: { label: string } | null;
     inputType: string;
   };
   user: { fullName: string; username: string };
@@ -109,7 +109,7 @@ function wibText(date: Date): string {
 
 export function serviceRouteLabel(service: ExportOrderRow["service"]): string {
   if (service.fulfillmentChannel !== "supplier") return "Manual";
-  return service.menu === "special" ? "Layanan Spesial" : "Order Ceir";
+  return service.menu?.label ?? "Supplier API";
 }
 
 type Column = {

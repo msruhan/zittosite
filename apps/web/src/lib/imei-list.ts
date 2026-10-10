@@ -3,9 +3,11 @@ export const IMEI_LENGTH = 15;
 export const MAX_BULK_IMEIS = 6;
 export const MAX_SPECIAL_BULK = 2;
 
-/** Most values one bulk order may carry; Layanan Spesial allows fewer. */
-export function maxBulkFor(service: { via?: string; menu?: string | null } | null): number {
-  return service?.via === "supplier" && service.menu === "special"
+/** Most values one bulk order may carry; Spesial-style menus allow fewer. */
+export function maxBulkFor(
+  service: { via?: string; menu?: { style: string } | null } | null,
+): number {
+  return service?.via === "supplier" && service.menu?.style === "special"
     ? MAX_SPECIAL_BULK
     : MAX_BULK_IMEIS;
 }
