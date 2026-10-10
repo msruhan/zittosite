@@ -23,8 +23,6 @@ import {
   isSpecialService,
   isUsdService,
 } from "../orders/supplier-routed";
-import { SupplierRequestError } from "../suppliers/dhru-supplier-client";
-import { supplierClient } from "../suppliers/suppliers.service";
 import { usdCentsToIdr } from "../orders/usd-pricing";
 import { UsdRateService } from "../orders/usd-rate.service";
 import { type PriceAdjustment, adjustedPrice, adjustmentError } from "./service-group-pricing";
@@ -364,7 +362,6 @@ export class AdminServicesService {
     const inputType = await this.phoneInputFor(
       route,
       inputTypeFor({ fulfillmentChannel, menu }, input.inputType, existing.inputType),
-      existing,
     );
     const extraFields = extraFieldsFor({ fulfillmentChannel, menu }, inputType, input, existing);
     const priceInUsd = isUsdService({ fulfillmentChannel, menu });
@@ -601,48 +598,20 @@ export class AdminServicesService {
     return menu;
   }
 
-  /**
-   * GContact services always take a phone number. A Dhru supplier service may
-   * too when the supplier lists it with `INPUTTYPE=phone` (e.g. CeirBot Getcontact).
-   */
+  /** GContact services always take a phone number; Dhru supplier services may take one too. */
   private async phoneInputFor(
-    route: { supplierId: string | null; supplierServiceId: string | null },
+    route: { supplierId: string | null },
     inputType: ServiceInputType,
-    existing?: { inputType: ServiceInputType; supplierId: string | null; supplierServiceId: string | null },
   ): Promise<ServiceInputType> {
-    const supplier = route.supplierId
-      ? await this.prisma.supplier.findUnique({ where: { id: route.supplierId } })
-      : null;
+    if (inputType === "phone" || !route.supplierId) return inputType;
+    const supplier = await this.prisma.supplier.findUnique({
+      where: { id: route.supplierId },
+      select: { kind: true },
+    });
     if (supplier?.kind === "gcontact") {
-      if (inputType !== "phone") {
-        throw new BadRequestException("Layanan GContact harus memakai jenis input Nomor HP.");
-      }
-      return inputType;
+      throw new BadRequestException("Layanan GContact harus memakai jenis input Nomor HP.");
     }
-    if (inputType !== "phone") return inputType;
-    const unchanged =
-      existing?.inputType === "phone" &&
-      existing.supplierId === route.supplierId &&
-      existing.supplierServiceId === route.supplierServiceId;
-    if (unchanged) return inputType;
-    if (supplier && route.supplierServiceId) {
-      let remote;
-      try {
-        remote = await supplierClient(supplier).serviceList();
-      } catch (err) {
-        if (err instanceof SupplierRequestError) {
-          throw new BadRequestException(`Jenis input supplier tidak bisa dicek: ${err.message}`);
-        }
-        throw err;
-      }
-      const declared = remote.ok
-        ? remote.data.find((svc) => svc.id === route.supplierServiceId)?.inputType
-        : null;
-      if (declared === "phone") return inputType;
-    }
-    throw new BadRequestException(
-      "Jenis input Nomor HP hanya untuk layanan GContact atau layanan supplier yang memintanya.",
-    );
+    return inputType;
   }
 
   /** Slug of the requested code (or name), suffixed `-2`, `-3`, … until unused. */

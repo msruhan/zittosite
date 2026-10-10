@@ -952,7 +952,7 @@ function ServiceFormDialog({
       : null;
   const inputTypeOptions: SelectOption[] = lockedInputType
     ? [{ value: lockedInputType, label: INPUT_TYPE_OPTION_LABEL[lockedInputType] }]
-    : (["imei", "sn", "ecid", "imei_sn", ...(special ? (["none"] as const) : [])] as const).map(
+    : (["imei", "sn", "ecid", "imei_sn", "phone", ...(special ? (["none"] as const) : [])] as const).map(
         (value) => ({ value, label: INPUT_TYPE_OPTION_LABEL[value] }),
       );
   const inputType: NonNullable<Service["inputType"]> =

@@ -379,6 +379,7 @@ export function SupplierImportPanel({
                 { value: "sn", label: "SN (Serial Number)" },
                 { value: "ecid", label: "ECID" },
                 { value: "imei_sn", label: "IMEI/SN (user pilih salah satu)" },
+                { value: "phone", label: "Nomor HP (08…)" },
                 ...(special ? [{ value: "none", label: "Tidak ada (tanpa IMEI/SN/ECID)" }] : []),
               ]}
             />
