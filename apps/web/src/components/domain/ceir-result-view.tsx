@@ -1,6 +1,8 @@
 import { CeirHistoryTable } from "@/components/domain/ceir-history-table";
+import { ContactLookupView } from "@/components/domain/contact-lookup-view";
 import { cn } from "@/lib/utils";
 import { parseCeirResult, type CeirResultLine } from "@/lib/ceir-result";
+import { parseContactLookup } from "@/lib/contact-lookup-result";
 import {
   isStructuredSupplierResult,
   parseSupplierResult,
@@ -73,7 +75,8 @@ export function isStructuredResult(text: string | null | undefined): boolean {
 /**
  * CEIR supplier result laid out like the CeirBot receipt: a key/value block
  * for Result / Valid until, then a history table. Other supplier replies
- * (often HTML) become a label/value list; anything else renders as-is.
+ * (often HTML) become a label/value list; phone lookups get their own
+ * layout with paged tags; anything else renders as-is.
  */
 export function CeirResultView({
   text,
@@ -82,6 +85,9 @@ export function CeirResultView({
   text: string | null | undefined;
   className?: string;
 }) {
+  const contact = parseContactLookup(resultPlainText(text));
+  if (contact) return <ContactLookupView result={contact} className={className} />;
+
   const parsed = parseCeirResult(resultPlainText(text));
 
   if (!parsed) {
