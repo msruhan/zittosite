@@ -48,6 +48,13 @@ import {
   refundOrderToBalance,
   type BalanceReason,
 } from "./balance";
+import { resultNoteLines } from "../telegram/result-note";
+
+/** Activity note for a rejection: plain text, one "Ditolak:" even when the reason already has it. */
+export function rejectedActivityNote(reason: string): string {
+  const text = resultNoteLines(reason).join("\n").replace(/^ditolak\s*[:.]?\s*/i, "");
+  return text ? `Ditolak: ${text}` : "Ditolak.";
+}
 
 /** SayaBayar only accepts invoice lifetimes of 60 minutes or more. */
 const INVOICE_TTL_MINUTES = 60;
@@ -1094,7 +1101,7 @@ export class OrdersService {
           status: next,
           note:
             update.kind === "rejected"
-              ? `Ditolak: ${note}${refundNote(refunded)}`
+              ? `${rejectedActivityNote(note)}${refundNote(refunded)}`
               : update.kind === "done"
                 ? "Hasil dikirim (success)."
                 : note,

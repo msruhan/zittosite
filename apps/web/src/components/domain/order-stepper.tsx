@@ -1,6 +1,7 @@
 import { Check, Minus, Timer, X } from "@phosphor-icons/react/dist/ssr";
 import { formatDateTime, formatProcessDuration } from "@/lib/format";
 import { ORDER_STATUS, ORDER_STATUS_FLOW, type FlowStatus } from "@/lib/status";
+import { resultPlainText } from "@/lib/supplier-result";
 import type { OrderDetail, OrderStatus } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -264,8 +265,8 @@ export function OrderStepper({
                   {formatDateTime(failureLog.createdAt)}
                 </time>
               </div>
-              <p className="mt-0.5 text-body text-ink-soft">
-                {failureLog.note}
+              <p className="mt-0.5 line-clamp-3 whitespace-pre-line break-words text-body text-ink-soft">
+                {resultPlainText(failureLog.note)}
               </p>
             </div>
           </li>

@@ -6,6 +6,7 @@ import { UserChip } from "@/components/shell/user-chip";
 import { AdsRunnerTicker } from "@/components/domain/ads-runner-ticker";
 import { ApiError } from "@/lib/api";
 import { serverApi } from "@/lib/server-api";
+import { resultPlainText } from "@/lib/supplier-result";
 import type { OrderDetail, RunningAd, User } from "@/lib/types";
 import { loadUserMenus } from "@/lib/server-user-menus";
 import { ORDER_MENU_HREF, menuNavItems, type UserMenus } from "@/lib/user-menus";
@@ -41,7 +42,7 @@ export default async function UserPortalLayout({
       id: log.id,
       orderId: log.orderId,
       status: log.status,
-      note: log.note,
+      note: resultPlainText(log.note),
       createdAt: log.createdAt,
     }));
 

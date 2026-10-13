@@ -7,7 +7,7 @@ import { CancelOrderButton } from "@/components/domain/cancel-order-button";
 import { CeirResultView, isStructuredResult } from "@/components/domain/ceir-result-view";
 import { deviceLabel, orderExtraRows } from "@/lib/order-fields";
 import { formatDateTime, formatRupiah } from "@/lib/format";
-import { resultPlainText } from "@/lib/supplier-result";
+import { resultPlainText, splitStatusReason } from "@/lib/supplier-result";
 import type { OrderDetail } from "@/lib/types";
 
 /** Supplier results arrive as "Result: UNKNOWN"; only the value is shown. */
@@ -15,7 +15,7 @@ function resultText(order: OrderDetail): string | null {
   if (order.result?.resultNote) {
     return resultPlainText(order.result.resultNote).replace(/^\s*result\s*:\s*/i, "").trim();
   }
-  if (order.status === "rejected") return order.statusReason || "Ditolak";
+  if (order.status === "rejected") return splitStatusReason(order.statusReason).summary || "Ditolak";
   if (order.status === "waiting_payment") return null;
   return "Menunggu hasil…";
 }
@@ -23,6 +23,10 @@ function resultText(order: OrderDetail): string | null {
 /** Order Ceir detail: one card with the essentials, no admin journey. */
 export function CeirOrderDetail({ order }: { order: OrderDetail }) {
   const result = resultText(order);
+  const reasonDetail =
+    order.status === "rejected" && !order.result?.resultNote
+      ? splitStatusReason(order.statusReason).detail
+      : null;
   return (
     <Card>
       <CardHeader>
@@ -66,6 +70,7 @@ export function CeirOrderDetail({ order }: { order: OrderDetail }) {
             </DataValue>
           </div>
         ) : null}
+        {reasonDetail ? <CeirResultView text={reasonDetail} className="mt-3" /> : null}
       </CardBody>
 
       {order.status === "waiting_payment" ? (

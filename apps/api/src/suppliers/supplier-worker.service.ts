@@ -7,6 +7,7 @@ import { supplierExtraFields } from "../orders/special-fields";
 import { UsdRateService } from "../orders/usd-rate.service";
 import { AdminNotifyService } from "../telegram/admin-notify.service";
 import { escapeHtml } from "../telegram/telegram-messages";
+import { resultNoteLines } from "../telegram/result-note";
 import { SupplierRequestError, supplierInputFields } from "./dhru-supplier-client";
 import { customerText } from "../orders/customer-text";
 import { checkSupplierCost } from "./supplier-price-guard";
@@ -37,9 +38,16 @@ export function isRetryableSupplierError(message: string): boolean {
   return /credit|balance|saldo|maintenance|try again|coba lagi|rate limit|too many/i.test(message);
 }
 
-/** Some suppliers mark failed orders as completed and put the error in CODE/COMMENTS. */
+const ERROR_WORDS = /\b(error|errors|failed|failure|gagal|invalid|refunded|rejected|cancell?ed)\b/i;
+
+/**
+ * Some suppliers mark failed orders as completed and put the error in CODE/COMMENTS.
+ * A multi-line report is a result even when a field reads "invalid" (e.g. an expired
+ * warranty), so only its first line is checked.
+ */
 export function isErrorReply(text: string): boolean {
-  return /\b(error|errors|failed|failure|gagal|invalid|refunded|rejected|cancell?ed)\b/i.test(text);
+  const lines = resultNoteLines(text);
+  return (lines.length > 2 ? lines.slice(0, 1) : lines).some((line) => ERROR_WORDS.test(line));
 }
 
 /** Wait before retry n (1-based): 1, 2, 4, 8 minutes. */

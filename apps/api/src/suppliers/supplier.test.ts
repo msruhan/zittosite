@@ -172,6 +172,8 @@ test("completed replies carrying an error are recognised", () => {
     "Gagal cek IMEI",
     "Invalid IMEI",
     "Adjusted by admin — credits refunded.",
+    "Error: IMEI not found<br>Please check the serial number",
+    "Invalid SN<br>Model: -<br>IMEI: -",
   ]) {
     assert.equal(isErrorReply(text), true, text);
   }
@@ -184,6 +186,8 @@ test("completed replies carrying an error are recognised", () => {
     '{"message":"successfully"}',
     "5 credits added to a@b.co",
     "Result: 5 entries 2026-07-17 · add_roamer · SF8080 · remove_roamer · auto-remove-operation",
+    "Model Description: TECNO LJ7<br>IMEI: 357517481048538<br>Warranty Status: Active<br>" +
+      "Status: valid<br><br>Warranty Name: 14 Days<br>Status: invalid<br>",
   ]) {
     assert.equal(isErrorReply(text), false, text);
   }

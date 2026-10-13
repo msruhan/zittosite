@@ -137,3 +137,19 @@ export function parseSupplierResult(text: string | null | undefined): SupplierRe
 export function isStructuredSupplierResult(text: string | null | undefined): boolean {
   return hasHtml(text) || parseSupplierResult(text).length > 1;
 }
+
+/**
+ * Status reason split into a one-line summary and, when the supplier's reply
+ * rides along ("Ditolak: <HTML report>"), that reply for a structured layout.
+ */
+export function splitStatusReason(reason: string | null | undefined): {
+  summary: string;
+  detail: string | null;
+} {
+  const text = String(reason ?? "").trim();
+  if (!isStructuredSupplierResult(text)) return { summary: resultPlainText(text), detail: null };
+  const prefix = /^(ditolak|dibatalkan|gagal)\s*:\s*/i.exec(text);
+  return prefix
+    ? { summary: prefix[1]!.replace(/^\w/, (c) => c.toUpperCase()), detail: text.slice(prefix[0].length) }
+    : { summary: "Lihat rincian", detail: text };
+}

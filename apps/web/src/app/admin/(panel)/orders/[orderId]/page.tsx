@@ -27,6 +27,7 @@ import { deviceLabel, orderExtraRows } from "@/lib/order-fields";
 import { ApiError } from "@/lib/api";
 import { serverApi } from "@/lib/server-api";
 import { formatDateTime, formatRupiah } from "@/lib/format";
+import { resultPlainText, splitStatusReason } from "@/lib/supplier-result";
 import { ORDER_CHANNEL_LABEL, type OrderDetail } from "@/lib/types";
 
 export async function generateMetadata({
@@ -58,6 +59,7 @@ export default async function AdminOrderDetailPage({
   const isSuperAdmin = me.role === "super_admin";
   const showCustomer = isSuperAdmin && order.user;
   const isClosed = order.status === "rejected" || order.status === "cancel";
+  const reason = splitStatusReason(order.statusReason);
 
   return (
     <>
@@ -155,12 +157,15 @@ export default async function AdminOrderDetailPage({
                 ) : null}
                 {isClosed ? (
                   <DetailRow label="Keterangan">
-                    {order.statusReason ?? (
+                    {reason.summary || (
                       <span className="text-ink-faint">Tidak ada keterangan</span>
                     )}
                   </DetailRow>
                 ) : null}
               </dl>
+              {isClosed && reason.detail ? (
+                <CeirResultView text={reason.detail} className="mt-2" />
+              ) : null}
 
               {order.notes ? (
                 <div className="mt-4 border-t border-hairline pt-4">
@@ -342,7 +347,9 @@ export default async function AdminOrderDetailPage({
                         {formatDateTime(log.createdAt)}
                       </time>
                     </div>
-                    <p className="whitespace-pre-line text-body text-ink-soft">{log.note}</p>
+                    <p className="whitespace-pre-line break-words text-body text-ink-soft">
+                      {resultPlainText(log.note)}
+                    </p>
                     <p className="text-body text-ink-faint">Oleh {log.actor}</p>
                   </li>
                 ))}

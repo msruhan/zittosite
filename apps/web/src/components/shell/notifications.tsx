@@ -82,7 +82,7 @@ export function Notifications({ items }: { items: NotificationItem[] }) {
                       <DataValue className="text-body">{item.orderId}</DataValue>
                       <StatusBadge status={item.status} />
                     </div>
-                    <p className="mt-1 text-body text-ink-soft">{item.note}</p>
+                    <p className="mt-1 line-clamp-2 break-words text-body text-ink-soft">{item.note}</p>
                     <p className="mt-1 font-data text-body text-ink-faint">
                       {formatRelative(item.createdAt)}
                     </p>
