@@ -1,4 +1,5 @@
 import { Injectable, Logger } from "@nestjs/common";
+import { Prisma } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
 import { AdminTelegramLinkService } from "./admin-telegram-link.service";
 import {
@@ -74,6 +75,43 @@ export class AdminNotifyService {
     } catch (err) {
       this.logger.warn(
         `User notify error: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+  }
+
+  /** Removes the invoice's QRIS photos from the customer's chat. Never throws. */
+  async deleteQrisMessages(invoiceRowId: string): Promise<void> {
+    const token = process.env.TELEGRAM_BOT_TOKEN?.trim();
+    if (!token) return;
+    try {
+      const invoice = await this.prisma.paymentInvoice.findUnique({
+        where: { id: invoiceRowId },
+        select: { telegramQrisMessages: true },
+      });
+      const refs = Array.isArray(invoice?.telegramQrisMessages)
+        ? (invoice.telegramQrisMessages as { chatId?: string; messageId?: number }[])
+        : [];
+      if (!refs.length) return;
+      await this.prisma.paymentInvoice.update({
+        where: { id: invoiceRowId },
+        data: { telegramQrisMessages: Prisma.DbNull },
+      });
+      for (const ref of refs) {
+        if (!ref?.chatId || !ref.messageId) continue;
+        const deleted = await this.sendMessageRaw(token, {
+          chat_id: ref.chatId,
+          message_id: ref.messageId,
+          _method: "deleteMessage",
+        }).catch(() => null);
+        if (!deleted?.ok) {
+          this.logger.warn(
+            `QRIS message delete failed chat=${ref.chatId}: ${deleted?.description ?? "network error"}`,
+          );
+        }
+      }
+    } catch (err) {
+      this.logger.warn(
+        `QRIS message cleanup error: ${err instanceof Error ? err.message : String(err)}`,
       );
     }
   }

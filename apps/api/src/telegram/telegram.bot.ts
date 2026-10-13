@@ -433,6 +433,7 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
     ctx: Context,
     input: {
       orderId: string;
+      invoiceId: string;
       qris: string;
       amount: number;
       balanceUsed?: number;
@@ -447,11 +448,22 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
         margin: 3,
         errorCorrectionLevel: "M",
       });
-      await ctx.replyWithPhoto(new InputFile(png, `QRIS-${input.orderId}.png`), {
+      const sent = await ctx.replyWithPhoto(new InputFile(png, `QRIS-${input.orderId}.png`), {
         caption: orderQrisCaptionHtml(input),
         parse_mode: TELEGRAM_PARSE_MODE,
         reply_markup: unpaidOrderKeyboard(input.orderId, false),
       });
+      const ref = JSON.stringify([
+        { chatId: String(sent.chat.id), messageId: sent.message_id },
+      ]);
+      await this.prisma.$executeRaw`
+        UPDATE "payment_invoices"
+        SET "telegram_qris_messages" = COALESCE("telegram_qris_messages", '[]'::jsonb) || ${ref}::jsonb
+        WHERE "invoice_id" = ${input.invoiceId}`.catch((err) =>
+        this.logger.warn(
+          `QRIS message ref save failed invoice=${input.invoiceId}: ${err?.message ?? err}`,
+        ),
+      );
       return true;
     } catch (err: any) {
       this.logger.warn(
@@ -750,6 +762,7 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
           if (invoice?.qrisString) {
             const sent = await this.replyQris(ctx, {
               orderId: order.orderId,
+              invoiceId: invoice.invoiceId,
               qris: invoice.qrisString,
               amount,
               balanceUsed,
@@ -1355,6 +1368,7 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
     await ctx.answerCallbackQuery();
     await this.replyQris(ctx, {
       orderId: order.orderId,
+      invoiceId: invoice.invoiceId,
       qris: invoice.qrisString,
       amount: invoice.amountDue ?? invoice.amount,
       balanceUsed: invoice.balanceUsed,

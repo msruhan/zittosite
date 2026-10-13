@@ -467,6 +467,7 @@ export class OrdersService {
         actor: current.user.fullName,
       }),
     );
+    if (cancelled) void this.adminNotify.deleteQrisMessages(invoice.id);
     for (const order of cancelled ?? []) {
       this.audit.record("order.cancelled_by_user", {
         actorUserId: userId,
@@ -523,6 +524,7 @@ export class OrdersService {
         }
         return rows;
       });
+      if (cancelled) void this.adminNotify.deleteQrisMessages(order.invoice.id);
       for (const row of cancelled ?? []) {
         this.audit.record("admin.order.cancelled", {
           actorId: adminId,
@@ -753,6 +755,7 @@ export class OrdersService {
       }),
     );
     if (closed === null) return "ignored";
+    void this.adminNotify.deleteQrisMessages(invoice.id);
     if (status === "expired") this.reportExpired(closed, "gateway");
     return "closed";
   }
@@ -1337,6 +1340,7 @@ export class OrdersService {
     });
 
     if (!result) return null;
+    void this.adminNotify.deleteQrisMessages(invoiceRowId);
     for (const order of result.orders) {
       this.audit.record("payment.paid", {
         userId: order.userId,
@@ -1463,7 +1467,10 @@ export class OrdersService {
         actor: "Sistem",
       }),
     );
-    if (expired) this.reportExpired(expired, "timeout");
+    if (expired) {
+      void this.adminNotify.deleteQrisMessages(invoiceRowId);
+      this.reportExpired(expired, "timeout");
+    }
     return (await this.prisma.order.findUniqueOrThrow({
       where: { id: order.id },
       include: orderInclude,
