@@ -13,6 +13,8 @@ import {
   type CardCustomer,
 } from "./telegram-messages";
 import { processDurationLabel } from "../orders/process-duration";
+import { WahaClient } from "../whatsapp/waha.client";
+import { telegramHtmlToWhatsapp } from "../whatsapp/whatsapp-format";
 
 const DURATION_INCLUDE = {
   invoice: { select: { paidAt: true } },
@@ -42,6 +44,7 @@ export class AdminNotifyService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly adminTelegram: AdminTelegramLinkService,
+    private readonly waha: WahaClient,
   ) {}
 
   /** Plain text broadcast. Never throws. */
@@ -60,18 +63,28 @@ export class AdminNotifyService {
     }
   }
 
+  /** Sends to the user's linked Telegram chat and registered WhatsApp number. Never throws. */
   async notifyUserById(userId: string, text: string): Promise<void> {
     const token = process.env.TELEGRAM_BOT_TOKEN?.trim();
-    if (!token) return;
     try {
-      const identity = await this.prisma.userIdentity.findUnique({
-        where: {
-          userId_provider: { userId, provider: "telegram" },
-        },
-        select: { chatId: true, chatVerifiedAt: true },
+      const identities = await this.prisma.userIdentity.findMany({
+        where: { userId, provider: { in: ["telegram", "whatsapp"] } },
+        select: { provider: true, chatId: true, chatVerifiedAt: true },
       });
-      if (!identity?.chatId || !identity.chatVerifiedAt) return;
-      await this.sendMessage(token, identity.chatId, text);
+      for (const identity of identities) {
+        if (!identity.chatId || !identity.chatVerifiedAt) continue;
+        if (identity.provider === "telegram") {
+          if (token) await this.sendMessage(token, identity.chatId, text);
+        } else if (this.waha.enabled()) {
+          await this.waha
+            .sendText(identity.chatId, telegramHtmlToWhatsapp(text))
+            .catch((err) =>
+              this.logger.warn(
+                `WhatsApp user notify failed: ${err instanceof Error ? err.message : String(err)}`,
+              ),
+            );
+        }
+      }
     } catch (err) {
       this.logger.warn(
         `User notify error: ${err instanceof Error ? err.message : String(err)}`,

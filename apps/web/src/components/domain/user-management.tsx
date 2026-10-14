@@ -65,7 +65,9 @@ export function UserManagement({
         user.fullName.toLowerCase().includes(needle) ||
         user.username.toLowerCase().includes(needle) ||
         (user.telegramHandle ?? "").toLowerCase().includes(needle) ||
-        (user.telegramLinked?.label ?? "").toLowerCase().includes(needle),
+        (user.telegramLinked?.label ?? "").toLowerCase().includes(needle) ||
+        (needle.replace(/\D/g, "").length >= 4 &&
+          (user.whatsappNumber ?? "").includes(needle.replace(/\D/g, ""))),
     );
   }, [users, query]);
 
@@ -84,6 +86,7 @@ export function UserManagement({
             fullName: next.fullName,
             password: next.password,
             telegramHandle: next.telegramHandle,
+            whatsappNumber: next.whatsappNumber ?? null,
             groupId: next.groupId ?? null,
             role: next.role ?? "customer",
             botAccess: next.botAccess,
@@ -96,6 +99,7 @@ export function UserManagement({
           body: JSON.stringify({
             fullName: next.fullName,
             telegramHandle: next.telegramHandle,
+            whatsappNumber: next.whatsappNumber ?? null,
             groupId: next.groupId ?? null,
             role: next.role ?? "customer",
             status: next.status,
@@ -160,7 +164,7 @@ export function UserManagement({
           <Input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Cari nama, username, atau Telegram"
+            placeholder="Cari nama, username, Telegram, atau nomor WhatsApp"
             className="pl-9"
           />
         </label>
@@ -196,6 +200,7 @@ export function UserManagement({
                     <TH>No</TH>
                     <TH>User</TH>
                     <TH>Telegram</TH>
+                    <TH>WhatsApp</TH>
                     <TH>Group</TH>
                     <TH>Saldo</TH>
                     <TH>Status</TH>
@@ -253,6 +258,13 @@ export function UserManagement({
                               Belum tertaut
                             </p>
                           </div>
+                        ) : (
+                          <span className="text-ink-soft">—</span>
+                        )}
+                      </TD>
+                      <TD className="whitespace-nowrap">
+                        {user.whatsappNumber ? (
+                          <DataValue className="text-ink">+{user.whatsappNumber}</DataValue>
                         ) : (
                           <span className="text-ink-soft">—</span>
                         )}
@@ -609,6 +621,7 @@ function UserFormDialog({
         fullName: draft.fullName.trim(),
         username: draft.username.trim(),
         telegramHandle: draft.telegramHandle?.trim() || null,
+        whatsappNumber: draft.whatsappNumber?.trim() || null,
         groupId: draft.groupId || null,
         ...(password ? { password } : {}),
       });
@@ -696,6 +709,23 @@ function UserFormDialog({
                 ...current,
                 telegramHandle: event.target.value,
               }))
+            }
+          />
+        </Field>
+        <Field
+          label="Nomor WhatsApp"
+          htmlFor="whatsappNumber"
+          hint="Hanya nomor ini yang bisa order lewat bot WhatsApp atas nama user ini. Kosongkan untuk mencabut akses."
+        >
+          <Input
+            id="whatsappNumber"
+            inputMode="tel"
+            autoComplete="off"
+            className="font-data"
+            placeholder="6281234567890"
+            value={draft.whatsappNumber ?? ""}
+            onChange={(event) =>
+              setDraft((current) => ({ ...current, whatsappNumber: event.target.value }))
             }
           />
         </Field>

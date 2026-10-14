@@ -34,6 +34,7 @@ const CHANNEL_LABEL: Record<string, string> = {
   web: "Website",
   telegram: "Telegram",
   api: "API",
+  whatsapp: "WhatsApp",
 };
 
 const INPUT_TYPE_LABEL: Record<string, string> = {

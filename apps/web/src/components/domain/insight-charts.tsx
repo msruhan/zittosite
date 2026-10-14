@@ -17,6 +17,7 @@ export const CHANNEL_COLOR = {
   web: "#1E63FF",
   telegram: "#0E2F7D",
   api: "#A78BFA",
+  whatsapp: "#16A34A",
 } as const;
 
 const AXIS_TICK = { fill: "#536070", fontSize: 12 };
@@ -102,7 +103,7 @@ export function ChannelTrendChart({
   data,
   className,
 }: {
-  data: { label: string; web: number; telegram: number; api: number }[];
+  data: { label: string; web: number; telegram: number; api: number; whatsapp?: number }[];
   className?: string;
 }) {
   return (
@@ -133,11 +134,12 @@ export function ChannelTrendChart({
           <Legend iconType="circle" iconSize={8} wrapperStyle={LEGEND_STYLE} />
           <Bar dataKey="web" name="Website" stackId="channel" fill={CHANNEL_COLOR.web} maxBarSize={28} />
           <Bar dataKey="telegram" name="Telegram" stackId="channel" fill={CHANNEL_COLOR.telegram} maxBarSize={28} />
+          <Bar dataKey="api" name="API" stackId="channel" fill={CHANNEL_COLOR.api} maxBarSize={28} />
           <Bar
-            dataKey="api"
-            name="API"
+            dataKey="whatsapp"
+            name="WhatsApp"
             stackId="channel"
-            fill={CHANNEL_COLOR.api}
+            fill={CHANNEL_COLOR.whatsapp}
             radius={[6, 6, 0, 0]}
             maxBarSize={28}
           />

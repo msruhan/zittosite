@@ -33,18 +33,45 @@ export class WahaClient {
       this.logger.log(`[WAHA_MOCK] sendText to ${chatId}:\n${text}`);
       return { messageId: `true_${chatId}_MOCK${Date.now()}` };
     }
+    return this.post("/api/sendText", {
+      chatId,
+      text,
+      ...(replyTo ? { reply_to: replyTo } : {}),
+    });
+  }
 
+  /** PNG with a caption. WAHA Core rejects images (Plus only), so callers need a text fallback. */
+  async sendImage(
+    chatId: string,
+    png: Buffer,
+    filename: string,
+    caption: string,
+  ): Promise<{ messageId: string | null }> {
+    const config = wahaConnection();
+    if (!config) throw new WahaApiError("not_configured");
+    if (config.mock) {
+      this.logger.log(`[WAHA_MOCK] sendImage ${filename} to ${chatId}:\n${caption}`);
+      return { messageId: `true_${chatId}_MOCK${Date.now()}` };
+    }
+    return this.post("/api/sendImage", {
+      chatId,
+      caption,
+      file: { mimetype: "image/png", filename, data: png.toString("base64") },
+    });
+  }
+
+  private async post(
+    path: string,
+    payload: Record<string, unknown>,
+  ): Promise<{ messageId: string | null }> {
+    const config = wahaConnection();
+    if (!config) throw new WahaApiError("not_configured");
     let res: Response;
     try {
-      res = await fetch(`${config.baseUrl}/api/sendText`, {
+      res = await fetch(`${config.baseUrl}${path}`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "X-Api-Key": config.apiKey },
-        body: JSON.stringify({
-          session: config.session,
-          chatId,
-          text,
-          ...(replyTo ? { reply_to: replyTo } : {}),
-        }),
+        body: JSON.stringify({ session: config.session, ...payload }),
         signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
       });
     } catch (err) {
@@ -110,6 +137,24 @@ export class WahaClient {
     } catch (err) {
       this.logger.warn(
         `WAHA LID lookup failed: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      return null;
+    }
+  }
+
+  /** Phone number (digits) behind a WhatsApp LID; private chats may arrive as `…@lid`. */
+  async phoneForLid(lid: string): Promise<string | null> {
+    const config = wahaConnection();
+    if (!config || config.mock) return null;
+    try {
+      const body = await this.getJson(
+        `/api/${encodeURIComponent(config.session)}/lids/${encodeURIComponent(lid)}`,
+      );
+      const pn = body && typeof body === "object" ? (body as { pn?: unknown }).pn : null;
+      return jidUser(pn);
+    } catch (err) {
+      this.logger.warn(
+        `WAHA phone lookup failed: ${err instanceof Error ? err.message : String(err)}`,
       );
       return null;
     }

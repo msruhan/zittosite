@@ -5,11 +5,12 @@ import { WhatsappModule } from "../whatsapp/whatsapp.module";
 import { AdminNotifyModule } from "../telegram/admin-notify.module";
 import { AdminReactionService } from "./admin-reaction.service";
 import { RoamercheckService } from "./roamercheck.service";
+import { CustomerBotService } from "./customer-bot.service";
 import { WahaWebhookController } from "./waha.webhook.controller";
 
 @Module({
   imports: [PrismaModule, OrdersModule, WhatsappModule, AdminNotifyModule],
   controllers: [WahaWebhookController],
-  providers: [RoamercheckService, AdminReactionService],
+  providers: [RoamercheckService, AdminReactionService, CustomerBotService],
 })
 export class WhatsappInboundModule {}

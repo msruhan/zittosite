@@ -11,9 +11,10 @@ import { PrismaService } from "../prisma/prisma.service";
 import { applyBalance } from "../orders/balance";
 import { serializeUser } from "../orders/orders.serializer";
 import { passwordPolicyError } from "../security/password";
+import { parseWhatsappNumber, whatsappChatId } from "../whatsapp/whatsapp-number";
 
 const managedUserInclude = {
-  identities: { where: { provider: "telegram" } },
+  identities: { where: { provider: { in: ["telegram", "whatsapp"] } } },
   group: { select: { id: true, name: true } },
   servicePrices: { select: { serviceId: true, price: true } },
 } satisfies Prisma.UserInclude;
@@ -25,7 +26,8 @@ function serializeManagedUser(
     servicePrices: { serviceId: string; price: number }[];
   },
 ) {
-  const telegram = user.identities[0];
+  const telegram = user.identities.find((identity) => identity.provider === "telegram");
+  const whatsapp = user.identities.find((identity) => identity.provider === "whatsapp");
   return {
     ...serializeUser(user),
     telegramLinked: telegram
@@ -34,9 +36,21 @@ function serializeManagedUser(
           chatReady: Boolean(telegram.chatId),
         }
       : null,
+    whatsappNumber: whatsapp?.externalId ?? null,
     groupId: user.groupId,
     groupName: user.group?.name ?? null,
     customPrices: user.servicePrices,
+  };
+}
+
+/** A Super Admin registers the number, so the chat counts as verified right away. */
+function whatsappIdentity(number: string) {
+  return {
+    provider: "whatsapp" as const,
+    externalId: number,
+    chatId: whatsappChatId(number),
+    label: `+${number}`,
+    chatVerifiedAt: new Date(),
   };
 }
 
@@ -61,6 +75,18 @@ export class AdminUsersService {
                   },
                 },
               },
+              ...(/\d{4,}/.test(needle)
+                ? [
+                    {
+                      identities: {
+                        some: {
+                          provider: "whatsapp" as const,
+                          externalId: { contains: needle.replace(/\D/g, "") },
+                        },
+                      },
+                    },
+                  ]
+                : []),
             ],
           }
         : undefined,
@@ -79,7 +105,10 @@ export class AdminUsersService {
     role?: "customer" | "testing";
     botAccess?: boolean;
     apiEnabled?: boolean;
+    whatsappNumber?: string | null;
   }) {
+    const whatsappNumber = parseWhatsappNumber(input.whatsappNumber);
+    if (whatsappNumber) await this.assertWhatsappNumberFree(whatsappNumber);
     const username = String(input.username ?? "")
       .trim()
       .toLowerCase();
@@ -105,6 +134,7 @@ export class AdminUsersService {
         status: "active",
         groupId: input.groupId || null,
         role: input.role ?? "customer",
+        ...(whatsappNumber ? { identities: { create: whatsappIdentity(whatsappNumber) } } : {}),
       },
       include: managedUserInclude,
     });
@@ -122,10 +152,13 @@ export class AdminUsersService {
       botAccess?: boolean;
       apiEnabled?: boolean;
       password?: string;
+      whatsappNumber?: string | null;
     },
   ) {
     const existing = await this.prisma.user.findUnique({ where: { id } });
     if (!existing) throw new NotFoundException("User tidak ditemukan.");
+    const whatsappNumber = parseWhatsappNumber(input.whatsappNumber);
+    if (whatsappNumber) await this.assertWhatsappNumberFree(whatsappNumber, id);
 
     const password = input.password ? String(input.password) : "";
     const policyError = password ? passwordPolicyError(password) : null;
@@ -152,6 +185,14 @@ export class AdminUsersService {
           : {}),
         ...(passwordHash ? { passwordHash } : {}),
         ...(input.groupId !== undefined ? { groupId: input.groupId || null } : {}),
+        ...(whatsappNumber !== undefined
+          ? {
+              identities: {
+                deleteMany: { provider: "whatsapp" },
+                ...(whatsappNumber ? { create: whatsappIdentity(whatsappNumber) } : {}),
+              },
+            }
+          : {}),
       },
       include: managedUserInclude,
     });
@@ -274,6 +315,16 @@ export class AdminUsersService {
     }
     await this.prisma.user.delete({ where: { id } });
     return { deleted: true, suspended: false };
+  }
+
+  private async assertWhatsappNumberFree(number: string, exceptUserId?: string) {
+    const owner = await this.prisma.userIdentity.findUnique({
+      where: { provider_externalId: { provider: "whatsapp", externalId: number } },
+      select: { userId: true, user: { select: { username: true } } },
+    });
+    if (owner && owner.userId !== exceptUserId) {
+      throw new ConflictException(`Nomor WhatsApp sudah dipakai user ${owner.user.username}.`);
+    }
   }
 
   private async assertGroupExists(groupId?: string | null) {

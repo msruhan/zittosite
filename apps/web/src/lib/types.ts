@@ -33,12 +33,13 @@ export interface Topup {
   createdAt: string;
 }
 
-export type OrderChannel = "web" | "telegram" | "api";
+export type OrderChannel = "web" | "telegram" | "api" | "whatsapp";
 
 export const ORDER_CHANNEL_LABEL: Record<OrderChannel, string> = {
   web: "Website",
   telegram: "Telegram",
   api: "API",
+  whatsapp: "WhatsApp",
 };
 
 export type UserStatus = "active" | "suspended";
@@ -190,6 +191,8 @@ export interface User {
   telegramHandle: string | null;
   /** Admin Users page only: the Telegram account actually linked via login/bot. */
   telegramLinked?: { label: string; chatReady: boolean } | null;
+  /** Admin Users page only: number (62…) that may use the WhatsApp bot for this account. */
+  whatsappNumber?: string | null;
   /** Admin Users page only: pricing group; without one the user pays default prices. */
   groupId?: string | null;
   groupName?: string | null;

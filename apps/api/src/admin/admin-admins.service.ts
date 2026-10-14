@@ -15,7 +15,7 @@ import type {
 } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
 import { passwordPolicyError } from "../security/password";
-import { normalizeWhatsappNumber } from "../whatsapp-inbound/admin-reaction-parser";
+import { parseWhatsappNumber } from "../whatsapp/whatsapp-number";
 
 const ADMIN_INCLUDE = {
   _count: { select: { assignedOrders: true } },
@@ -66,17 +66,6 @@ export function serializeAdminAccount(
     totpEnabled: Boolean(admin.totpEnabledAt),
     createdAt: admin.createdAt.toISOString(),
   };
-}
-
-/** undefined = unchanged, null = cleared; throws on a malformed number. */
-function parseWhatsappNumber(raw: string | null | undefined): string | null | undefined {
-  if (raw === undefined) return undefined;
-  if (raw === null || !raw.trim()) return null;
-  const number = normalizeWhatsappNumber(raw);
-  if (!/^62\d{8,13}$/.test(number)) {
-    throw new BadRequestException("Nomor WhatsApp tidak valid. Contoh: 6281234567890.");
-  }
-  return number;
 }
 
 /** Operators never sign in on the web, so they get a random, never-shared password. */

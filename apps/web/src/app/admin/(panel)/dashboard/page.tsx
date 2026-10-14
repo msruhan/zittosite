@@ -63,7 +63,7 @@ type DashboardInsights = {
   };
   servicesWithoutCost: string[];
   profitSeries: (Money & { label: string })[];
-  channelDaily: { label: string; web: number; telegram: number; api: number }[];
+  channelDaily: { label: string; web: number; telegram: number; api: number; whatsapp?: number }[];
   channels: (Money & {
     key: "web" | "telegram" | "api";
     name: string;

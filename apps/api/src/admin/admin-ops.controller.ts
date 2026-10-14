@@ -153,10 +153,12 @@ export class AdminOpsController {
       role: optEnum(body.role, USER_ROLES, "Role"),
       botAccess: optBoolean(body.botAccess, "Akses bot"),
       apiEnabled: optBoolean(body.apiEnabled, "Akses API"),
+      whatsappNumber: optNullableString(body.whatsappNumber, "Nomor WhatsApp", 30),
     });
     this.audit.record("admin.user.created", {
       actorId: req.admin.sub,
       userId: user.id,
+      whatsappNumber: user.whatsappNumber ?? undefined,
     });
     if (user.apiEnabled) {
       this.audit.record("api.access.toggled", {
@@ -184,6 +186,7 @@ export class AdminOpsController {
       botAccess: optBoolean(body.botAccess, "Akses bot"),
       apiEnabled: optBoolean(body.apiEnabled, "Akses API"),
       password: optString(body.password, "Password", 200),
+      whatsappNumber: optNullableString(body.whatsappNumber, "Nomor WhatsApp", 30),
     };
     const { user, apiAccessChanged } = await this.users.update(id, input);
     this.audit.record("admin.user.updated", {
@@ -193,6 +196,9 @@ export class AdminOpsController {
       passwordReset: Boolean(input.password),
       groupId: input.groupId,
       role: input.role,
+      ...(input.whatsappNumber !== undefined
+        ? { whatsappNumber: user.whatsappNumber ?? "dihapus" }
+        : {}),
     });
     if (apiAccessChanged) {
       this.audit.record("api.access.toggled", {

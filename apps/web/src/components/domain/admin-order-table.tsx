@@ -118,7 +118,11 @@ export function AdminOrderTable({
                     <Tag className="border-action bg-action-wash text-action-deep">API</Tag>
                   ) : (
                     <Tag className="hidden xl:inline-flex">
-                      {order.channel === "telegram" ? "TG" : "Web"}
+                      {order.channel === "telegram"
+                        ? "TG"
+                        : order.channel === "whatsapp"
+                          ? "WA"
+                          : "Web"}
                     </Tag>
                   )}
                 </span>

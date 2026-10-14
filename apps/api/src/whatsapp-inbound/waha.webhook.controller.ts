@@ -14,6 +14,7 @@ import { createHmac, timingSafeEqual } from "crypto";
 import { wahaWebhookSecret } from "../config/env";
 import { AdminReactionService, type WahaReactionPayload } from "./admin-reaction.service";
 import { RoamercheckService, type WahaMessagePayload } from "./roamercheck.service";
+import { CustomerBotService } from "./customer-bot.service";
 
 function hmacValid(rawBody: Buffer, provided: string, secret: string): boolean {
   const expected = createHmac("sha512", secret).update(rawBody).digest();
@@ -30,6 +31,7 @@ export class WahaWebhookController {
   constructor(
     private readonly roamercheck: RoamercheckService,
     private readonly reactions: AdminReactionService,
+    private readonly customerBot: CustomerBotService,
   ) {}
 
   @Post()
@@ -49,6 +51,13 @@ export class WahaWebhookController {
     try {
       if (body.event === "message") {
         const payload = body.payload as WahaMessagePayload;
+        const customer = await this.customerBot.handle(payload);
+        if (customer !== null) {
+          if (!customer.startsWith("ignored") && customer !== "off") {
+            this.logger.log(`WAHA customer ${String(payload.from)}: ${customer}`);
+          }
+          return { received: true };
+        }
         const command = await this.reactions.handleCommand(payload);
         if (command !== null) {
           if (!command.startsWith("ignored: other") && command !== "off") {

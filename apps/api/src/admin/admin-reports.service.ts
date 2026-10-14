@@ -13,6 +13,7 @@ const CHANNELS: { key: OrderChannel; name: string }[] = [
   { key: "web", name: "Website" },
   { key: "telegram", name: "Telegram" },
   { key: "api", name: "API" },
+  { key: "whatsapp", name: "WhatsApp" },
 ];
 
 type Money = { revenue: number; cost: number; profit: number; orders: number };
@@ -45,6 +46,7 @@ const CHANNEL_COLORS: Record<string, string> = {
   Website: "#1E63FF",
   Telegram: "#0E2F7D",
   API: "#A78BFA",
+  WhatsApp: "#16A34A",
 };
 const SERVICE_PALETTE = [
   "#2563EB",
@@ -444,19 +446,15 @@ export class AdminReportsService {
       orders: daily[i]!.orders,
     }));
 
-    let web = 0;
-    let telegram = 0;
-    let apiCount = 0;
+    const windowByChannel = new Map<OrderChannel, number>();
     for (const o of ordersInWindow) {
-      if (o.channel === "telegram") telegram += 1;
-      else if (o.channel === "api") apiCount += 1;
-      else web += 1;
+      windowByChannel.set(o.channel, (windowByChannel.get(o.channel) ?? 0) + 1);
     }
-    const channelMix = [
-      { name: "Website", amount: web, color: CHANNEL_COLORS.Website! },
-      { name: "Telegram", amount: telegram, color: CHANNEL_COLORS.Telegram! },
-      { name: "API", amount: apiCount, color: CHANNEL_COLORS.API! },
-    ].filter((item) => item.amount > 0);
+    const channelMix = CHANNELS.map((c) => ({
+      name: c.name,
+      amount: windowByChannel.get(c.key) ?? 0,
+      color: CHANNEL_COLORS[c.name]!,
+    })).filter((item) => item.amount > 0);
 
     const serviceTotals = new Map<string, number>();
     for (const inv of paidAllWithService) {
@@ -739,6 +737,7 @@ export class AdminReportsService {
       web: 0,
       telegram: 0,
       api: 0,
+      whatsapp: 0,
     }));
     for (const order of created) {
       createdByChannel.set(order.channel, (createdByChannel.get(order.channel) ?? 0) + 1);

@@ -323,7 +323,13 @@ export class OrdersService {
     const orderIds = await this.nextOrderIds(imeis.length);
     const invoiceId = `INV-${orderIds[0]}`;
     const via =
-      channel === "telegram" ? "Telegram" : channel === "api" ? "API" : "website";
+      channel === "telegram"
+        ? "Telegram"
+        : channel === "api"
+          ? "API"
+          : channel === "whatsapp"
+            ? "WhatsApp"
+            : "website";
     const bulkNote =
       imeis.length > 1 ? ` Bulk ${imeis.length} IMEI, 1 QRIS.` : "";
     const balanceUsed = Math.min(Math.max(user.creditBalance, 0), total);

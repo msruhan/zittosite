@@ -32,7 +32,9 @@ const via = (f: Fields) =>
       ? "website"
       : f.channel === "api"
         ? "API"
-        : "";
+        : f.channel === "whatsapp"
+          ? "WhatsApp"
+          : "";
 const withReason = (base: string, reason: unknown) =>
   reason ? `${base} — alasan: ${String(reason)}` : base;
 const orderLine = (f: Fields) =>
