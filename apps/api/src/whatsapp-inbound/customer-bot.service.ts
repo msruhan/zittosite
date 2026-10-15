@@ -23,8 +23,9 @@ import {
   accountText,
   askImeiText,
   confirmOrderText,
+  isBackKeyword,
   isCancelKeyword,
-  isMenuKeyword,
+  isMenuCommand,
   mainMenu,
   parseChoice,
   pendingChoicesText,
@@ -106,6 +107,7 @@ export class CustomerBotService {
   }
 
   private async process(chatId: string, text: string): Promise<string> {
+    if (!isMenuCommand(text) && !this.getSession(chatId)) return "ignored: no conversation";
     const phone = await this.senderPhone(chatId);
     const member = phone ? await this.findMember(phone) : null;
     if (!member) {
@@ -138,7 +140,7 @@ export class CustomerBotService {
       this.sessions.delete(chatId);
       await this.send(
         chatId,
-        `⚠️ ${err instanceof Error ? err.message : "Terjadi kesalahan"}\n\nBalas *MENU* untuk kembali.`,
+        `⚠️ ${err instanceof Error ? err.message : "Terjadi kesalahan"}\n\nKirim */menu* untuk kembali.`,
       ).catch(() => undefined);
       return "error";
     }
@@ -146,9 +148,14 @@ export class CustomerBotService {
 
   private async route(chatId: string, member: Member, text: string): Promise<string> {
     const session = this.getSession(chatId);
-    if (!session || isMenuKeyword(text)) {
+    if (isMenuCommand(text)) {
       await this.showMenu(chatId, member);
       return "menu";
+    }
+    if (!session) return "ignored: no conversation";
+    if (isBackKeyword(text)) {
+      await this.showMenu(chatId, member, session.kind === "confirm" ? "Order dibatalkan." : undefined);
+      return session.kind === "confirm" ? "confirm: cancelled" : "menu";
     }
 
     switch (session.kind) {
@@ -158,7 +165,7 @@ export class CustomerBotService {
         if (!entry) {
           await this.send(
             chatId,
-            `Pilihan tidak dikenal. Balas angka *1–${session.entries.length}*, atau *MENU* untuk melihat menu lagi.`,
+            `Pilihan tidak dikenal. Balas angka *1–${session.entries.length}*, atau kirim */menu* untuk melihat menu lagi.`,
           );
           return "menu: invalid";
         }
@@ -289,7 +296,7 @@ export class CustomerBotService {
             amount: invoice?.amount ?? order.price,
             items: invoice?.orders,
           }),
-        )}\n\nBalas *MENU* untuk kembali.`,
+        )}\n\nKirim */menu* untuk kembali.`,
       );
       return `order: ${order.orderId} paid by balance`;
     }
@@ -401,7 +408,7 @@ export class CustomerBotService {
             imei: o.imei,
           })),
         ),
-      )}\n\nRiwayat lengkap: ${webPublicUrl()}/app\nBalas *MENU* untuk kembali.`,
+      )}\n\nRiwayat lengkap: ${webPublicUrl()}/app\nKirim */menu* untuk kembali.`,
     );
     return "history";
   }

@@ -72,8 +72,14 @@ export function parseChoice(text: string, count: number): number | null {
   return choice >= 1 && choice <= count ? choice : null;
 }
 
-export function isMenuKeyword(text: string): boolean {
-  return /^\s*(menu|0|start|mulai)\s*$/i.test(text);
+/** The only message that opens the bot; without an open conversation everything else is ignored. */
+export function isMenuCommand(text: string): boolean {
+  return /^\s*\/menu\s*$/i.test(text);
+}
+
+/** "0" inside a conversation: back to the menu (or cancel, on the confirmation step). */
+export function isBackKeyword(text: string): boolean {
+  return /^\s*0\s*$/.test(text);
 }
 
 export function isCancelKeyword(text: string): boolean {
@@ -143,7 +149,7 @@ export function accountText(input: {
     "Saldo dipakai otomatis saat order. Topup dan riwayat lengkap ada di website:",
     input.portalUrl,
     "",
-    "Balas *MENU* untuk kembali.",
+    "Kirim */menu* untuk kembali.",
   ].join("\n");
 }
 

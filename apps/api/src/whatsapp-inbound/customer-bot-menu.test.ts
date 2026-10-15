@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   confirmOrderText,
-  isMenuKeyword,
+  isBackKeyword,
+  isMenuCommand,
   mainMenu,
   parseChoice,
   whatsappMenuSections,
@@ -72,9 +73,13 @@ test("menu choices and keywords", () => {
   assert.equal(parseChoice("6", 5), null);
   assert.equal(parseChoice("0", 5), null);
   assert.equal(parseChoice("dua", 5), null);
-  assert.equal(isMenuKeyword("MENU"), true);
-  assert.equal(isMenuKeyword("0"), true);
-  assert.equal(isMenuKeyword("menu dong"), false);
+  assert.equal(isMenuCommand("/menu"), true);
+  assert.equal(isMenuCommand(" /MENU "), true);
+  assert.equal(isMenuCommand("menu"), false);
+  assert.equal(isMenuCommand("/menu dong"), false);
+  assert.equal(isMenuCommand("halo"), false);
+  assert.equal(isBackKeyword("0"), true);
+  assert.equal(isBackKeyword("00"), false);
 });
 
 test("order confirmation lists the IMEIs, total and quoted description", () => {
