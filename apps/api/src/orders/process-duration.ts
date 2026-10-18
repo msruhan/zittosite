@@ -31,3 +31,12 @@ export function processDurationLabel(order: DurationSource, now = new Date()): s
   const end = endLog?.createdAt ?? now;
   return formatProcessDuration(end.getTime() - start.getTime());
 }
+
+/** Same as {@link processDurationLabel}, empty until the order is done or rejected. */
+export function closedProcessDurationLabel(
+  order: DurationSource & { status: string },
+  now = new Date(),
+): string {
+  if (order.status !== "done" && order.status !== "rejected") return "";
+  return processDurationLabel(order, now);
+}

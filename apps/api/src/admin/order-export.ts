@@ -1,4 +1,5 @@
 import ExcelJS from "exceljs";
+import { closedProcessDurationLabel } from "../orders/process-duration";
 import { resultNoteLines } from "../telegram/result-note";
 
 const WIB_OFFSET_MS = 7 * 60 * 60 * 1000;
@@ -81,6 +82,7 @@ export type ExportOrderRow = {
   } | null;
   result: { resultStatus: string; resultNote: string } | null;
   supplier: { name: string } | null;
+  activity: Array<{ status: string; createdAt: Date }>;
 };
 
 export type ExportMeta = {
@@ -163,6 +165,11 @@ const COLUMNS: Column[] = [
   { header: "Dibayar", width: 18, kind: "date", value: (r) => wib(r.invoice?.paidAt) },
   { header: "Mulai Diproses", width: 18, kind: "date", value: (r) => wib(r.startedAt) },
   { header: "Selesai", width: 18, kind: "date", value: (r) => wib(r.completedAt) },
+  {
+    header: "Waktu Proses",
+    width: 16,
+    value: (r) => closedProcessDurationLabel(r),
+  },
   { header: "Admin Pemroses", width: 22, value: (r) => r.assignedAdmin?.fullName ?? "" },
   { header: "Supplier", width: 20, value: (r) => r.supplier?.name ?? "" },
   { header: "Ref Supplier", width: 18, kind: "text", value: (r) => r.supplierRef ?? "" },

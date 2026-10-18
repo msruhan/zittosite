@@ -57,6 +57,7 @@ const exportInclude = {
   invoice: { select: { invoiceId: true, paymentStatus: true, paidAt: true } },
   result: { select: { resultStatus: true, resultNote: true } },
   supplier: { select: { name: true } },
+  activity: { orderBy: { createdAt: "asc" as const }, select: { status: true, createdAt: true } },
 } satisfies Prisma.OrderInclude;
 
 const EXPORT_LIMIT = 20_000;
@@ -503,6 +504,7 @@ export class AdminOrdersService {
       users,
       services,
       paidToday,
+      idleCredit,
       recent,
     ] = await Promise.all([
       this.prisma.order.count({ where: { isTest: false } }),
@@ -515,6 +517,11 @@ export class AdminOrdersService {
       this.prisma.paymentInvoice.aggregate({
         where: { purpose: "order", isTest: false, paymentStatus: "paid", paidAt: { gte: start } },
         _sum: { amount: true },
+      }),
+      // Topup leftover on customer wallets (testing accounts excluded).
+      this.prisma.user.aggregate({
+        where: { role: "customer", creditBalance: { gt: 0 } },
+        _sum: { creditBalance: true },
       }),
       this.prisma.order.findMany({
         include: orderInclude,
@@ -532,6 +539,7 @@ export class AdminOrdersService {
       totalUsers: users,
       activeServices: services,
       revenueToday: paidToday._sum.amount ?? 0,
+      idleCreditBalance: idleCredit._sum.creditBalance ?? 0,
       recentOrders: recent.map((row) =>
         serializeOrderListItem(row, { redactUser, internal: true }),
       ),

@@ -126,6 +126,26 @@ export function formatProcessDuration(ms: number): string {
   return `${minutes} menit`;
 }
 
+/**
+ * Payment → done/rejected duration. Empty until the order is closed
+ * (matches Telegram notices and the order detail stepper).
+ */
+export function processDurationLabel(order: {
+  status: string;
+  createdAt: string;
+  invoice?: { paidAt: string | null } | null;
+  activity?: Array<{ status: string; createdAt: string }>;
+}): string {
+  if (order.status !== "done" && order.status !== "rejected") return "";
+  const paidLog = order.activity?.find((log) => log.status === "paid");
+  const start = paidLog?.createdAt ?? order.invoice?.paidAt ?? order.createdAt;
+  const endLog = order.activity
+    ?.filter((log) => log.status === "done" || log.status === "rejected")
+    .at(-1);
+  const end = endLog?.createdAt ?? order.createdAt;
+  return formatProcessDuration(new Date(end).getTime() - new Date(start).getTime());
+}
+
 export function formatCountdown(totalSeconds: number): string {
   const safe = Math.max(0, totalSeconds);
   const minutes = Math.floor(safe / 60);

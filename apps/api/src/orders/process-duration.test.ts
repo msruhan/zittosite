@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { formatProcessDuration, processDurationLabel } from "./process-duration";
+import {
+  closedProcessDurationLabel,
+  formatProcessDuration,
+  processDurationLabel,
+} from "./process-duration";
 
 const MIN = 60_000;
 
@@ -30,4 +34,6 @@ test("duration runs from payment to the closing log", () => {
     processDurationLabel({ createdAt: at(0), invoice: { paidAt: at(5) } }, at(40)),
     "35 menit",
   );
+  assert.equal(closedProcessDurationLabel({ ...order, status: "done" }), "55 menit");
+  assert.equal(closedProcessDurationLabel({ ...order, status: "in_process" }), "");
 });

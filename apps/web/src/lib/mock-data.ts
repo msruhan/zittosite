@@ -563,6 +563,10 @@ export function getAdminStats() {
     totalAdmins: admins.filter((a) => a.active).length,
     revenueToday,
     ordersToday: today.length,
+    idleCreditBalance: users.reduce(
+      (sum, user) => sum + Math.max(0, user.creditBalance ?? 0),
+      0,
+    ),
   };
 }
 

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  askImeiText,
   confirmOrderText,
   isBackKeyword,
   isMenuCommand,
@@ -80,6 +81,30 @@ test("menu choices and keywords", () => {
   assert.equal(isMenuCommand("halo"), false);
   assert.equal(isBackKeyword("0"), true);
   assert.equal(isBackKeyword("00"), false);
+});
+
+test("ask-IMEI step quotes the service description like Telegram", () => {
+  const withDesc = askImeiText(
+    {
+      code: "3b-khusus",
+      name: "3B Khusus (WAJIB kirim 2 IMEI Instan Done)",
+      price: 150_000,
+      inputType: "imei",
+      menu: null,
+      description: "Wajib kirim 2 IMEI\nProses instan",
+    },
+    6,
+  );
+  assert.match(withDesc, /> Wajib kirim 2 IMEI\n> Proses instan\n\n✍️ Kirim \*IMEI 15 digit\* untuk melanjutkan/);
+  assert.match(withDesc, /maksimal 6/);
+
+  const plain = askImeiText(
+    { code: "a", name: "A", price: 10_000, inputType: "imei", menu: null, description: "" },
+    1,
+  );
+  assert.match(plain, /✍️ Kirim \*IMEI 15 digit\* perangkat\./);
+  assert.doesNotMatch(plain, /^>/m);
+  assert.doesNotMatch(plain, /maksimal/);
 });
 
 test("order confirmation lists the IMEIs, total and quoted description", () => {

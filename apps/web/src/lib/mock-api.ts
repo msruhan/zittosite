@@ -14,7 +14,7 @@ import {
   users,
 } from "@/lib/mock-data";
 import type { MockAudience } from "@/lib/mock-mode";
-import type { OrderStatus } from "@/lib/types";
+import type { OrderStatus, Supplier } from "@/lib/types";
 
 function unauthorized(): never {
   throw new ApiError("Unauthorized", 401);
@@ -39,6 +39,42 @@ function mockAdmin() {
     handledCount: 0,
     totpEnabled: false,
   };
+}
+
+function mockSuppliers(): Supplier[] {
+  const checkedAt = new Date().toISOString();
+  return [
+    {
+      id: "sup-mock-ispider",
+      kind: "dhru",
+      name: "iSpider",
+      baseUrl: "https://ispider.example/api",
+      username: "zittosite",
+      apiKeyHint: "••••3F9A",
+      isActive: true,
+      lastBalance: "152.40 USD",
+      lastCheckedAt: checkedAt,
+      lastError: null,
+      serviceCount: 24,
+      remoteServiceCount: 310,
+      createdAt: checkedAt,
+    },
+    {
+      id: "sup-mock-gcontact",
+      kind: "gcontact",
+      name: "GContact+",
+      baseUrl: "https://gcontact.id/api",
+      username: "",
+      apiKeyHint: "••••91C2",
+      isActive: true,
+      lastBalance: "120 kuota",
+      lastCheckedAt: checkedAt,
+      lastError: null,
+      serviceCount: 1,
+      remoteServiceCount: 1,
+      createdAt: checkedAt,
+    },
+  ];
 }
 
 function reportsSummary() {
@@ -171,6 +207,26 @@ export async function mockApi<T>(
 
   if (method === "GET" && p === "/admin/usd-rate") {
     return { rate: 17_000 } as T;
+  }
+
+  if (method === "GET" && p === "/admin/suppliers") {
+    if (audience !== "admin") unauthorized();
+    return mockSuppliers() as T;
+  }
+
+  if (method === "POST" && /^\/admin\/suppliers\/[^/]+\/sync$/.test(p)) {
+    if (audience !== "admin") unauthorized();
+    return {
+      supplierName: "iSpider",
+      checked: 24,
+      unchanged: 20,
+      changed: [
+        { name: "Xiaomi Mi Account Remove", before: 1200, after: 1500, usd: true },
+        { name: "Samsung FRP Remove", before: 450, after: 400, usd: true },
+      ],
+      offline: ["Oppo Unlock Lama"],
+      belowCost: ["Xiaomi Mi Account Remove"],
+    } as T;
   }
 
   if (method === "GET" && p === "/admin/service-groups") {

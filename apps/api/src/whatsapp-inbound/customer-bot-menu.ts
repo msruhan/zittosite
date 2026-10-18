@@ -8,6 +8,8 @@ export type WaService = {
   price: number;
   inputType: string;
   menu: { slug: string } | null;
+  /** Plain-text service description; shown on the ask-IMEI step like Telegram. */
+  description?: string | null;
 };
 
 export type WaMenuEntry =
@@ -87,11 +89,18 @@ export function isCancelKeyword(text: string): boolean {
 }
 
 export function askImeiText(service: WaService, maxBulk: number): string {
+  const description = String(service.description ?? "")
+    .trim()
+    .split("\n")
+    .map((line) => line.trimEnd())
+    .filter((line) => line.length > 0);
   return [
     `📦 *${service.name}*`,
     `💰 Harga: *${formatRp(service.price)}* per IMEI`,
     "",
-    "✍️ Kirim *IMEI 15 digit* perangkat.",
+    ...(description.length
+      ? [...description.map((line) => `> ${line}`), "", "✍️ Kirim *IMEI 15 digit* untuk melanjutkan."]
+      : ["✍️ Kirim *IMEI 15 digit* perangkat."]),
     maxBulk > 1 ? `Untuk beberapa IMEI, tulis satu per baris (maksimal ${maxBulk}).` : null,
     "",
     "Balas *0* untuk kembali ke menu.",

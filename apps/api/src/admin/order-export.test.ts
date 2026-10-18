@@ -31,6 +31,10 @@ function row(overrides: Partial<ExportOrderRow> = {}): ExportOrderRow {
     invoice: { invoiceId: "INV-1", paymentStatus: "paid", paidAt: new Date("2026-10-03T03:01:00Z") },
     result: { resultStatus: "success", resultNote: "OK" },
     supplier: null,
+    activity: [
+      { status: "paid", createdAt: new Date("2026-10-03T03:01:00Z") },
+      { status: "done", createdAt: new Date("2026-10-03T03:30:00Z") },
+    ],
     ...overrides,
   };
 }
@@ -55,6 +59,7 @@ test("orders sheet keeps IMEI as text, shows WIB times and sums money columns", 
   const col = (name: string) => headers.indexOf(name);
 
   assert.equal(sheet.getRow(6).getCell(col("IMEI / SN / ECID")).value, "356938035643809");
+  assert.equal(sheet.getRow(6).getCell(col("Waktu Proses")).value, "29 menit");
   const created = sheet.getRow(6).getCell(col("Tanggal Order")).value as Date;
   assert.equal(created.getUTCHours(), 10);
 

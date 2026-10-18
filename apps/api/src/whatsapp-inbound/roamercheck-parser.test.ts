@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { parseRoamercheckMessage } from "./roamercheck-parser";
+import { isAddDoneCommand, parseRoamercheckMessage } from "./roamercheck-parser";
 
 test("queued message means processing", () => {
   assert.deepEqual(
@@ -79,4 +79,20 @@ test("chatter and unknown formats are ignored", () => {
   assert.deepEqual(parseRoamercheckMessage("keproses wkwk"), []);
   assert.deepEqual(parseRoamercheckMessage("IMEI 12345 BERHASIL"), []);
   assert.deepEqual(parseRoamercheckMessage("• 358790737367981: tanpa header"), []);
+  assert.deepEqual(parseRoamercheckMessage("/adddone"), []);
+  assert.deepEqual(parseRoamercheckMessage("jangan /adddone 356556102094753 dulu"), []);
+});
+
+test("/adddone marks each IMEI as done", () => {
+  assert.equal(isAddDoneCommand("/adddone 356556102094753"), true);
+  assert.equal(isAddDoneCommand("/ADDDONE 356556102094753"), true);
+  assert.equal(isAddDoneCommand("/adddone"), false);
+  assert.equal(isAddDoneCommand("jangan /adddone 356556102094753"), false);
+  assert.deepEqual(parseRoamercheckMessage("/adddone 356556102094753"), [
+    { kind: "done", imei: "356556102094753" },
+  ]);
+  assert.deepEqual(parseRoamercheckMessage("  /AddDone 356556102094753 353241103298751  "), [
+    { kind: "done", imei: "356556102094753" },
+    { kind: "done", imei: "353241103298751" },
+  ]);
 });

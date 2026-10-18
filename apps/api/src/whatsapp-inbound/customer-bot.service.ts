@@ -212,7 +212,20 @@ export class CustomerBotService {
     }
     const maxBulk = maxBulkFor({ fulfillmentChannel: service.via, menu: service.menu });
     this.setSession(chatId, { kind: "imei", serviceCode: service.code, maxBulk });
-    await this.send(chatId, askImeiText(service, maxBulk));
+    const description = descriptionToPlain(service.description ?? "");
+    await this.send(
+      chatId,
+      askImeiText(
+        {
+          ...service,
+          description:
+            description.length > DESCRIPTION_MAX_CHARS
+              ? `${description.slice(0, DESCRIPTION_MAX_CHARS)}…`
+              : description,
+        },
+        maxBulk,
+      ),
+    );
     return `service: ${service.code}`;
   }
 

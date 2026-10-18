@@ -24,7 +24,7 @@ import {
 import { ApiError, api, downloadFile } from "@/lib/api";
 import { ORDER_STATUS_OPTIONS } from "@/lib/status";
 import { AutoRefreshStatus, useAutoRefresh } from "@/components/domain/auto-refresh";
-import { formatDateTime, formatRupiah } from "@/lib/format";
+import { formatDateTime, formatRupiah, processDurationLabel } from "@/lib/format";
 import type { OrderDetail, OrderStatus } from "@/lib/types";
 
 const STATUS_CHOICES = ORDER_STATUS_OPTIONS.filter(
@@ -305,12 +305,15 @@ export function AdminOrderManagement({
                     <TH>Harga</TH>
                     <TH>{supplierView ? "Supplier" : "Admin"}</TH>
                     <TH>Status</TH>
+                    <TH>Waktu proses</TH>
                     <TH>Dibuat</TH>
                     <TH className={canEditStatus ? "w-24" : "w-16"}>Aksi</TH>
                   </TR>
                 </THead>
                 <TBody>
-                  {filtered.map((order) => (
+                  {filtered.map((order) => {
+                    const duration = processDurationLabel(order);
+                    return (
                     <TR key={order.orderId}>
                       <TD>
                         <DataValue emphasis>{order.orderId}</DataValue>
@@ -377,6 +380,15 @@ export function AdminOrderManagement({
                         )}
                       </TD>
                       <TD>
+                        {duration ? (
+                          <span className="font-data tabular whitespace-nowrap text-ink">
+                            {duration}
+                          </span>
+                        ) : (
+                          <span className="text-ink-faint">—</span>
+                        )}
+                      </TD>
+                      <TD>
                         <time
                           dateTime={order.createdAt}
                           className="font-data tabular whitespace-nowrap text-ink-soft"
@@ -422,7 +434,8 @@ export function AdminOrderManagement({
                         </div>
                       </TD>
                     </TR>
-                  ))}
+                    );
+                  })}
                 </TBody>
               </Table>
             </TableScroll>

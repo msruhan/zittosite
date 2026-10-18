@@ -12,7 +12,7 @@ import {
   Table,
   TableScroll,
 } from "@/components/ui/table";
-import { formatDateTime, formatRupiah } from "@/lib/format";
+import { formatDateTime, formatRupiah, processDurationLabel } from "@/lib/format";
 import type { OrderDetail } from "@/lib/types";
 
 export const ADMIN_ORDER_COLUMNS = [
@@ -23,6 +23,7 @@ export const ADMIN_ORDER_COLUMNS = [
   "Harga",
   "Status",
   "Admin",
+  "Waktu proses",
   "Tanggal",
 ];
 
@@ -46,6 +47,7 @@ export function AdminOrderTable({
             <TH className="text-right">Harga</TH>
             <TH>Status</TH>
             <TH>Admin</TH>
+            <TH>Waktu proses</TH>
             <TH>Tanggal</TH>
             <TH className="w-10">
               <span className="sr-only">Buka detail</span>
@@ -53,7 +55,9 @@ export function AdminOrderTable({
           </TR>
         </THead>
         <TBody>
-          {orders.map((order) => (
+          {orders.map((order) => {
+            const duration = processDurationLabel(order);
+            return (
             <TR key={order.orderId}>
               <TD className="py-2.5">
                 <Link
@@ -107,6 +111,13 @@ export function AdminOrderTable({
                 )}
               </TD>
               <TD className="py-2.5">
+                {duration ? (
+                  <span className="font-data tabular whitespace-nowrap text-ink">{duration}</span>
+                ) : (
+                  <span className="text-ink-faint">—</span>
+                )}
+              </TD>
+              <TD className="py-2.5">
                 <span className="flex items-center gap-2 whitespace-nowrap">
                   <time
                     dateTime={order.createdAt}
@@ -137,7 +148,8 @@ export function AdminOrderTable({
                 </Link>
               </TD>
             </TR>
-          ))}
+            );
+          })}
         </TBody>
       </Table>
     </TableScroll>

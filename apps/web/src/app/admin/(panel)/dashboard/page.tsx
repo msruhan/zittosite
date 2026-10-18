@@ -9,6 +9,7 @@ import {
   CurrencyCircleDollar,
   Package,
   Users,
+  Wallet,
   WarningCircle,
 } from "@phosphor-icons/react/dist/ssr";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
@@ -45,6 +46,8 @@ type DashboardStats = {
   totalUsers: number;
   activeServices: number;
   revenueToday: number;
+  /** Sum of positive credit balances on customer accounts (unused topup). */
+  idleCreditBalance: number;
   recentOrders: OrderDetail[];
 };
 
@@ -655,6 +658,12 @@ export default async function AdminDashboardPage({
           )}
 
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-1">
+            <SummaryTile
+              label="Saldo mengendap"
+              value={formatRupiah(stats.idleCreditBalance ?? 0)}
+              helper="Total saldo topup user yang belum terpakai."
+              icon={<Wallet className="size-5" weight="regular" />}
+            />
             <SummaryTile
               label="User"
               value={stats.totalUsers}

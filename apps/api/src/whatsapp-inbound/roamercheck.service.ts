@@ -3,7 +3,8 @@ import { wahaInboundConfig, whatsappConfig } from "../config/env";
 import { OrdersService } from "../orders/orders.service";
 import { PrismaService } from "../prisma/prisma.service";
 import { WahaClient } from "../whatsapp/waha.client";
-import { parseRoamercheckMessage } from "./roamercheck-parser";
+import { jidPhone } from "./admin-reaction-parser";
+import { isAddDoneCommand, parseRoamercheckMessage } from "./roamercheck-parser";
 
 export type WahaMessagePayload = {
   id?: unknown;
@@ -14,7 +15,7 @@ export type WahaMessagePayload = {
   replyTo?: { id?: unknown } | null;
 };
 
-const ACTOR = { username: "Roamercheck", fullName: "bot otomatis" };
+const PROCESSOR_ACTOR = { username: "Roamercheck", fullName: "bot otomatis" };
 
 @Injectable()
 export class RoamercheckService {
@@ -27,21 +28,27 @@ export class RoamercheckService {
     private readonly waha: WahaClient,
   ) {}
 
-  /** Applies a group message from the processor bot. Returns a short outcome for logs. */
+  /**
+   * Applies a group message from the processor bot, or `/adddone <imei>` from any
+   * group member. Returns a short outcome for logs.
+   */
   async handle(payload: WahaMessagePayload): Promise<string> {
     const group = whatsappConfig();
     const inbound = wahaInboundConfig();
     if (!group || !inbound) return "off";
     if (payload.fromMe === true) return "ignored: own message";
     if (payload.from !== group.groupChatId) return "ignored: other chat";
-    if (!(await this.isProcessor(payload.participant, inbound.processorNumber))) {
+
+    const text = typeof payload.body === "string" ? payload.body : "";
+    const addDone = isAddDoneCommand(text);
+    if (!addDone && !(await this.isProcessor(payload.participant, inbound.processorNumber))) {
       return "ignored: other sender";
     }
 
-    const text = typeof payload.body === "string" ? payload.body : "";
     const updates = parseRoamercheckMessage(text);
     if (!updates.length) return "ignored: unrecognised message";
 
+    const actor = addDone ? this.addDoneActor(payload.participant) : PROCESSOR_ACTOR;
     const invoiceId = await this.repliedInvoiceId(payload.replyTo?.id);
     const results: string[] = [];
     for (const update of updates) {
@@ -59,10 +66,23 @@ export class RoamercheckService {
         results.push(`${update.imei} ${update.kind}: no active order`);
         continue;
       }
-      const outcome = await this.orders.applyProcessorUpdate(order.id, update, ACTOR);
+      const outcome = await this.orders.applyProcessorUpdate(
+        order.id,
+        addDone
+          ? { kind: "done", note: `IMEI ditandai done via /adddone oleh ${actor.fullName}.` }
+          : update,
+        actor,
+      );
       results.push(`${order.orderId} ${update.kind}: ${outcome}`);
     }
     return results.join("; ");
+  }
+
+  private addDoneActor(participant: unknown): { username: string; fullName: string } {
+    const jid = typeof participant === "string" ? participant : "";
+    const phone = jidPhone(jid) ?? (jid.endsWith("@lid") ? jid.replace(/@lid$/, "") : null);
+    const label = phone ?? "anggota grup";
+    return { username: "manual-/adddone", fullName: label };
   }
 
   private async isProcessor(participant: unknown, phone: string): Promise<boolean> {
