@@ -126,10 +126,12 @@ test("phone JIDs give digits; LIDs and groups do not", () => {
   assert.equal(jidPhone("120363427454043461@g.us"), null);
 });
 
-test("admin WhatsApp numbers are stored as 62 digits", () => {
+test("admin WhatsApp numbers keep the country code", () => {
   assert.equal(normalizeWhatsappNumber("0812-3456-7890"), "6281234567890");
   assert.equal(normalizeWhatsappNumber("+62 812 3456 7890"), "6281234567890");
   assert.equal(normalizeWhatsappNumber("6281234567890"), "6281234567890");
+  assert.equal(normalizeWhatsappNumber("+65 8123 4567"), "6581234567");
+  assert.equal(normalizeWhatsappNumber("006581234567"), "6581234567");
 });
 
 test("reactions match cards on the bare message id", () => {

@@ -715,14 +715,14 @@ function UserFormDialog({
         <Field
           label="Nomor WhatsApp"
           htmlFor="whatsappNumber"
-          hint="Hanya nomor ini yang bisa order lewat bot WhatsApp atas nama user ini. Kosongkan untuk mencabut akses."
+          hint="Hanya nomor ini yang bisa order lewat bot WhatsApp atas nama user ini. +62 atau kode negara lain. Kosongkan untuk mencabut akses."
         >
           <Input
             id="whatsappNumber"
             inputMode="tel"
             autoComplete="off"
             className="font-data"
-            placeholder="6281234567890"
+            placeholder="6281234567890 atau +60123456789"
             value={draft.whatsappNumber ?? ""}
             onChange={(event) =>
               setDraft((current) => ({ ...current, whatsappNumber: event.target.value }))

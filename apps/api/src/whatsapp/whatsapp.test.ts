@@ -4,31 +4,23 @@ import { whatsappConfig } from "../config/env";
 import { formatWib, paidInvoiceGroupText } from "./whatsapp-messages";
 import { backoffMs, MAX_ATTEMPTS, shouldGiveUp } from "./whatsapp-retry-policy";
 
-const paidAt = new Date("2026-09-30T07:05:00Z");
-
-test("single order message", () => {
-  const text = paidInvoiceGroupText({
-    paidAt,
-    orders: [{ imei: "356938035643809" }],
-  });
+test("single order message is the service name and IMEI", () => {
   assert.equal(
-    text,
-    [
-      "✅ *PEMBAYARAN DITERIMA*",
-      "",
-      "🕒 Dibayar: 30 Sep 2026, 14:05 WIB",
-      "",
-      "1. `356938035643809`",
-    ].join("\n"),
+    paidInvoiceGroupText({
+      orders: [{ serviceName: "3B Slow", imei: "356938035643809" }],
+    }),
+    "3B Slow\n356938035643809",
   );
 });
 
-test("bulk order numbers every IMEI without service names", () => {
-  const orders = Array.from({ length: 6 }, (_, i) => ({ imei: `35693803564380${i}` }));
-  const text = paidInvoiceGroupText({ paidAt, orders });
-  assert.match(text, /WIB\n\n1\. `356938035643800`/);
-  assert.match(text, /6\. `356938035643805`$/);
-  assert.doesNotMatch(text, /📦/);
+test("bulk order repeats the service name above each IMEI", () => {
+  const text = paidInvoiceGroupText({
+    orders: [
+      { serviceName: "3B Slow", imei: "356938035643800" },
+      { serviceName: "1B", imei: "356938035643801" },
+    ],
+  });
+  assert.equal(text, "3B Slow\n356938035643800\n\n1B\n356938035643801");
 });
 
 test("WIB formatting", () => {

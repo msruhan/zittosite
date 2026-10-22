@@ -871,14 +871,14 @@ function AdminFormDialog({
         <Field
           label="Nomor WhatsApp"
           htmlFor="whatsappNumber"
-          hint="Untuk layanan berjalur WhatsApp Admin: react admin di grup dikenali dari nomor ini. Contoh 6281234567890."
+          hint="Untuk layanan berjalur WhatsApp Admin: react admin di grup dikenali dari nomor ini. +62 atau kode negara lain, contoh 6281234567890 atau +60123456789."
         >
           <Input
             id="whatsappNumber"
             inputMode="tel"
             autoComplete="off"
             className="font-data"
-            placeholder="62…"
+            placeholder="628… atau +60…"
             maxLength={30}
             value={draft.whatsappNumber ?? ""}
             onChange={(event) =>

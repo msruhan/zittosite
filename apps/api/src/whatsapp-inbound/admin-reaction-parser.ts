@@ -20,8 +20,14 @@ export function jidPhone(jid: string): string | null {
   return match ? match[1]! : null;
 }
 
-/** Admin WhatsApp number as stored: digits only, local 08… rewritten to 628…. */
+/**
+ * WhatsApp number as stored: digits only, no leading +.
+ * Local Indonesian 08… becomes 628…; 00… is an international prefix and is dropped.
+ * Other country codes (60…, 65…, 1…) stay as entered.
+ */
 export function normalizeWhatsappNumber(raw: string): string {
-  const digits = raw.replace(/\D/g, "");
-  return digits.startsWith("0") ? `62${digits.slice(1)}` : digits;
+  let digits = raw.replace(/\D/g, "");
+  if (digits.startsWith("00")) digits = digits.slice(2);
+  else if (digits.startsWith("0")) digits = `62${digits.slice(1)}`;
+  return digits;
 }

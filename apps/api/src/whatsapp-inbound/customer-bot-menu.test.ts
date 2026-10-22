@@ -144,6 +144,8 @@ test("WhatsApp number registration format", () => {
   assert.equal(parseWhatsappNumber(""), null);
   assert.equal(parseWhatsappNumber("0812-3456-7890"), "6281234567890");
   assert.equal(parseWhatsappNumber("+62 812 3456 7890"), "6281234567890");
+  assert.equal(parseWhatsappNumber("+60 12-345 6789"), "60123456789");
+  assert.equal(parseWhatsappNumber("0060123456789"), "60123456789");
   assert.throws(() => parseWhatsappNumber("12345"));
   assert.equal(whatsappChatId("6281234567890"), "6281234567890@c.us");
 });

@@ -82,7 +82,7 @@ export type ExportOrderRow = {
   } | null;
   result: { resultStatus: string; resultNote: string } | null;
   supplier: { name: string } | null;
-  activity: Array<{ status: string; createdAt: Date }>;
+  activity: Array<{ status: string; createdAt: Date; actor?: string }>;
 };
 
 export type ExportMeta = {
@@ -170,7 +170,13 @@ const COLUMNS: Column[] = [
     width: 16,
     value: (r) => closedProcessDurationLabel(r),
   },
-  { header: "Admin Pemroses", width: 22, value: (r) => r.assignedAdmin?.fullName ?? "" },
+  {
+    header: "Admin Pemroses",
+    width: 22,
+    value: (r) =>
+      r.assignedAdmin?.fullName ??
+      (r.activity.some((log) => log.actor?.startsWith("Roamercheck")) ? "Roamercheck" : ""),
+  },
   { header: "Supplier", width: 20, value: (r) => r.supplier?.name ?? "" },
   { header: "Ref Supplier", width: 18, kind: "text", value: (r) => r.supplierRef ?? "" },
   { header: "Error Supplier", width: 28, value: (r) => r.supplierError ?? "" },

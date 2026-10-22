@@ -299,21 +299,22 @@ export default async function AdminOrderDetailPage({
               )}
 
               <div className="mt-4 border-t border-hairline pt-4">
-                {order.assignedAdmin ? (
+                {order.assignedAdmin ||
+                order.activity.some((log) => log.actor.startsWith("Roamercheck")) ? (
                   <div className="flex items-center gap-3">
                     <Avatar
-                      fullName={order.assignedAdmin.fullName}
+                      fullName={order.assignedAdmin?.fullName ?? "Roamercheck"}
                       className="size-9"
                     />
                     <div className="min-w-0">
                       <p className="text-body font-medium text-ink">
-                        {order.assignedAdmin.fullName}
+                        {order.assignedAdmin?.fullName ?? "Roamercheck"}
                       </p>
                       <p className="font-data text-body text-ink-soft">
-                        {order.assignedAdmin.telegramHandle
+                        {order.assignedAdmin?.telegramHandle
                           ? `${order.assignedAdmin.telegramHandle} · `
                           : ""}
-                        admin pemroses
+                        {order.assignedAdmin ? "admin pemroses" : "bot pemroses"}
                       </p>
                     </div>
                   </div>

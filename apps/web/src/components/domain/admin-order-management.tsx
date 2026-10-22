@@ -61,6 +61,13 @@ const CANCEL_FLOW_FROM: OrderStatus[] = [
 
 export type OrderHandler = { id: string; fullName: string; username: string };
 
+/** Matches the API filter for orders the Roamercheck bot updated. */
+const ROAMERCHECK_FILTER = "roamercheck";
+
+function handledByRoamercheck(order: { activity: { actor: string }[] }): boolean {
+  return order.activity.some((log) => log.actor.startsWith("Roamercheck"));
+}
+
 /** Admin and order-date filters run on the server: the list is capped at the newest 200. */
 type ServerFilters = { admin: string; from: string; to: string; handlers: OrderHandler[] };
 
@@ -236,6 +243,7 @@ export function AdminOrderManagement({
             options={[
               { value: "all", label: "Semua admin" },
               { value: "none", label: "Tanpa admin" },
+              { value: ROAMERCHECK_FILTER, label: "Roamercheck" },
               ...serverFilters.handlers.map((admin) => ({
                 value: admin.id,
                 label: admin.fullName,
@@ -352,6 +360,8 @@ export function AdminOrderManagement({
                           <span className="font-medium text-ink">
                             {order.assignedAdmin.fullName}
                           </span>
+                        ) : handledByRoamercheck(order) ? (
+                          <span className="font-medium text-ink">Roamercheck</span>
                         ) : (
                           <span className="text-ink-faint">—</span>
                         )}

@@ -34,19 +34,20 @@ export class WhatsappNotifyService {
     const invoice = await tx.paymentInvoice.findUnique({
       where: { id: invoiceRowId },
       select: {
-        paidAt: true,
         orders: {
           where: { status: "waiting_action", service: { fulfillmentChannel: "whatsapp" } },
           orderBy: { orderId: "asc" },
-          select: { imei: true },
+          select: { imei: true, service: { select: { name: true } } },
         },
       },
     });
     if (!invoice?.orders.length) return null;
 
     const text = paidInvoiceGroupText({
-      paidAt: invoice.paidAt ?? new Date(),
-      orders: invoice.orders,
+      orders: invoice.orders.map((order) => ({
+        serviceName: order.service.name,
+        imei: order.imei,
+      })),
     });
     const row = await tx.whatsappNotification.upsert({
       where: { invoiceId: invoiceRowId },

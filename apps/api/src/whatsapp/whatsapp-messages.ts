@@ -1,8 +1,7 @@
 import type { ServiceInputType } from "@prisma/client";
 
 export type PaidInvoiceInput = {
-  paidAt: Date;
-  orders: Array<{ imei: string }>;
+  orders: Array<{ serviceName: string; imei: string }>;
 };
 
 export function formatWib(date: Date): string {
@@ -20,15 +19,9 @@ export function formatWib(date: Date): string {
   return `${get("day")} ${get("month")} ${get("year")}, ${get("hour")}:${get("minute")} WIB`;
 }
 
-/** Group message for one paid invoice: payment time and numbered IMEIs. Service names stay private. */
+/** Roamercheck group notice: one service name and IMEI per order, same shape as an admin card. */
 export function paidInvoiceGroupText(input: PaidInvoiceInput): string {
-  return [
-    "✅ *PEMBAYARAN DITERIMA*",
-    "",
-    `🕒 Dibayar: ${formatWib(input.paidAt)}`,
-    "",
-    ...input.orders.map((order, i) => `${i + 1}. \`${order.imei}\``),
-  ].join("\n");
+  return input.orders.map((order) => `${order.serviceName}\n${order.imei}`).join("\n\n");
 }
 
 /**

@@ -57,12 +57,23 @@ const exportInclude = {
   invoice: { select: { invoiceId: true, paymentStatus: true, paidAt: true } },
   result: { select: { resultStatus: true, resultNote: true } },
   supplier: { select: { name: true } },
-  activity: { orderBy: { createdAt: "asc" as const }, select: { status: true, createdAt: true } },
+  activity: {
+    orderBy: { createdAt: "asc" as const },
+    select: { status: true, createdAt: true, actor: true },
+  },
 } satisfies Prisma.OrderInclude;
 
 const EXPORT_LIMIT = 20_000;
 
 type OrderListFilters = { adminId?: string; from?: string; to?: string };
+
+/** Orders page filter value for the Roamercheck processor bot (not an admin account). */
+const ROAMERCHECK_HANDLER = "roamercheck";
+
+const handledByRoamercheck: Prisma.OrderWhereInput = {
+  assignedAdminId: null,
+  activity: { some: { actor: { startsWith: "Roamercheck" } } },
+};
 
 const ALL_STATUSES: OrderStatus[] = [
   "waiting_payment",
@@ -133,6 +144,7 @@ export class AdminOrdersService {
     if (status && ORDER_STATUS_LABEL[status]) labels.push(`Status ${ORDER_STATUS_LABEL[status]}`);
     const handler = String(filters.adminId ?? "").trim();
     if (handler === "none") labels.push("Tanpa admin");
+    else if (handler === ROAMERCHECK_HANDLER) labels.push("Admin Roamercheck");
     else if (handler) {
       const picked = await this.prisma.admin.findUnique({
         where: { id: handler },
@@ -194,8 +206,10 @@ export class AdminOrdersService {
     const handlerFilter: Prisma.OrderWhereInput | null = !adminId
       ? null
       : adminId === "none"
-        ? { assignedAdminId: null }
-        : {
+        ? { assignedAdminId: null, NOT: handledByRoamercheck }
+        : adminId === ROAMERCHECK_HANDLER
+          ? handledByRoamercheck
+          : {
             OR: [
               { assignedAdminId: adminId },
               {
