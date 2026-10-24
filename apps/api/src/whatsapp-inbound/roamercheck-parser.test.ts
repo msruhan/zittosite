@@ -41,21 +41,15 @@ test("success message means done", () => {
   ]);
 });
 
-test("failed message means rejected", () => {
+test("failed message stays in process instead of rejecting", () => {
   assert.deepEqual(
     parseRoamercheckMessage(
       "❌ IMEI 353941308991338 GAGAL. Coba lagi nanti / hubungi admin.",
     ),
-    [
-      {
-        kind: "rejected",
-        imei: "353941308991338",
-        reason: "Gagal diproses. Coba lagi nanti / hubungi admin.",
-      },
-    ],
+    [{ kind: "processing", imei: "353941308991338" }],
   );
   assert.deepEqual(parseRoamercheckMessage("❌ *IMEI 353941308991338 GAGAL*"), [
-    { kind: "rejected", imei: "353941308991338", reason: "Gagal diproses." },
+    { kind: "processing", imei: "353941308991338" },
   ]);
 });
 

@@ -33,7 +33,7 @@ function cleanReason(value: string): string {
  * - `⏳ *Processing* IMEI *356609236832323* + 353241103298751...` → processing (each IMEI)
  * - `✅ *IMEI 358790737367981 BERHASIL* ✅`               → done
  * - `/adddone 356556102094753`                          → done (manual; any sender)
- * - `❌ IMEI 353941308991338 GAGAL. Coba lagi nanti …`   → rejected
+ * - `❌ IMEI 353941308991338 GAGAL. Coba lagi nanti …`   → stay in process (not rejected)
  * - `❌ *Ada IMEI nggak valid:*` + `• <imei>: <reason>`  → rejected
  */
 export function parseRoamercheckMessage(text: string): ProcessorUpdate[] {
@@ -55,14 +55,9 @@ export function parseRoamercheckMessage(text: string): ProcessorUpdate[] {
   for (const [, imei] of text.matchAll(DONE)) {
     byImei.set(imei, { kind: "done", imei });
   }
-  for (const [, imei, rest] of text.matchAll(FAILED)) {
-    if (byImei.has(imei)) continue;
-    const detail = cleanReason(rest);
-    byImei.set(imei, {
-      kind: "rejected",
-      imei,
-      reason: detail ? `Gagal diproses. ${detail}` : "Gagal diproses.",
-    });
+  // "GAGAL" is a temporary miss from the bot. Keep the order in process; do not reject or refund.
+  for (const [, imei] of text.matchAll(FAILED)) {
+    if (!byImei.has(imei)) byImei.set(imei, { kind: "processing", imei });
   }
   for (const [, imei] of text.matchAll(PROCESSING)) {
     if (!byImei.has(imei)) byImei.set(imei, { kind: "processing", imei });
