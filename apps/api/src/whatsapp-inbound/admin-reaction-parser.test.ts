@@ -6,7 +6,7 @@ import {
   normalizeWhatsappNumber,
   reactionAction,
 } from "./admin-reaction-parser";
-import { wibToday } from "./admin-reaction.service";
+import { adminDailyCountWhere, wibToday } from "./admin-reaction.service";
 import { adminDailyCountText } from "../whatsapp/whatsapp-messages";
 
 test("/hitung command and daily count reply", () => {
@@ -46,6 +46,14 @@ test("/hitung command and daily count reply", () => {
   const today = wibToday(new Date("2026-10-07T18:43:00Z"));
   assert.equal(today.label, "08-10-2026");
   assert.equal(today.start.toISOString(), "2026-10-07T17:00:00.000Z");
+
+  const range = { gte: today.start, lt: new Date(today.start.getTime() + 86_400_000) };
+  assert.deepEqual(adminDailyCountWhere("1@g.us", range), {
+    whatsappAdminMessage: { chatId: "1@g.us" },
+    createdAt: range,
+    status: { in: ["waiting_action", "in_process", "done", "rejected"] },
+    OR: [{ assignedAdminId: null }, { assignedAdmin: { role: { not: "super_admin" } } }],
+  });
 });
 import { messageKey, parseGroups, selfIds } from "../whatsapp/waha.client";
 import { adminOrderCardText, adminReactionReplyText } from "../whatsapp/whatsapp-messages";

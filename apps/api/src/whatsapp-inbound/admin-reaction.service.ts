@@ -1,7 +1,6 @@
 import { HttpException, Injectable, Logger } from "@nestjs/common";
-import type { OrderStatus } from "@prisma/client";
+import type { OrderStatus, Prisma } from "@prisma/client";
 import { whatsappAdminEnabled, whatsappConfig } from "../config/env";
-import { orderDayWhere } from "../orders/order-day";
 import { OrdersService } from "../orders/orders.service";
 import { PrismaService } from "../prisma/prisma.service";
 import { AdminNotifyService } from "../telegram/admin-notify.service";
@@ -43,6 +42,29 @@ export function wibToday(now = new Date()): { start: Date; label: string } {
 function wibTime(date: Date): string {
   const d = new Date(date.getTime() + WIB_OFFSET_MS);
   return `${String(d.getUTCHours()).padStart(2, "0")}:${String(d.getUTCMinutes()).padStart(2, "0")}`;
+}
+
+/**
+ * Orders that arrived in this admin group on this WIB day, finished or not.
+ * A previous day's order stays out even when it was marked done today or yesterday.
+ * Super Admin takes stay out; an order nobody has taken yet still counts.
+ */
+export function adminDailyCountWhere(
+  chatId: string,
+  range: { gte: Date; lt: Date },
+): Prisma.OrderWhereInput {
+  return {
+    whatsappAdminMessage: { chatId },
+    createdAt: range,
+    status: { in: ["waiting_action", "in_process", "done", "rejected"] },
+    OR: [{ assignedAdminId: null }, { assignedAdmin: { role: { not: "super_admin" } } }],
+  };
+}
+
+/** Waiting and in-process are both "not done yet" on the /hitung card. */
+function countStatus(status: OrderStatus): DailyCountRow["status"] {
+  if (status === "done" || status === "rejected") return status;
+  return "in_process";
 }
 
 /** Reactions on finished orders are ignored without a word. */
@@ -129,8 +151,8 @@ export class AdminReactionService {
 
   /**
    * "/hitung" in an admin group, sent by any active admin (Super Admin included): replies with
-   * today's (WIB) orders of that group handled by its admins. Orders a Super Admin took — on the
-   * web, Telegram or in the group — stay out of the recap.
+   * the orders that arrived in that group today (WIB), whether already done or not.
+   * Orders a Super Admin took — on the web, Telegram or in the group — stay out of the recap.
    */
   async handleCommand(payload: WahaMessagePayload): Promise<string | null> {
     const text = typeof payload.body === "string" ? payload.body : "";
@@ -151,29 +173,30 @@ export class AdminReactionService {
 
     const today = wibToday();
     const orders = await this.prisma.order.findMany({
-      where: {
-        whatsappAdminMessage: { chatId },
-        assignedAdmin: { role: { not: "super_admin" } },
-        status: { in: ["in_process", "done", "rejected"] },
-        ...orderDayWhere({ gte: today.start, lt: new Date(today.start.getTime() + DAY_MS) }),
-      },
+      where: adminDailyCountWhere(chatId, {
+        gte: today.start,
+        lt: new Date(today.start.getTime() + DAY_MS),
+      }),
       select: {
         imei: true,
         status: true,
-        startedAt: true,
-        updatedAt: true,
+        createdAt: true,
         assignedAdmin: { select: { fullName: true } },
       },
     });
     const sorted = orders
-      .map((order) => ({ at: order.startedAt ?? order.updatedAt, order }))
+      .map((order) => ({ at: order.createdAt, order }))
       .sort((a, b) => a.at.getTime() - b.at.getTime());
-    const handlers = [...new Set(sorted.map(({ order }) => order.assignedAdmin?.fullName ?? "-"))];
+    const handlers = [
+      ...new Set(
+        sorted.flatMap(({ order }) => (order.assignedAdmin?.fullName ? [order.assignedAdmin.fullName] : [])),
+      ),
+    ];
     const rows = sorted.map(
       ({ at, order }): DailyCountRow => ({
         time: wibTime(at),
         imei: order.imei,
-        status: order.status as DailyCountRow["status"],
+        status: countStatus(order.status),
         ...(handlers.length > 1 ? { adminName: order.assignedAdmin?.fullName ?? "-" } : {}),
       }),
     );

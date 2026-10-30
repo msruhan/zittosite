@@ -80,7 +80,7 @@ const DAILY_COUNT_MARK: Record<DailyCountRow["status"], string> = {
   rejected: "❌",
 };
 
-/** Reply to "/hitung": the group's orders handled today, oldest first. */
+/** Reply to "/hitung": the group's orders that arrived today, oldest first. */
 export function adminDailyCountText(input: {
   /** Admins who handled the orders; empty when none did. */
   adminName: string;
@@ -100,7 +100,7 @@ export function adminDailyCountText(input: {
             `${i + 1}. [${row.time}] ${row.imei} ${DAILY_COUNT_MARK[row.status]}` +
             (row.adminName ? ` · ${row.adminName}` : ""),
         )
-      : ["_Belum ada order yang diproses hari ini._"]),
+      : ["_Belum ada order hari ini._"]),
     "",
     `Total IMEI masuk : ${input.rows.length}`,
     `✅ Done : ${count("done")}`,
