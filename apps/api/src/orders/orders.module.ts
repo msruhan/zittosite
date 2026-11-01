@@ -2,6 +2,7 @@ import { Module, forwardRef } from "@nestjs/common";
 import { PrismaModule } from "../prisma/prisma.module";
 import { AuthModule } from "../auth/auth.module";
 import { AdminNotifyModule } from "../telegram/admin-notify.module";
+import { PaymentModeModule } from "../payments/payment-mode.module";
 import { SayabayarModule } from "../payments/sayabayar.module";
 import { WhatsappModule } from "../whatsapp/whatsapp.module";
 import { OrdersController } from "./orders.controller";
@@ -20,6 +21,7 @@ import { UserMenusService } from "./user-menus.service";
     PrismaModule,
     AuthModule,
     SayabayarModule,
+    PaymentModeModule,
     forwardRef(() => AdminNotifyModule),
     WhatsappModule,
   ],

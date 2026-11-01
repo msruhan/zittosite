@@ -10,6 +10,7 @@ import { PrismaService } from "../prisma/prisma.service";
 import { paymentSimulationEnabled, webPublicUrl } from "../config/env";
 import { AdminNotifyService } from "../telegram/admin-notify.service";
 import { AuditLogService } from "../security/audit-log.service";
+import { PaymentModeService } from "../payments/payment-mode.service";
 import { SayabayarClient } from "../payments/sayabayar.client";
 import {
   topupPaidSuperAdminHtml,
@@ -46,6 +47,7 @@ export class TopupService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly sayabayar: SayabayarClient,
+    private readonly paymentMode: PaymentModeService,
     private readonly audit: AuditLogService,
     private readonly adminNotify: AdminNotifyService,
   ) {}
@@ -86,8 +88,11 @@ export class TopupService {
     const user = await this.prisma.user.findUniqueOrThrow({ where: { id: userId } });
     const invoiceId = await this.nextInvoiceId();
 
+    const useListener = (await this.paymentMode.gateway()) === "listener";
     let gateway = null;
-    if (this.sayabayar.enabled()) {
+    if (useListener) {
+      // Reserved inside the transaction below.
+    } else if (this.sayabayar.enabled()) {
       gateway = await this.sayabayar.createInvoice({
         amount,
         description: `Topup saldo — ${invoiceId}`,
@@ -99,27 +104,36 @@ export class TopupService {
       throw new ServiceUnavailableException("Pembayaran belum tersedia. Hubungi admin.");
     }
 
-    const invoice = await this.prisma.paymentInvoice.create({
-      data: {
-        invoiceId,
-        purpose: "topup",
-        userId,
-        amount,
-        paymentStatus: "pending",
-        expiredAt:
-          gateway?.expiredAt ?? new Date(Date.now() + TOPUP_TTL_MINUTES * 60_000),
-        ...(gateway
-          ? {
-              paymentChannel: "sayabayar",
-              paymentReference: gateway.id,
-              amountDue: gateway.amountDue,
-              qrisString: gateway.qrisString,
-              checkoutUrl: gateway.paymentUrl,
-              gatewayPayload: gateway.raw as Prisma.InputJsonValue,
-            }
-          : { paymentChannel: "qris_placeholder" }),
-      },
-    });
+    const invoice = await this.prisma.$transaction(async (tx) => {
+      const listener = useListener ? await this.paymentMode.reserve(tx, amount) : null;
+      return tx.paymentInvoice.create({
+        data: {
+          invoiceId,
+          purpose: "topup",
+          userId,
+          amount,
+          paymentStatus: "pending",
+          expiredAt:
+            gateway?.expiredAt ?? new Date(Date.now() + TOPUP_TTL_MINUTES * 60_000),
+          ...(listener
+            ? {
+                paymentChannel: "listener",
+                amountDue: listener.amountDue,
+                qrisString: listener.qrisString,
+              }
+            : gateway
+              ? {
+                  paymentChannel: "sayabayar",
+                  paymentReference: gateway.id,
+                  amountDue: gateway.amountDue,
+                  qrisString: gateway.qrisString,
+                  checkoutUrl: gateway.paymentUrl,
+                  gatewayPayload: gateway.raw as Prisma.InputJsonValue,
+                }
+              : { paymentChannel: "qris_placeholder" }),
+        },
+      });
+    }, useListener ? { isolationLevel: Prisma.TransactionIsolationLevel.Serializable } : undefined);
     this.audit.record("balance.topup_created", {
       actorUserId: userId,
       invoiceId,
@@ -148,6 +162,7 @@ export class TopupService {
   async check(userId: string, invoiceId: string) {
     const invoice = await this.findOwned(userId, invoiceId);
     if (invoice.paymentStatus !== "pending") return serializeTopup(invoice);
+    if (invoice.paymentChannel === "listener") return serializeTopup(invoice);
 
     const ref = this.gatewayReference(invoice);
     if (ref) {
@@ -162,6 +177,16 @@ export class TopupService {
       throw new ForbiddenException("Konfirmasi pembayaran manual tidak tersedia.");
     }
     return this.get(userId, invoiceId);
+  }
+
+  /** Credits the requested topup amount after the listener matched its unique payable. */
+  async settleFromListener(
+    invoiceRowId: string,
+    payment: { paidAt: Date; reference?: string; payload?: Prisma.InputJsonValue },
+  ): Promise<boolean> {
+    const invoice = await this.prisma.paymentInvoice.findUnique({ where: { id: invoiceRowId } });
+    if (!invoice || invoice.purpose !== "topup") return false;
+    return this.settle(invoiceRowId, invoice.amount, payment);
   }
 
   /** Verified gateway payment for a topup invoice (also after it expired: the money arrived). */

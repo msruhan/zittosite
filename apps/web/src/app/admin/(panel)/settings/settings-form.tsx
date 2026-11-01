@@ -6,14 +6,12 @@ import { PageHeader } from "@/components/shell/app-shell";
 import { Button } from "@/components/ui/button";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field, Input } from "@/components/ui/field";
-import { Select } from "@/components/ui/select";
 import { UserMenuSettings } from "@/components/domain/user-menu-settings";
 
 export function AdminSettingsForm() {
   const [productName, setProductName] = React.useState("ZITTOSITE");
   const [supportHandle, setSupportHandle] = React.useState("@zittosite_support");
   const [invoiceMinutes, setInvoiceMinutes] = React.useState("30");
-  const [paymentMode, setPaymentMode] = React.useState("manual");
   const [saving, setSaving] = React.useState(false);
 
   function handleSubmit(event: React.FormEvent) {
@@ -70,22 +68,9 @@ export function AdminSettingsForm() {
             <CardTitle>Pembayaran</CardTitle>
           </CardHeader>
           <CardBody className="space-y-4 pt-3">
-            <Field
-              label="Mode payment gateway"
-              htmlFor="paymentMode"
-              hint="Integrasi gateway akan diaktifkan pada fase berikutnya."
-            >
-              <Select
-                id="paymentMode"
-                value={paymentMode}
-                onValueChange={setPaymentMode}
-                options={[
-                  { value: "manual", label: "Manual / mark-paid" },
-                  { value: "midtrans", label: "Midtrans (belum terhubung)" },
-                  { value: "xendit", label: "Xendit (belum terhubung)" },
-                ]}
-              />
-            </Field>
+            <p className="text-body text-ink-soft">
+              Gateway aktif dipilih di menu Pembayaran: Saya Bayar atau Listener VPS.
+            </p>
             <Field
               label="Batas waktu invoice (menit)"
               htmlFor="invoiceMinutes"

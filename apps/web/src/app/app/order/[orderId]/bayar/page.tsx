@@ -169,7 +169,10 @@ export default async function PaymentPage({
                 ))
           }
           checkoutUrl={order.invoice.checkoutUrl ?? null}
-          gateway={order.invoice.paymentChannel === "sayabayar"}
+          gateway={
+            order.invoice.paymentChannel === "sayabayar" ||
+            order.invoice.paymentChannel === "listener"
+          }
           menu={menu}
           automated={order.service.via === "supplier"}
         />

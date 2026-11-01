@@ -606,7 +606,23 @@ model PaymentInvoice {
 
   @@index([paymentReference])
   @@index([userId, purpose, createdAt])
+  @@index([paymentChannel, paymentStatus, amountDue])
   @@map("payment_invoices")
+}
+
+/// A GoBiz transaction already seen by the VPS listener, so the same payment is not applied twice.
+model GobizTransaction {
+  id          String   @id
+  amount      Int
+  paymentType String?  @map("payment_type")
+  occurredAt  DateTime @map("occurred_at")
+  status      String
+  invoiceId   String?  @map("invoice_id")
+  raw         Json
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([occurredAt])
+  @@map("gobiz_transactions")
 }
 
 /// Queued WhatsApp group message, one per paid invoice; retried until sent or attempts run out.

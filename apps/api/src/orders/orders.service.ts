@@ -22,6 +22,7 @@ import { AdminNotifyService } from "../telegram/admin-notify.service";
 import { AuditLogService } from "../security/audit-log.service";
 import { WhatsappNotifyService } from "../whatsapp/whatsapp-notify.service";
 import { WhatsappAdminService } from "../whatsapp/whatsapp-admin.service";
+import { PaymentModeService } from "../payments/payment-mode.service";
 import {
   SayabayarClient,
   type SayabayarInvoice,
@@ -104,6 +105,7 @@ export class OrdersService {
     private readonly prisma: PrismaService,
     private readonly adminNotify: AdminNotifyService,
     private readonly sayabayar: SayabayarClient,
+    private readonly paymentMode: PaymentModeService,
     private readonly audit: AuditLogService,
     private readonly whatsappNotify: WhatsappNotifyService,
     private readonly whatsappAdmin: WhatsappAdminService,
@@ -344,8 +346,11 @@ export class OrdersService {
         }`;
 
     let gateway: SayabayarInvoice | null = null;
+    const useListener = !paidByBalance && (await this.paymentMode.gateway()) === "listener";
     if (paidByBalance) {
       // Nothing left for the gateway to collect.
+    } else if (useListener) {
+      // The unique nominal and QR are reserved inside the invoice transaction.
     } else if (this.sayabayar.enabled()) {
       gateway = await this.sayabayar.createInvoice({
         amount: charge,
@@ -366,6 +371,7 @@ export class OrdersService {
       gateway?.expiredAt ?? new Date(Date.now() + INVOICE_TTL_MS);
 
     const created = await this.prisma.$transaction(async (tx) => {
+      const listener = useListener ? await this.paymentMode.reserve(tx, charge) : null;
       const invoice = await tx.paymentInvoice.create({
         data: {
           invoiceId,
@@ -374,18 +380,24 @@ export class OrdersService {
           isTest: user.role === "testing",
           paymentStatus: "pending",
           expiredAt,
-          ...(gateway
+          ...(listener
             ? {
-                paymentChannel: "sayabayar",
-                paymentReference: gateway.id,
-                amountDue: gateway.amountDue,
-                qrisString: gateway.qrisString,
-                checkoutUrl: gateway.paymentUrl,
-                gatewayPayload: gateway.raw as Prisma.InputJsonValue,
+                paymentChannel: "listener",
+                amountDue: listener.amountDue,
+                qrisString: listener.qrisString,
               }
-            : {
-                paymentChannel: paidByBalance ? "balance" : "qris_placeholder",
-              }),
+            : gateway
+              ? {
+                  paymentChannel: "sayabayar",
+                  paymentReference: gateway.id,
+                  amountDue: gateway.amountDue,
+                  qrisString: gateway.qrisString,
+                  checkoutUrl: gateway.paymentUrl,
+                  gatewayPayload: gateway.raw as Prisma.InputJsonValue,
+                }
+              : {
+                  paymentChannel: paidByBalance ? "balance" : "qris_placeholder",
+                }),
         },
       });
       if (balanceUsed > 0) {
@@ -435,7 +447,7 @@ export class OrdersService {
         where: { orderId: orderIds[0] },
         include: orderInclude,
       });
-    });
+    }, useListener ? { isolationLevel: Prisma.TransactionIsolationLevel.Serializable } : undefined);
 
     for (const [i, imei] of imeis.entries()) {
       this.audit.record("order.created", {
@@ -650,6 +662,9 @@ export class OrdersService {
       throw new BadRequestException("Invoice tidak dalam status pending.");
     }
 
+    if (current.invoice.paymentChannel === "listener") {
+      return serializeOrderListItem(current);
+    }
     const gatewayRef = this.gatewayReference(current.invoice);
     if (gatewayRef) {
       if (this.sayabayar.supportsConfirm()) {
@@ -747,6 +762,57 @@ export class OrdersService {
       note: `Pembayaran diterima via SayaBayar${input.channel ? ` (${input.channel})` : ""}.`,
     });
     return settled ? "paid" : "duplicate";
+  }
+
+  /**
+   * Closes the pending Listener VPS invoice whose unique payable equals `amount`.
+   * The extra rupiah is only a matcher; a topup still credits the requested amount.
+   */
+  async settleListenerPayment(input: {
+    amount: number;
+    transactionId: string;
+    occurredAt: Date;
+    payload: Prisma.InputJsonValue;
+  }): Promise<{ status: "matched" | "unmatched" | "already_settled"; invoiceId?: string }> {
+    const skew = 60_000;
+    const invoice = await this.prisma.paymentInvoice.findFirst({
+      where: {
+        paymentChannel: "listener",
+        paymentStatus: "pending",
+        amountDue: input.amount,
+        createdAt: { lte: new Date(input.occurredAt.getTime() + skew) },
+        expiredAt: { gte: new Date(input.occurredAt.getTime() - skew) },
+      },
+      orderBy: { createdAt: "asc" },
+    });
+    if (!invoice) {
+      const settled = await this.prisma.paymentInvoice.findFirst({
+        where: { paymentChannel: "listener", paymentStatus: "paid", amountDue: input.amount },
+        select: { invoiceId: true },
+      });
+      return settled
+        ? { status: "already_settled", invoiceId: settled.invoiceId }
+        : { status: "unmatched" };
+    }
+    if (input.occurredAt.getTime() < invoice.createdAt.getTime() - skew) {
+      return { status: "unmatched" };
+    }
+
+    const payment = {
+      paidAt: input.occurredAt,
+      reference: input.transactionId,
+      payload: input.payload,
+    };
+    const ok =
+      invoice.purpose === "topup"
+        ? await this.topups.settleFromListener(invoice.id, payment)
+        : await this.settleInvoice(invoice.id, {
+            ...payment,
+            note: "Pembayaran diterima via Listener VPS.",
+          });
+    return ok
+      ? { status: "matched", invoiceId: invoice.invoiceId }
+      : { status: "already_settled", invoiceId: invoice.invoiceId };
   }
 
   /** Applies a verified `invoice.expired` / `invoice.cancelled` webhook. */

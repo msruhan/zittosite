@@ -76,7 +76,7 @@ export default async function TopupPaymentPage({
               : `ZITTOSITE|QRIS-PLACEHOLDER|${topup.invoiceId}|${topup.amountDue}`)
           }
           checkoutUrl={topup.checkoutUrl}
-          gateway={topup.paymentChannel === "sayabayar"}
+          gateway={topup.paymentChannel === "sayabayar" || topup.paymentChannel === "listener"}
         />
         <div className="border-t border-hairline px-4 py-3 sm:px-5">
           <CancelTopupButton invoiceId={topup.invoiceId} />
