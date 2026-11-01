@@ -1,6 +1,6 @@
 {
   "name": "zittosite",
-  "version": "0.1.95",
+  "version": "0.1.96",
   "private": true,
   "description": "ZITTOSITE — Digital IMEI Activation Platform",
   "workspaces": [
