@@ -25,8 +25,9 @@ export function paidInvoiceGroupText(input: PaidInvoiceInput): string {
 }
 
 /**
- * Admin group card for one order: just the service and the device value, so
- * admins can copy the IMEI. Reactions find the order by the card's message id.
+ * Admin group card for one order: the WhatsApp slug, when set, and the device
+ * value, so admins can copy the IMEI. An empty slug sends the IMEI alone.
+ * Reactions find the order by the card's message id.
  * The customer's note stays on the website for Super Admins.
  */
 export function adminOrderCardText(input: {
@@ -35,9 +36,10 @@ export function adminOrderCardText(input: {
   imei: string;
   isTest?: boolean;
 }): string {
+  const serviceName = input.serviceName.trim();
   return [
     ...(input.isTest ? ["🧪 *TESTING*"] : []),
-    input.serviceName,
+    ...(serviceName ? [serviceName] : []),
     ...(input.inputType === "none" ? [] : [input.imei]),
   ].join("\n");
 }

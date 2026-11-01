@@ -161,6 +161,10 @@ test("admin group card and replies", () => {
     "🧪 *TESTING*\n1B\n353249109618062",
   );
   assert.equal(adminOrderCardText({ serviceName: "S", inputType: "none", imei: "-" }), "S");
+  assert.equal(
+    adminOrderCardText({ serviceName: "", inputType: "imei", imei: "357001184891312" }),
+    "357001184891312",
+  );
   assert.equal(adminReactionReplyText({ kind: "done", adminName: "Admin HJ" }), "Done ✅ · Admin HJ");
   assert.match(
     adminReactionReplyText({ kind: "rejected", adminName: "Admin HJ", refunded: true }),

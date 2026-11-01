@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  accountText,
   askImeiText,
   confirmOrderText,
   isBackKeyword,
@@ -60,6 +61,14 @@ test("WhatsApp menu offers Order IMEI and CEIR services with IMEI input only", (
   ]);
   assert.match(menu.text, /\n3\. STATUS — Rp10\.000\n/);
   assert.match(menu.text, /\n4\. Riwayat Order Saya\n5\. Akun & Informasi\n/);
+  const account = accountText({
+    fullName: "Budi",
+    username: "budi",
+    balance: 10_000,
+    whatsappNumber: "6281234567890",
+  });
+  assert.match(account, /Saldo dipakai otomatis saat order\./);
+  assert.doesNotMatch(account, /Group|zittosite\.com/);
 
   const disabled = whatsappMenuSections([service("a", null)], {
     ...menus,

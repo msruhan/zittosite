@@ -84,7 +84,7 @@ export function whatsappGroupFor(
   return id;
 }
 
-/** Short card title for `whatsapp_admin` services; empty means the card shows the service name. */
+/** Short card title for `whatsapp_admin` services; empty means the card is only the IMEI. */
 export function whatsappSlugFor(
   channel: FulfillmentChannel,
   input: string | null | undefined,

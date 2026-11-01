@@ -61,7 +61,7 @@ export class WhatsappAdminService {
           orderId: order.id,
           chatId,
           text: adminOrderCardText({
-            serviceName: order.service.whatsappSlug || order.service.name,
+            serviceName: order.service.whatsappSlug?.trim() ?? "",
             inputType: order.service.inputType,
             imei: order.imei,
             isTest: order.isTest,

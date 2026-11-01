@@ -55,7 +55,6 @@ type Member = {
   creditBalance: number;
   status: string;
   botAccess: boolean;
-  group: { name: string } | null;
   number: string;
 };
 
@@ -421,7 +420,7 @@ export class CustomerBotService {
             imei: o.imei,
           })),
         ),
-      )}\n\nRiwayat lengkap: ${webPublicUrl()}/app\nKirim */menu* untuk kembali.`,
+      )}\n\nKirim */menu* untuk kembali.`,
     );
     return "history";
   }
@@ -435,8 +434,6 @@ export class CustomerBotService {
         username: member.username,
         balance: member.creditBalance,
         whatsappNumber: member.number,
-        groupName: member.group?.name ?? null,
-        portalUrl: `${webPublicUrl()}/app`,
       }),
     );
     return "account";
@@ -454,7 +451,6 @@ export class CustomerBotService {
             creditBalance: true,
             status: true,
             botAccess: true,
-            group: { select: { name: true } },
           },
         },
       },

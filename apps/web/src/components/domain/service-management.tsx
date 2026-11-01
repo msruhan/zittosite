@@ -1294,13 +1294,13 @@ function ServiceFormDialog({
             <Field
               label="Slug WhatsApp"
               htmlFor="whatsappSlug"
-              hint={`Judul singkat di pesan grup, mis. "3B". Kosongkan untuk memakai nama layanan.`}
+              hint={`Judul singkat di pesan grup, mis. "3B". Kosongkan agar pesan hanya berisi IMEI.`}
             >
               <Input
                 id="whatsappSlug"
                 value={draft.whatsappSlug ?? ""}
                 maxLength={60}
-                placeholder={draft.name || "3B"}
+                placeholder="3B"
                 onChange={(event) =>
                   setDraft((current) => ({ ...current, whatsappSlug: event.target.value }))
                 }

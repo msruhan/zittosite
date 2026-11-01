@@ -143,8 +143,6 @@ export function accountText(input: {
   username: string;
   balance: number;
   whatsappNumber: string;
-  groupName: string | null;
-  portalUrl: string;
 }): string {
   return [
     "👤 *Akun & Informasi*",
@@ -153,10 +151,8 @@ export function accountText(input: {
     `🔖 *Username:* ${input.username}`,
     `📞 *WhatsApp:* +${input.whatsappNumber}`,
     `💎 *Saldo:* ${formatRp(input.balance)}`,
-    ...(input.groupName ? [`🏷️ *Group:* ${input.groupName}`] : []),
     "",
-    "Saldo dipakai otomatis saat order. Topup dan riwayat lengkap ada di website:",
-    input.portalUrl,
+    "Saldo dipakai otomatis saat order.",
     "",
     "Kirim */menu* untuk kembali.",
   ].join("\n");
