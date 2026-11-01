@@ -21,6 +21,8 @@ export type RemoteService = {
   /** Catalog metadata (CeirBot `INPUTTYPE`/`CURRENCY`); null when the panel does not send it. */
   inputType: RemoteInputType | null;
   currency: RemoteCurrency | null;
+  /** iSpider-style single custom field (`CUSTOM.customname`), e.g. "Key Lock" or "Lock Code". */
+  customFieldName: string | null;
 };
 
 const REMOTE_INPUT_TYPES: readonly RemoteInputType[] = ["imei", "sn", "ecid", "imei_sn", "phone", "none"];
@@ -33,6 +35,15 @@ function remoteInputType(value: unknown): RemoteInputType | null {
 function remoteCurrency(value: unknown): RemoteCurrency | null {
   const code = text(value).toUpperCase();
   return code === "IDR" || code === "USD" ? code : null;
+}
+
+/** The panel's own label for its one custom field. `KEYLOCK` is not a name iSpider reads. */
+function customFieldName(service: Record<string, unknown>): string | null {
+  const custom = service.CUSTOM;
+  if (!custom || typeof custom !== "object") return null;
+  const row = custom as { allow?: unknown; customname?: unknown };
+  if (text(row.allow) === "0") return null;
+  return text(row.customname) || null;
 }
 
 export type DhruReply<T> = { ok: true; data: T } | { ok: false; message: string };
@@ -109,6 +120,7 @@ export function parseServiceList(list: unknown): RemoteService[] {
         info: text(svc.INFO),
         inputType: remoteInputType(svc.INPUTTYPE),
         currency: remoteCurrency(svc.CURRENCY),
+        customFieldName: customFieldName(svc),
       });
     }
   }

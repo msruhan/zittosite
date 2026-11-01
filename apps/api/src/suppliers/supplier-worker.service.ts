@@ -28,7 +28,13 @@ const FIRST_CHECK_DELAY_MS = 2_000;
 /** Supplier price list and account currency are reused this long before refetching. */
 const PRICE_LIST_TTL_MS = 2 * 60_000;
 
-type PriceList = { at: number; currency: string; credits: Map<string, number> };
+type PriceList = {
+  at: number;
+  currency: string;
+  credits: Map<string, number>;
+  /** Remote service id → custom field label, when the panel defines one. */
+  customFields: Map<string, string>;
+};
 type PendingOrder = Prisma.OrderGetPayload<{ include: { service: { include: { supplier: true } } } }>;
 /** Why a submit did not go through; `refusal` is the supplier's message, safe to show once rewritten. */
 type SubmitFailure = { failure: string; retryable: boolean; refusal: string | null };
@@ -214,11 +220,14 @@ export class SupplierWorkerService implements OnModuleInit, OnModuleDestroy {
       {
         ...supplierInputFields(order.service.inputType, order.imei),
         // Optional notes are meant for our admins; only a required Notes field goes upstream.
-        ...supplierExtraFields({
-          ...order,
-          notes: order.service.requireNotes ? order.notes : null,
-          password: order.passwordEnc ? decryptSupplierKey(order.passwordEnc) : null,
-        }),
+        ...supplierExtraFields(
+          {
+            ...order,
+            notes: order.service.requireNotes ? order.notes : null,
+            password: order.passwordEnc ? decryptSupplierKey(order.passwordEnc) : null,
+          },
+          { keyLockField: prices.customFields.get(order.service.supplierServiceId!) },
+        ),
       },
     );
     if (reply.ok) {
@@ -313,6 +322,9 @@ export class SupplierWorkerService implements OnModuleInit, OnModuleDestroy {
       at: Date.now(),
       currency: account.data.currency,
       credits: new Map(list.data.map((s) => [s.id, s.credit])),
+      customFields: new Map(
+        list.data.flatMap((s) => (s.customFieldName ? [[s.id, s.customFieldName] as const] : [])),
+      ),
     };
     this.priceLists.set(supplier.id, fresh);
     return fresh;

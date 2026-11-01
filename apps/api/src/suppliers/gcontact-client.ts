@@ -18,6 +18,7 @@ export const GCONTACT_SERVICE: RemoteService = {
   info: "Nama, tag kontak, e-wallet, dan WhatsApp dari nomor HP.",
   inputType: "phone",
   currency: null,
+  customFieldName: null,
 };
 
 export type GContactLookup = {

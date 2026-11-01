@@ -177,15 +177,22 @@ export function parseOrderExtras(
   return errors.length ? { ok: false, errors } : { ok: true, extras };
 }
 
-/** Dhru parameters for the extra fields; empty values are omitted. */
-export function supplierExtraFields(extras: OrderExtras): Record<string, string> {
+/**
+ * Dhru parameters for the extra fields; empty values are omitted.
+ * `keyLockField` is the supplier's custom-field label ("Key Lock", "Lock Code").
+ * Without one, the value is sent as KEYLOCK.
+ */
+export function supplierExtraFields(
+  extras: OrderExtras,
+  options?: { keyLockField?: string | null },
+): Record<string, string> {
   const fields: Record<string, string> = {};
   if (extras.quantity != null) fields.QNT = String(extras.quantity);
   if (extras.username) fields.USERNAME = extras.username;
   if (extras.email) fields.EMAIL = extras.email;
   if (extras.notes) fields.NOTES = extras.notes;
   if (extras.password) fields.PASSWORD = extras.password;
-  if (extras.keyLock) fields.KEYLOCK = extras.keyLock;
+  if (extras.keyLock) fields[options?.keyLockField?.trim() || "KEYLOCK"] = extras.keyLock;
   if (extras.signInPicture) fields[SIGN_IN_PICTURE_FIELD] = extras.signInPicture;
   if (extras.codeText) fields[CODE_FIELD] = extras.codeText;
   return fields;

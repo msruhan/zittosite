@@ -122,6 +122,7 @@ test("status, account info, and service list parsing", async () => {
         info: "",
         inputType: null,
         currency: null,
+        customFieldName: null,
       },
     ],
   );
@@ -138,14 +139,35 @@ test("status, account info, and service list parsing", async () => {
           CATEGORY: "CEIR",
         },
         "x-1": { SERVICEID: "x-1", SERVICENAME: "Odd", CREDIT: "1", INPUTTYPE: "weird", CURRENCY: "EUR" },
+        "svc-keylock": {
+          SERVICEID: "svc-keylock",
+          SERVICENAME: "Xiaomi Keylock",
+          CREDIT: "1",
+          CUSTOM: { allow: "1", customname: "Key Lock" },
+        },
+        "svc-lockcode": {
+          SERVICEID: "svc-lockcode",
+          SERVICENAME: "Xiaomi Lock Code",
+          CREDIT: "1",
+          CUSTOM: { allow: "1", customname: "Lock Code" },
+        },
+        off: {
+          SERVICEID: "off",
+          SERVICENAME: "No custom",
+          CREDIT: "1",
+          CUSTOM: { allow: "0", customname: "Key Lock" },
+        },
       },
     },
   });
   assert.deepEqual(
-    catalog.map((service) => [service.id, service.inputType, service.currency]),
+    catalog.map((service) => [service.id, service.inputType, service.currency, service.customFieldName]),
     [
-      ["ceir-getcontact", "phone", "IDR"],
-      ["x-1", null, null],
+      ["ceir-getcontact", "phone", "IDR", null],
+      ["x-1", null, null, null],
+      ["svc-keylock", null, null, "Key Lock"],
+      ["svc-lockcode", null, null, "Lock Code"],
+      ["off", null, null, null],
     ],
   );
 });

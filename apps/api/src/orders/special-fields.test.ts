@@ -127,6 +127,13 @@ test("supplier fields omit empty values", () => {
       Code: "1234\n5678",
     },
   );
+  assert.deepEqual(
+    supplierExtraFields(
+      { ...NO_EXTRAS, keyLock: "KL-1" },
+      { keyLockField: "Lock Code" },
+    ),
+    { "Lock Code": "KL-1" },
+  );
   assert.deepEqual(supplierExtraFields(NO_EXTRAS), {});
 });
 

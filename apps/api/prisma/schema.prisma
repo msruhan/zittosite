@@ -384,7 +384,7 @@ model Service {
   requireNotes       Boolean             @default(false) @map("require_notes")
   /// Password is stored encrypted in Order.passwordEnc and sent to the supplier as PASSWORD.
   requirePassword    Boolean             @default(false) @map("require_password")
-  /// Key Lock is stored in Order.keyLock and sent to the supplier as KEYLOCK.
+  /// Key Lock is stored in Order.keyLock and sent under the supplier's custom field name.
   requireKeyLock     Boolean             @default(false) @map("require_key_lock")
   /// Stored in Order.signInPicture; sent to the supplier as the "Picture on sign-in page" custom field.
   requireSignInPicture Boolean           @default(false) @map("require_sign_in_picture")
